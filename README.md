@@ -4,5 +4,5 @@ Can we create a library in PureScript for type-safe routing and hybrid apps whic
 
 I don't think so.
 
-We have `Record` and `Variant*` (and `Rows` in general). We have wonderful libs like _run_ and _routing-duplex_ at our disposal.
+We have `Record` and `Variant*` (and `Rows` in general). We have wonderful libs like _run_ ,  _routing-duplex_ or _wai_ at our disposal.
 So let's make a little proof that PureScript is not just a "simpler Haskell for the frontend".
