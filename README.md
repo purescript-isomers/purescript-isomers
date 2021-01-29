@@ -1,6 +1,6 @@
 # webrow-hybrid
 
-Can we create a library in PureScript for type-safe routing and hybrid apps which operates purely on the value level? Do we really have to clone (_servant_ like) heavy type-level machinery and fight with piles of constraints and ad hoc polymorphism?
+Can we create a library in PureScript for type-safe routing and hybrid apps which operates from the user perspective purely on the value level? Do we really have to clone (_servant_ like) heavy type-level machinery and fight with piles of constraints and ad hoc polymorphism?
 
 I don't think so.
 
