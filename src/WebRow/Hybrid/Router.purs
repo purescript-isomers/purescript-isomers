@@ -1,7 +1,6 @@
 module WebRow.Hybrid.Router where
 
 import Prelude
-
 import Control.Alt ((<|>))
 import Data.Maybe (Maybe, fromMaybe)
 import Data.Tuple (Tuple, fst, snd)
@@ -32,7 +31,6 @@ import Type.Row (RProxy)
 import Unsafe.Coerce (unsafeCoerce)
 import WebRow.Hybrid.Contrib.Type.Eval.Tuple (Tuples)
 import WebRow.Hybrid.Data.Variant.Prefix (class PrefixRow, class UnprefixRow, add, remove) as Variant.Prefix
-
 
 newtype Router response request
   = Router
@@ -133,7 +131,6 @@ class PrefixRoute (rl ∷ RowList) request where
 
 instance prefixRouteNil ∷ PrefixRoute RowList.Nil request where
   prefixRoute _ = mempty
-
 else instance prefixRouteEmptyCons ::
   (PrefixRoute tail request, Row.Cons "" (Router response request) r' request) =>
   PrefixRoute (RowList.Cons "" (Router response request) tail) request where
@@ -174,22 +171,21 @@ prefix ∷
   Router d r
 prefix sep request = prefixLabels sep (Generic.Variant.update (prefixRoute (RLProxy ∷ RLProxy il)) request)
 
-
 prs ∷ ∀ a. RouteDuplex' a → RouteParser a
 prs (RouteDuplex _ p) = p
 
 prt ∷ ∀ a. RouteDuplex' a → (a → RoutePrinter)
 prt (RouteDuplex p _) = p
 
-
-type PrefixRouters = Boolean
+type PrefixRouters
+  = Boolean
 
 data Fst
   = Fst PrefixRouters
 
 instance fst ∷ (IsSymbol prop) ⇒ MappingWithIndex Fst (SProxy prop) (Tuple (RouteDuplex a a) b) (RouteDuplex a a) where
-  mappingWithIndex (Fst prefixRouters) prop = if prefixRouters
-    then
+  mappingWithIndex (Fst prefixRouters) prop =
+    if prefixRouters then
       Routing.Duplex.prefix (reflectSymbol prop) <<< fst
     else
       fst
@@ -221,4 +217,3 @@ router p r =
       { response
       , request
       }
-
