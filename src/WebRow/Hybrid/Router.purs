@@ -32,6 +32,12 @@ import Unsafe.Coerce (unsafeCoerce)
 import WebRow.Hybrid.Contrib.Type.Eval.Tuple (Tuples)
 import WebRow.Hybrid.Data.Variant.Prefix (class PrefixRow, class UnprefixRow, add, remove) as Variant.Prefix
 
+-- | TODO:
+-- | In this prototype we are using RouteDuplex'
+-- | for the request and simple record of codecs (functions)
+-- | for the response.
+-- | In the future we want to have here something
+-- | like `RequestDuplex` and `ResponseDuplex`here.
 newtype Router response request
   = Router
   { response ∷ { | response }
