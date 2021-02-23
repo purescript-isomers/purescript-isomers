@@ -118,15 +118,14 @@ in  upstream
   with
     polyform-batteries-json = ../batteries-json/spago.dhall as Location
   with
-    routing-duplex-variant = mkPackage
-      [ "assert", "console", "effect", "routing-duplex", "variant" ]
-      "https://github.com/paluh/purescript-routing-duplex-variant.git"
-      "f16f1b21128457fda3176f464f4284aaf18a4e6c"
+    request-duplex = ../request-duplex/spago.dhall as Location
+  with
+    request-duplex-variant = ../request-duplex-variant/spago.dhall as Location
   with
     record-prefix = mkPackage
       [ "avar", "console", "prelude", "react-basic-hooks" ]
-      "https://github.com/dariooddenino/purescript-record-prefix"
-      "v1.0.0"
+      "https://github.com/paluh/purescript-record-prefix"
+      "master"
   with
     typelevel-eval = mkPackage
       [ "console", "effect", "globals", "leibniz", "psci-support", "record" ]

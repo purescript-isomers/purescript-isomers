@@ -15,7 +15,7 @@ You can edit this file as you like.
   , "psci-support"
   , "record-extra"
   , "record-prefix"
-  , "routing-duplex-variant"
+  , "request-duplex-variant"
   , "run"
   , "tuples"
   , "typelevel-eval"

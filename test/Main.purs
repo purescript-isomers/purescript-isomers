@@ -1,74 +1,67 @@
 module Test.Main where
 
 import Prelude
-import Data.Either (Either)
+import Data.Either.Nested (type (\/))
 import Data.Maybe (Maybe(..))
-import Data.Newtype (un)
 import Data.Number (fromString) as Number
 import Data.Tuple (Tuple)
 import Data.Tuple.Nested ((/\), type (/\))
 import Data.Variant (Variant)
-import Routing.Duplex (int, segment) as Routing.Duplex
-import Routing.Duplex.Parser (RouteError)
+import Data.Variant (inj) as Variant
+import Debug.Trace (traceM)
+import Effect (Effect)
+import Effect.Console (log)
+import Hybrid.Api.Spec (ResponseCodec(..))
+import Hybrid.App.Server (route) as App.Server
+import Hybrid.App.Spec (Raw(..))
+import Hybrid.App.Spec (duplex, prefix, spec) as App.Spec
+import Hybrid.Contrib.Request.Duplex (unitDuplex)
+import Hybrid.Response (Response(..))
+import Request.Duplex (Request)
+import Request.Duplex (Request, int, print, segment) as Request.Duplex
+import Request.Duplex.Parser (RouteError)
+import Request.Duplex.Types (Method(..))
 import Run (Run)
 import Run.Except (EXCEPT)
 import Type.Prelude (SProxy(..))
-import WebRow.Hybrid.Contrib.Routing.Duplex (unitDuplex)
-import WebRow.Hybrid.Router (Router)
-import WebRow.Hybrid.Router (duplex, prefix, router) as Router
-import WebRow.Hybrid.Router.Run (FETCH, Request, Response(..), ResponseCodec(..))
-import WebRow.Hybrid.Router.Run (route) as Router.Run
 
 number ∷ ResponseCodec Number
 number =
   ResponseCodec
-    { decode: Number.fromString <=< (_.content <<< un Response)
-    , encode: \content → Response { statusCode: 200, content: Just (show content) }
+    { decode: Number.fromString
+    , encode: show
     }
 
 string ∷ ResponseCodec String
 string =
   ResponseCodec
-    { decode: _.content <<< un Response
-    , encode: \content → Response { statusCode: 200, content: Just content }
+    { decode: Just
+    , encode: identity
     }
 
--- | Type signature is fully derived and optional here.
-router ::
-  Router
-    ( "admin.dashboard" ∷ ResponseCodec Number
-    , "admin.profile" ∷ ResponseCodec String
-    )
-    ( "admin.dashboard" ∷ Tuple Int Unit
-    , "admin.profile" ∷ Tuple Int Int
-    )
-router =
-  Router.duplex (Routing.Duplex.int Routing.Duplex.segment)
-    $ Router.prefix (SProxy ∷ SProxy ".")
+-- router ::
+--   Router
+--     ( "admin.dashboard" ∷ ResponseCodec Number
+--     , "admin.profile" ∷ ResponseCodec String
+--     )
+--     ( "admin.dashboard" ∷ Tuple Int Unit
+--     , "admin.profile" ∷ Tuple Int Int
+--     )
+spec =
+  App.Spec.duplex (Request.Duplex.int Request.Duplex.segment)
+    $ App.Spec.prefix
+        (SProxy ∷ SProxy ".")
         { admin:
-            Router.router true
-              { dashboard: unitDuplex Routing.Duplex.segment /\ number
-              , profile: Routing.Duplex.int Routing.Duplex.segment /\ string
+            App.Spec.spec true
+              { dashboard: unitDuplex Request.Duplex.segment /\ number /\ \req res → "TEST"
+              , profile: Request.Duplex.int Request.Duplex.segment /\ string /\ \req res → "TEST"
               }
         }
 
-route ::
-  ∀ eff.
-  Either (Request String)
-    ( Variant
-        ( "admin.dashboard" ∷ Int /\ Unit
-        , "admin.profile" ∷ Int /\ Int
-        )
-    ) ->
-  Run
-    ( "admin.dashboard" ∷ FETCH (Int /\ Unit) Number
-    , "admin.profile" ∷ FETCH (Int /\ Int) String
-    , routeNotFound ∷ EXCEPT (RouteError /\ Request String)
-    | eff
-    )
-    String
-route =
-  Router.Run.route router
-    { "admin.dashboard": const $ pure "TEST"
-    , "admin.profile": const $ pure "TEST"
-    }
+-- route = App.Server.route spec
+main ∷ Effect Unit
+main = do
+  let
+    Raw raw = spec
+  traceM $ Request.Duplex.print raw.codecs.request (Variant.inj (SProxy ∷ SProxy "admin.profile") $ 9 /\ 8)
+  traceM $ Request.Duplex.print raw.codecs.request (Variant.inj (SProxy ∷ SProxy "admin.dashboard") $ 9 /\ unit)

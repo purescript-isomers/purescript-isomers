@@ -1,4 +1,4 @@
-module WebRow.Hybrid.Contrib.Type.Eval.Tuple where
+module Hybrid.Contrib.Type.Eval.Tuple where
 
 import Data.Tuple (Tuple)
 import Type.Eval (class Eval, kind TypeExpr)
