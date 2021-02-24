@@ -3,7 +3,6 @@ module Hybrid.App.Spec where
 import Prelude
 
 import Control.Alt ((<|>))
-import Data.Either.Nested (type (\/))
 import Data.Maybe (Maybe, fromMaybe)
 import Data.Tuple (fst, snd)
 import Data.Tuple.Nested ((/\), type (/\))
@@ -12,11 +11,10 @@ import Data.Variant (class Contractable, contract, expand) as Variant
 import Data.Variant.Internal (VariantRep(..))
 import Data.Variant.Prefix (NilExpr, PrefixCases, PrefixStep, UnprefixCases, UnprefixStep)
 import Data.Variant.Prefix (add, remove) as Variant.Prefix
-import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
+import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
 import Heterogeneous.Mapping (class HMap, class HMapWithIndex, class Mapping, class MappingWithIndex, hmap, hmapWithIndex)
-import Hybrid.Api.Spec (Codecs, FetchError)
+import Hybrid.Api.Spec (Codecs)
 import Hybrid.Contrib.Type.Eval.Tuple (Tuples)
-import Hybrid.Response (Response)
 import Prim.Row (class Cons, class Union) as Row
 import Prim.RowList (Cons, Nil) as RowList
 import Prim.RowList (class RowToList, kind RowList)
@@ -38,18 +36,14 @@ import Type.Eval.RowList (FromRow, ToRow)
 import Type.Prelude (class IsSymbol, RLProxy(..), RProxy, SProxy(..), reflectSymbol)
 import Unsafe.Coerce (unsafeCoerce)
 
-newtype Raw req res rnd = Raw
+newtype Raw req res rnd
+  = Raw
   { codecs ∷ Codecs req res
   , renderers ∷ { | rnd }
   }
 
 -- | A "magic wrapper" around `Codecs` record which exposes API type using more convenient type signature.
 -- | newtype Spec ... = Spec ...
-
-type Renderer req res doc
-  = req → Maybe (FetchError \/ Response res) → doc
-
-
 type PrefixRouters
   = Boolean
 
@@ -75,8 +69,8 @@ data Snd
 instance snd ∷ Mapping Snd (a /\ b) b where
   mapping _ = snd
 
--- | Build a `Router` value from a record of endpoints of the shape `requestDuplex /\ ResponseCodec a /\ Renderer req res doc`.
-spec ∷
+-- | Build a `Spec` value from a record of endpoints of the shape `requestDuplex /\ ResponseCodec a /\ Renderer req res doc`.
+endpoints ∷
   ∀ r req reqs reqsl res rnd t.
   RowToList reqs reqsl ⇒
   VariantParser reqsl reqs req ⇒
@@ -88,18 +82,19 @@ spec ∷
   PrefixRouters →
   r →
   Raw req res rnd
-spec p r =
+endpoints p r =
   let
     request = Request.Duplex.Generic.Variant.variant (hmapWithIndex (FstDuplex p) r)
 
     t = hmap Snd r
-  in Raw
-    { codecs:
-      { request
-      , response: hmap Fst t
+  in
+    Raw
+      { codecs:
+          { request
+          , response: hmap Fst t
+          }
+      , renderers: hmap Snd t
       }
-    , renderers: hmap Snd t
-    }
 
 duplex ∷
   ∀ a rnd req req' res.
@@ -107,7 +102,7 @@ duplex ∷
   RequestDuplex' a →
   Raw req res rnd →
   Raw req' res rnd
-duplex (RequestDuplex aprt aprs) (Raw { codecs: codecs@{ request: RequestDuplex vprt vprs }, renderers }) = Raw { renderers, codecs: codecs { request = request' }}
+duplex (RequestDuplex aprt aprs) (Raw { codecs: codecs@{ request: RequestDuplex vprt vprs }, renderers }) = Raw { renderers, codecs: codecs { request = request' } }
   where
   prs' = ado
     a ← aprs
@@ -133,9 +128,27 @@ duplex (RequestDuplex aprt aprs) (Raw { codecs: codecs@{ request: RequestDuplex 
 
   request' = RequestDuplex prt' prs'
 
-
 data PrefixLabels (sep ∷ Symbol)
   = PrefixLabels
+
+instance foldingWithIndexPrefixNested ::
+  ( HFoldlWithIndex (PrefixLabels sep) (Raw () () ()) { | r } (Raw req res doc)
+  , FoldingWithIndex (PrefixLabels sep) (SProxy l) accum (Raw req res doc) o
+  ) =>
+  FoldingWithIndex
+    (PrefixLabels sep)
+    (SProxy l)
+    accum
+    { | r }
+    o where
+  foldingWithIndex pref prop accum r =
+    let
+      (raw ∷ Raw req res doc) = hfoldlWithIndex
+        pref
+        (Raw { codecs: { request: RequestDuplex mempty fail, response: {} }, renderers: {} } ∷ Raw () () ())
+        r
+    in
+      foldingWithIndex pref prop accum raw
 
 instance foldingWithIndexPrefixLabels ::
   ( IsSymbol l
@@ -144,29 +157,23 @@ instance foldingWithIndexPrefixLabels ::
   , Symbol.Append l sep sym
   , Row.Union response piresponse response'
   , Row.Union piresponse response response'
-
   , Row.Union render pirender render'
   , Row.Union pirender render render'
-
   , Row.Union request pirequest request'
   , Row.Union pirequest request request'
-
   , Variant.Contractable request' request
   , Variant.Contractable request' pirequest
   , RowToList irequest irl
   , RowToList pirequest pirl
   , Eval ((ToRow <<< FoldrWithIndex (PrefixStep sym) NilExpr <<< FromRow) (RProxy irequest)) (RProxy pirequest)
   , HFoldlWithIndex (PrefixCases sym pirequest) Unit (Variant irequest) (Variant pirequest)
-
   , Eval ((ToRow <<< FoldrWithIndex (UnprefixStep sym) NilExpr <<< FromRow) (RProxy pirequest)) (RProxy irequest)
   , HFoldlWithIndex (UnprefixCases sym irequest) Unit (Variant pirequest) (Variant irequest)
-
   , HFoldlWithIndex
       (Record.Prefix.PrefixProps sym)
       (Record.Builder.Builder {} {})
       { | iresponse }
       (Record.Builder.Builder {} { | piresponse })
-
   , HFoldlWithIndex
       (Record.Prefix.PrefixProps sym)
       (Record.Builder.Builder {} {})
@@ -179,28 +186,29 @@ instance foldingWithIndexPrefixLabels ::
     (Raw request response render)
     (Raw irequest iresponse irender)
     (Raw request' response' render') where
-  foldingWithIndex _ _ (Raw s) (Raw is) = Raw
+  foldingWithIndex _ _ (Raw s) (Raw is) =
+    Raw
       { codecs:
-        { response: Record.union s.codecs.response (Record.Prefix.add prop is.codecs.response) ∷ { | response' }
-        , request:
-          RequestDuplex
-            ( \i →
-                let
-                  pir ∷ Maybe (Variant pirequest)
-                  pir = Variant.contract i
+          { response: Record.union s.codecs.response (Record.Prefix.add prop is.codecs.response) ∷ { | response' }
+          , request:
+              RequestDuplex
+                ( \i →
+                    let
+                      pir ∷ Maybe (Variant pirequest)
+                      pir = Variant.contract i
 
-                  ir ∷ Maybe (Variant irequest)
-                  ir = Variant.Prefix.remove prop <$> pir
+                      ir ∷ Maybe (Variant irequest)
+                      ir = Variant.Prefix.remove prop <$> pir
 
-                  r ∷ Maybe (Variant request)
-                  r = Variant.contract i
-                in
-                  fromMaybe
-                    (RequestPrinter identity)
-                    (prt <$> r <|> iprt <$> ir)
-            )
-            (Variant.expand <$> prs <|> (expandIreq <$> iprs))
-        }
+                      r ∷ Maybe (Variant request)
+                      r = Variant.contract i
+                    in
+                      fromMaybe
+                        (RequestPrinter identity)
+                        (prt <$> r <|> iprt <$> ir)
+                )
+                (Variant.expand <$> prs <|> (expandIreq <$> iprs))
+          }
       , renderers: Record.union s.renderers (Record.Prefix.add prop is.renderers) ∷ { | render' }
       }
     where
@@ -209,8 +217,8 @@ instance foldingWithIndexPrefixLabels ::
     expandIreq ∷ Variant irequest → Variant request'
     expandIreq = Variant.expand <<< p
       where
-        p ∷ Variant irequest → Variant pirequest
-        p = Variant.Prefix.add prop
+      p ∷ Variant irequest → Variant pirequest
+      p = Variant.Prefix.add prop
 
     RequestDuplex prt prs = s.codecs.request
 
@@ -226,14 +234,14 @@ prefixLabels ::
   SProxy sep →
   { | r } →
   Raw req res rnd
-prefixLabels _ r = hfoldlWithIndex
-  (PrefixLabels ∷ PrefixLabels sep)
-  (Raw { codecs: { request: RequestDuplex mempty fail, response: {}}, renderers: {}} ∷ Raw () () ())
-  r
-  where
-    fail ∷ RequestParser (Variant ())
-    fail = Request.Duplex.Parser.Chomp $ const $ Request.Duplex.Parser.Fail Request.Duplex.Parser.EndOfPath
+prefixLabels _ r =
+  hfoldlWithIndex
+    (PrefixLabels ∷ PrefixLabels sep)
+    (Raw { codecs: { request: RequestDuplex mempty fail, response: {} }, renderers: {} } ∷ Raw () () ())
+    r
 
+fail ∷ RequestParser (Variant ())
+fail = Request.Duplex.Parser.Chomp $ const $ Request.Duplex.Parser.Fail Request.Duplex.Parser.EndOfPath
 
 class PrefixPath (rl ∷ RowList) request where
   prefixPath ∷ RLProxy rl → Request.Duplex.Generic.Variant.Updater { | request }
@@ -252,14 +260,13 @@ else instance prefixPathCons ::
     step (Raw { codecs: { request: r, response }, renderers }) =
       Raw
         { codecs:
-          { request: Request.Duplex.prefix (reflectSymbol prop) r
-          , response
-          }
+            { request: Request.Duplex.prefix (reflectSymbol prop) r
+            , response
+            }
         , renderers
         }
 
     prop = SProxy ∷ SProxy sym
-
 
 -- | Additionally to prefixing labels we also
 -- | add string label prefix to the url path.

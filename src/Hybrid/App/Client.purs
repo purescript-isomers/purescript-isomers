@@ -1,4 +1,4 @@
-module Hbrid.App.Client where
+module Hybrid.App.Client where
 
 import Prelude
 
@@ -11,8 +11,8 @@ import Data.Variant (Variant)
 import Data.Variant (inj) as Variant
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
 import Hybrid.Api.Spec (FetchError(..), ResponseCodec(..))
+import Hybrid.App.Renderer (Renderer)
 import Hybrid.App.Spec (Raw(..)) as Spec
-import Hybrid.App.Spec (Renderer)
 import Hybrid.Response (Response)
 import Prim.Row (class Cons) as Row
 import Record (get) as Record

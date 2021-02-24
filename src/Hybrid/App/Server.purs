@@ -11,7 +11,7 @@ import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfo
 import Heterogeneous.Mapping (class MappingWithIndex)
 import Hybrid.Api.Spec (ResponseCodec(..))
 import Hybrid.App.Spec (Raw(..)) as Spec
-import Hybrid.App.Spec (Renderer)
+import Hybrid.App.Renderer (Renderer)
 import Hybrid.Response (Response)
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
