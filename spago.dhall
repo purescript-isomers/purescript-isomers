@@ -16,9 +16,11 @@ You can edit this file as you like.
   , "record-extra"
   , "record-prefix"
   , "request-duplex-variant"
+  , "routing"
   , "run"
   , "tuples"
   , "typelevel-eval"
+  , "wire-react-router"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

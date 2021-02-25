@@ -131,6 +131,7 @@ duplex (RequestDuplex aprt aprs) (Raw { codecs: codecs@{ request: RequestDuplex 
 data PrefixLabels (sep ∷ Symbol)
   = PrefixLabels
 
+-- | A recursive call so we are able to prefix nested records.
 instance foldingWithIndexPrefixNested ::
   ( HFoldlWithIndex (PrefixLabels sep) (Raw () () ()) { | r } (Raw req res doc)
   , FoldingWithIndex (PrefixLabels sep) (SProxy l) accum (Raw req res doc) o

@@ -4,25 +4,20 @@ import Prelude
 
 import Data.Either (Either(..))
 import Data.Lazy (Lazy, defer)
-import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Variant (Variant)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
 import Heterogeneous.Mapping (class MappingWithIndex)
 import Hybrid.Api.Spec (ResponseCodec(..))
-import Hybrid.App.Spec (Raw(..)) as Spec
 import Hybrid.App.Renderer (Renderer)
-import Hybrid.Response (Response)
+import Hybrid.App.Spec (Raw(..)) as Spec
+import Hybrid.HTTP (Result(..)) as HTTP
+import Hybrid.HTTP.Exchange (Exchange(..)) as Exchange
+import Hybrid.HTTP.Response (Response)
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
 import Request.Duplex (Request, parse) as Request.Duplex
 import Type.Prelude (class IsSymbol, SProxy)
-
-type Handler m req res
-  = req → m (Response res)
-
-data Route handlers resCodecs renderers
-  = Route { | handlers } { | resCodecs } { | renderers }
 
 -- | On the server side we want to work with this type: `Response (Lazy String /\ Lazy doc)`
 -- | It gives as a way to respond to API calls but also to direct
@@ -35,12 +30,13 @@ render ∷
   req →
   ResponseCodec res →
   Renderer req res doc →
-  (Response res → Response (Lazy String /\ Lazy doc))
-render req (ResponseCodec codec) renderer res =
-  res
+  Response res →
+  Response (Lazy String /\ Lazy doc)
+render request (ResponseCodec codec) renderer response =
+  response
     <#> \content →
         let
-          doc = defer \_ → renderer req (Just (Right res))
+          doc = defer \_ → renderer $ Exchange.Done request (HTTP.Result $ Right response)
 
           dump = defer \_ → codec.encode content
         in
@@ -49,24 +45,32 @@ render req (ResponseCodec codec) renderer res =
 
 -- | Iterate over response codecs and build a single rendering
 -- | function by applying selected renderer to the response.
-newtype RenderResponse renderers
-  = RenderResponse { | renderers }
+newtype RenderMapping renderers
+  = RenderMapping { | renderers }
 
 instance renderResponse ::
   (IsSymbol sym, Row.Cons sym (Renderer req res doc) renderers_ renderers) =>
   MappingWithIndex
-    (RenderResponse renderers)
+    (RenderMapping renderers)
     (SProxy sym)
     (ResponseCodec res)
     (req → Response res → Response (Lazy String /\ Lazy doc)) where
-  mappingWithIndex (RenderResponse renderers) prop codec =
+  mappingWithIndex (RenderMapping renderers) prop codec request =
     let
       renderer = Record.get prop renderers
     in
-      \request → render request codec renderer
+      render request codec renderer
 
 
-instance routeFold ::
+type Handler m req res
+  = req → m (Response res)
+
+data RouterFolding handlers resCodecs renderers
+  = RouterFolding { | handlers } { | resCodecs } { | renderers }
+
+-- | This fold pattern maches over a request `Variant` to get
+-- | renderer and handler.
+instance routerFolding ::
   ( IsSymbol sym
   , Row.Cons sym (Handler m req res) handlers_ handlers
   , Row.Cons sym (ResponseCodec res) resCodecs_ resCodecs
@@ -74,12 +78,12 @@ instance routeFold ::
   , Monad m
   ) =>
   FoldingWithIndex
-    (Route handlers resCodecs renderers)
+    (RouterFolding handlers resCodecs renderers)
     (SProxy sym)
     Unit
     req
     (m (Response (Lazy String /\ Lazy doc))) where
-  foldingWithIndex (Route handlers resCodecs renderers) prop _ req =
+  foldingWithIndex (RouterFolding handlers resCodecs renderers) prop _ req =
     let
       renderer = Record.get prop renderers
 
@@ -96,17 +100,17 @@ instance routeFold ::
 data RoutingError
   = NotFound
 
-route ∷
+router ∷
   ∀ doc handlers m renderers request resCodecs.
   Monad m ⇒
-  HFoldlWithIndex (Route handlers resCodecs renderers) Unit (Variant request) (m (Response (Lazy String /\ Lazy doc))) ⇒
+  HFoldlWithIndex (RouterFolding handlers resCodecs renderers) Unit (Variant request) (m (Response (Lazy String /\ Lazy doc))) ⇒
   Spec.Raw request resCodecs renderers →
   { | handlers } →
   Request.Duplex.Request →
   m (Either RoutingError (Response (Lazy String /\ Lazy doc)))
-route spec@(Spec.Raw { codecs, renderers }) handlers = go
+router spec@(Spec.Raw { codecs, renderers }) handlers = go
   where
   go raw = do
     case Request.Duplex.parse codecs.request raw of
-      Right req → Right <$> hfoldlWithIndex (Route handlers codecs.response renderers) unit req
+      Right req → Right <$> hfoldlWithIndex (RouterFolding handlers codecs.response renderers) unit req
       Left err → pure $ Left NotFound

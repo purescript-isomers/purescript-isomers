@@ -131,3 +131,8 @@ in  upstream
       [ "console", "effect", "globals", "leibniz", "psci-support", "record" ]
       "https://github.com/natefaubion/purescript-typelevel-eval.git"
       "04e86ce3be5c46a7a13270d4fca183af6de648f5"
+  with
+    wire-react-router = mkPackage
+      [ "wire", "free", "freet", "react-basic-hooks" ]
+      "https://github.com/paluh/purescript-wire-react-router"
+      "master"

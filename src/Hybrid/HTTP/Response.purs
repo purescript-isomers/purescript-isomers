@@ -1,4 +1,4 @@
-module Hybrid.Response where
+module Hybrid.HTTP.Response where
 
 import Prelude
 
