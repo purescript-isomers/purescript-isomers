@@ -2,7 +2,6 @@ module Hybrid.App.Server where
 
 import Prelude
 
-import Control.Monad.Reader (Reader, runReader)
 import Data.Either (Either(..))
 import Data.Lazy (Lazy, defer)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -28,16 +27,17 @@ import Type.Prelude (class IsSymbol, SProxy)
 -- | We need a request because final rendering component
 -- | takes it as a part of input.
 render ∷
-  ∀ doc req res.
+  ∀ doc req res router.
+  router →
   req →
   ResponseCodec res →
-  Renderer req res doc →
+  Renderer router req res doc →
   Server.Result res →
-  Server.Result (Lazy String /\ doc)
-render request (ResponseCodec codec) renderer (Left raw) = Left raw
-render request (ResponseCodec codec) renderer (Right response) =
+  Server.Result (Lazy String /\ Lazy doc)
+render _ request (ResponseCodec codec) renderer (Left raw) = Left raw
+render clientRouter request (ResponseCodec codec) renderer (Right response) =
   let
-    doc = renderer $ Exchange.fromResponse request response
+    doc = defer \_ → renderer $ clientRouter /\ Exchange.fromResponse request response
 
     dump = defer \_ → codec.encode response
   in
@@ -47,8 +47,8 @@ render request (ResponseCodec codec) renderer (Right response) =
 type Handler m req res
   = req → m (Server.Result res)
 
-data RouterFolding handlers resCodecs renderers
-  = RouterFolding { | handlers } { | resCodecs } { | renderers }
+data RouterFolding router handlers resCodecs renderers
+  = RouterFolding router { | handlers } { | resCodecs } { | renderers }
 
 -- | This fold pattern maches over a request `Variant` to get
 -- | renderer and handler.
@@ -56,16 +56,16 @@ instance routerFolding ::
   ( IsSymbol sym
   , Row.Cons sym (Handler m req res) handlers_ handlers
   , Row.Cons sym (ResponseCodec res) resCodecs_ resCodecs
-  , Row.Cons sym (Renderer req res doc) renderers_ renderers
+  , Row.Cons sym (Renderer router req res doc) renderers_ renderers
   , Monad m
   ) =>
   FoldingWithIndex
-    (RouterFolding handlers resCodecs renderers)
+    (RouterFolding router handlers resCodecs renderers)
     (SProxy sym)
     Unit
     req
-    (m (Either Node.HTTP.Response (Lazy String /\ doc))) where
-  foldingWithIndex (RouterFolding handlers resCodecs renderers) prop _ req =
+    (m (Either Node.HTTP.Response (Lazy String /\ Lazy doc))) where
+  foldingWithIndex (RouterFolding clientRouter handlers resCodecs renderers) prop _ req =
     let
       renderer = Record.get prop renderers
 
@@ -78,48 +78,42 @@ instance routerFolding ::
         res ← handler req
         -- | On the server side we always have a response
         -- | which we can render.
-        pure $ render req resCodec renderer res
+        pure $ render clientRouter req resCodec renderer res
 
 data RoutingError
   = NotFound
 
 router ∷
-  ∀ doc handlers m renderers request resCodecs.
+  ∀ clientRouter doc handlers m renderers request resCodecs.
   Monad m ⇒
-  HFoldlWithIndex (RouterFolding handlers resCodecs renderers) Unit (Variant request) (m (Api.Server.Result (Lazy String /\ doc))) ⇒
+  HFoldlWithIndex (RouterFolding clientRouter handlers resCodecs renderers) Unit (Variant request) (m (Api.Server.Result (Lazy String /\ doc))) ⇒
+  clientRouter →
   Spec.Raw request resCodecs renderers →
   { | handlers } →
   Request.Duplex.Request →
   m (Either RoutingError (Api.Server.Result (Lazy String /\ doc)))
-router spec@(Spec.Raw { codecs, renderers }) handlers = go
+router clientRouter spec@(Spec.Raw { codecs, renderers }) handlers = go
   where
   go raw = do
     case Request.Duplex.parse codecs.request raw of
-      Right req → Right <$> hfoldlWithIndex (RouterFolding handlers codecs.response renderers) unit req
+      Right req → Right <$> hfoldlWithIndex (RouterFolding clientRouter handlers codecs.response renderers) unit req
       Left err → pure $ Left NotFound
-
 
 router' ∷
   ∀ doc handlers m renderers request resCodecs.
   Monad m ⇒
-  HFoldlWithIndex (RouterFolding handlers resCodecs renderers) Unit (Variant request) (m (Api.Server.Result (Lazy String /\ Reader (RouterInterface request) doc))) ⇒
+  HFoldlWithIndex (RouterFolding (RouterInterface request) handlers resCodecs renderers) Unit (Variant request) (m (Api.Server.Result (Lazy String /\ Lazy doc))) ⇒
   Spec.Raw request resCodecs renderers →
   { | handlers } →
   Request.Duplex.Request →
   m (Either RoutingError (Api.Server.Result (Lazy String /\ Lazy doc)))
-router' spec@(Spec.Raw { codecs, renderers }) handlers =
+router' =
   let
-    fakeWebRouter ∷ ∀ req. RouterInterface req
-    fakeWebRouter =
+    fakeClientRouter ∷ RouterInterface request
+    fakeClientRouter =
       { navigate: const $ pure unit
       , redirect: const $ pure unit
       , submit: const $ pure unit
       }
-  in \raw → do
-    case Request.Duplex.parse codecs.request raw of
-      Right req → do
-        res ← hfoldlWithIndex (RouterFolding handlers codecs.response renderers) unit req
-        let
-          res' = map (\r → defer \_ → runReader r fakeWebRouter) <$> res
-        pure (Right res')
-      Left err → pure $ Left NotFound
+  in
+    router fakeClientRouter

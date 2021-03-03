@@ -3,6 +3,7 @@ module Hybrid.App.Client.Render where
 import Prelude
 
 import Control.Monad.Except (ExceptT(..), runExceptT, throwError)
+import Data.Tuple.Nested ((/\), type (/\))
 import Data.Either (Either)
 import Data.Maybe (Maybe(..))
 import Data.Traversable (for)
@@ -19,23 +20,24 @@ import Record (get) as Record
 import Type.Prelude (class IsSymbol, SProxy)
 
 -- | We should put here `Spec` directly and not its piceses
-data RenderFolding req res rnd
+data RenderFolding router req res rnd
   = RenderFolding
+    router
     (Spec.Raw req res rnd)
 
 instance renderFolding ::
   ( IsSymbol sym
   , Row.Cons sym (ResponseCodec res) response_ response
-  , Row.Cons sym (Renderer req res doc) render_ render
+  , Row.Cons sym (Renderer router req res doc) render_ render
   , Row.Cons sym req request_ request
   ) =>
   FoldingWithIndex
-    (RenderFolding request response render)
+    (RenderFolding router request response render)
     (SProxy sym)
     Unit
     req
     (Maybe (Either FetchError (Response String)) → doc) where
-  foldingWithIndex (RenderFolding (Spec.Raw spec)) prop _ req res =
+  foldingWithIndex (RenderFolding router (Spec.Raw spec)) prop _ req res =
     let
       renderer = Record.get prop spec.renderers
 
@@ -49,13 +51,13 @@ instance renderFolding ::
                 Just resp → pure resp
                 Nothing → throwError (FetchError $ "Response decoding error: " <> content)
     in
-      renderer exch'
+      renderer (router /\ exch')
 
 render ::
-  ∀ doc rnd res req.
-  HFoldlWithIndex (RenderFolding req res rnd) Unit (Variant req) (Maybe (Either FetchError (Response String)) → doc) ⇒
+  ∀ doc rnd res req router.
+  HFoldlWithIndex (RenderFolding router req res rnd) Unit (Variant req) (Maybe (Either FetchError (Response String)) → doc) ⇒
   Spec.Raw req res rnd →
-  HTTP.Exchange (Variant req) String →
+  (router /\ HTTP.Exchange (Variant req) String) →
   doc
-render spec@(Spec.Raw { codecs }) (HTTP.Exchange req res) = do
-  hfoldlWithIndex (RenderFolding spec) unit req res
+render spec@(Spec.Raw { codecs }) (router /\ HTTP.Exchange req res) = do
+  hfoldlWithIndex (RenderFolding router spec) unit req res

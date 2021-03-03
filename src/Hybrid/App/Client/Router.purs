@@ -3,10 +3,10 @@ module Hybrid.App.Client.Router where
 import Prelude
 import Control.Monad.Except (throwError)
 import Control.Monad.Free.Trans (liftFreeT)
-import Control.Monad.Reader (Reader, runReader)
 import Data.Either (Either(..))
 import Data.Lens (view)
 import Data.Maybe (Maybe(..))
+import Data.Tuple.Nested ((/\))
 import Data.Variant (Variant)
 import Effect (Effect)
 import Effect.Aff.Class (liftAff)
@@ -36,7 +36,7 @@ type RouterInterface req
 
 router ∷
   ∀ doc req res rnd.
-  HFoldlWithIndex (RenderFolding req res rnd) Unit (Variant req) (Maybe (Either FetchError (Response String)) → doc) ⇒
+  HFoldlWithIndex (RenderFolding (RouterInterface req) req res rnd) Unit (Variant req) (Maybe (Either FetchError (Response String)) → doc) ⇒
   Spec.Raw req res rnd →
   Maybe (Either FetchError (Response String)) →
   Effect { component ∷ JSX, signal ∷ Signal doc, interface ∷ RouterInterface req }
@@ -96,15 +96,5 @@ router spec@(Spec.Raw { codecs }) initialResponse = do
 
         interface' = { navigate: navigate', redirect: redirect', submit: submit' }
 
-        signal' = signal <#> render
+        signal' = signal <#> \exchange → render (interface' /\ exchange)
       pure { component, signal: signal', interface: interface' }
-
-router' ∷
-  ∀ doc req res rnd.
-  HFoldlWithIndex (RenderFolding req res rnd) Unit (Variant req) (Maybe (Either FetchError (Response String)) → Reader (RouterInterface req) doc) ⇒
-  Spec.Raw req res rnd →
-  Maybe (Either FetchError (Response String)) →
-  Effect { component ∷ JSX, signal ∷ Signal doc, interface ∷ RouterInterface req }
-router' spec initialResponse = do
-  { component, signal, interface } ← router spec initialResponse
-  pure { component, signal: flip runReader interface <$> signal, interface }
