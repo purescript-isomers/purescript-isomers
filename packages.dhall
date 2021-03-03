@@ -132,7 +132,23 @@ in  upstream
       "https://github.com/natefaubion/purescript-typelevel-eval.git"
       "04e86ce3be5c46a7a13270d4fca183af6de648f5"
   with
-    wire-react-router = mkPackage
+    webrow = mkPackage
+      [ "b64", "console", "crypto", "effect", "homogeneous", "httpure", "logging-journald"
+      , "optparse", "polyform-batteries-env", "postgresql-client", "profunctor-lenses"
+      , "psci-support", "record", "record-extra", "routing-duplex-variant", "resourcet", "run"
+      , "run-streaming", "selda", "simple-jwt", "smolder", "spec", "strings"
+      , "string-parsers", "typelevel-eval", "undefined-is-not-a-problem", "uuid"
+      ]
+      "https://github.com/purescript-webrow/webrow.git"
+      "b6b928ede6ed5430f759bb39f268061377d5ccd9"
+  with
+    wire-react = mkPackage
       [ "wire", "free", "freet", "react-basic-hooks" ]
-      "https://github.com/paluh/purescript-wire-react-router"
-      "master"
+      "https://github.com/robertdp/purescript-wire-react"
+      "v0.0.1"
+  with
+    wire-react-router = ../purescript-wire-react-router/spago.dhall as Location
+    -- wire-react-router = mkPackage
+    --   [ "wire", "free", "freet", "react-basic-hooks" ]
+    --   "https://github.com/paluh/purescript-wire-react-router"
+    --   "master"

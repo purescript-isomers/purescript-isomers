@@ -4,5 +4,5 @@ module Hybrid.HTTP
   )
   where
 
-import Hybrid.HTTP.Exchange (exchange, Exchange(..), Result(..)) as Exchange
+import Hybrid.HTTP.Exchange (Exchange(..)) as Exchange
 import Hybrid.HTTP.Response (Response(..)) as Response

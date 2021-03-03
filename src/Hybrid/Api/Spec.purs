@@ -29,7 +29,3 @@ fromDual dual =
     , encode: Polyform.Validator.Dual.Pure.runSerializer dual
     }
 
-data FetchError
-  = FetchError String
-  | NotFound String
-

@@ -41,8 +41,8 @@ spec =
         { test:
             { admin:
                 App.Spec.endpoints true
-                  { dashboard: unitDuplex Request.Duplex.segment /\ number /\ \req res → "TEST"
-                  , profile: Request.Duplex.int Request.Duplex.segment /\ string /\ \req res → "TEST"
+                  { dashboard: unitDuplex Request.Duplex.segment /\ number /\ \req → "TEST"
+                  , profile: Request.Duplex.int Request.Duplex.segment /\ string /\ \req → "TEST"
                   }
             }
         }

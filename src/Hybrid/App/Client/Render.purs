@@ -3,17 +3,17 @@ module Hybrid.App.Client.Render where
 import Prelude
 
 import Control.Monad.Except (ExceptT(..), runExceptT, throwError)
-import Data.Lazy (Lazy, defer)
+import Data.Either (Either)
 import Data.Maybe (Maybe(..))
 import Data.Traversable (for)
-import Data.Tuple.Nested ((/\))
 import Data.Variant (Variant)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
-import Hybrid.Api.Spec (FetchError(..), ResponseCodec(..))
+import Hybrid.Api.Spec (ResponseCodec(..))
 import Hybrid.App.Renderer (Renderer)
 import Hybrid.App.Spec (Raw(..)) as Spec
-import Hybrid.HTTP.Exchange (Exchange(..), Result(..)) as HTTP.Exchange
-import Hybrid.HTTP.Exchange (Exchange, Result(..), exchange) as HTTP
+import Hybrid.HTTP.Exchange (Exchange(..)) as HTTP
+import Hybrid.HTTP.Exchange (FetchError(..))
+import Hybrid.HTTP.Response (Response)
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
 import Type.Prelude (class IsSymbol, SProxy)
@@ -33,36 +33,29 @@ instance renderFolding ::
     (RenderFolding request response render)
     (SProxy sym)
     Unit
-    (HTTP.Exchange req String)
-    (Lazy doc) where
-  foldingWithIndex (RenderFolding (Spec.Raw spec)) prop _ exch =
+    req
+    (Maybe (Either FetchError (Response String)) → doc) where
+  foldingWithIndex (RenderFolding (Spec.Raw spec)) prop _ req res =
     let
       renderer = Record.get prop spec.renderers
 
-      req /\ res = case exch of
-        HTTP.Exchange.Ongoing req → req /\ Nothing
-        HTTP.Exchange.Done req (HTTP.Exchange.Result res) → req /\ Just res
-
       ResponseCodec respCodec = Record.get prop spec.codecs.response
 
-    in
-        defer \_ →
-          let
-            res' = runExceptT do
+      exch' =
+        HTTP.Exchange req
+          $ runExceptT do
               rawRes ← ExceptT res
               for rawRes \content → case respCodec.decode content of
                 Just resp → pure resp
                 Nothing → throwError (FetchError $ "Response decoding error: " <> content)
-            result = HTTP.Result <$> res'
-          in
-            renderer $ HTTP.exchange req result
+    in
+      renderer exch'
 
 render ::
   ∀ doc rnd res req.
-  HFoldlWithIndex (RenderFolding req res rnd) Unit (HTTP.Exchange (Variant req) String) doc ⇒
+  HFoldlWithIndex (RenderFolding req res rnd) Unit (Variant req) (Maybe (Either FetchError (Response String)) → doc) ⇒
   Spec.Raw req res rnd →
   HTTP.Exchange (Variant req) String →
   doc
-render spec@(Spec.Raw { codecs }) exch = do
-  hfoldlWithIndex (RenderFolding spec) unit exch
-
+render spec@(Spec.Raw { codecs }) (HTTP.Exchange req res) = do
+  hfoldlWithIndex (RenderFolding spec) unit req res
