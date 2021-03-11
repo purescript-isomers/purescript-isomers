@@ -6,15 +6,18 @@ import Control.Applicative.Indexed (class IxApplicative, class IxApply, class Ix
 import Control.Apply as Control.Apply
 import Data.Argonaut (Json)
 import Data.Array (fromFoldable) as Array
+import Data.Either (hush)
 import Data.Functor.Compose (Compose(..))
 import Data.Identity (Identity)
 import Data.List (fromFoldable) as List
+import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Tuple.Nested ((/\), type (/\))
 import Hybrid.Api.Spec (ResponseCodec, fromDual)
 import Hybrid.App.Renderer.Types (Renderer)
-import Hybrid.HTTP (Exchange) as HTTP
+import Hybrid.HTTP (Exchange(..)) as HTTP
+import Hybrid.HTTP (Response(..))
 import Polyform.Batteries.Json (FieldMissing)
 import Polyform.Batteries.Json.Duals (Base, array) as Json.Duals
 import Polyform.Batteries.Json.Parser (dual') as Json.Parser
@@ -79,6 +82,32 @@ derive newtype instance ixFunctorBuilder ∷ IxFunctor (Builder router req err)
 derive newtype instance ixApplyBuilder ∷ IxApply (Builder router req err)
 
 derive newtype instance ixApplicativeBuilder ∷ IxApplicative (Builder router req err)
+
+request :: forall a err req router. Builder router req err a a req
+request = Builder $ BuilderBase
+  { dual: identity
+  , extract: identity
+  , render: \(Compose (_ /\ HTTP.Exchange req _)) → req
+  }
+
+router :: forall a err req router. Builder router req err a a router
+router = Builder $ BuilderBase
+  { dual: identity
+  , extract: identity
+  , render: \(Compose (r /\ _)) → r
+  }
+
+response :: forall err req router v. Builder router req err v v (Maybe v)
+response = Builder $ BuilderBase
+  { dual: identity
+  , extract: identity
+  , render: \(Compose (r /\ HTTP.Exchange _ v)) → join (hush <$> v) >>= unResponse
+  }
+  where
+    unResponse (Response v) = Just v
+    unResponse _ = Nothing
+
+
 
 builder ∷
   ∀ a doc err req router st.

@@ -1,15 +1,18 @@
 module Test.Main where
 
 import Prelude
+
 import Data.Maybe (Maybe(..))
 import Data.Number (fromString) as Number
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Hybrid.Api.Spec (ResponseCodec(..))
 import Hybrid.App.Spec (Raw(..))
-import Hybrid.App.Spec (duplex, endpoints, prefixLabels) as App.Spec
+import Hybrid.App.Spec (duplex, endpoints, prefix, prefixLabels) as App.Spec
 import Hybrid.Contrib.Request.Duplex (unitDuplex)
+import Hybrid.HTTP.Request.Method (get) as Method
 import Request.Duplex (int, segment) as Request.Duplex
+import Request.Duplex.Generic.Variant (methodVariant)
 import Type.Prelude (SProxy(..))
 
 number ∷ ResponseCodec Number
@@ -26,6 +29,26 @@ string =
     , encode: identity
     }
 
+-- spec' =
+--   -- App.Spec.prefixLabels
+--   --   (SProxy ∷ SProxy ".")
+--     { test:
+--         { admin:
+--           { "dashboard"
+--             Method $ Method.get
+--               ( App.Spec.endpoints true
+--                 { dashboard: unitDuplex /\ number /\ \_ req → "TEST"
+--                 , profile: Request.Duplex.int Request.Duplex.segment /\ string /\ \_ req → "TEST"
+--                 }
+--               )
+--           , "POST": App.Spec.endpoints true
+--             { dashboard: unitDuplex /\ number /\ \_ req → "TEST"
+--             , profile: Request.Duplex.int Request.Duplex.segment /\ string /\ \_ req → "TEST"
+--             }
+--           }
+--         }
+--     }
+
 -- router ::
 --   Router
 --     ( "admin.dashboard" ∷ ResponseCodec Number
@@ -41,8 +64,8 @@ spec =
         { test:
             { admin:
                 App.Spec.endpoints true
-                  { dashboard: unitDuplex Request.Duplex.segment /\ number /\ \req → "TEST"
-                  , profile: Request.Duplex.int Request.Duplex.segment /\ string /\ \req → "TEST"
+                  { dashboard: unitDuplex /\ number /\ \_ req → "TEST"
+                  , profile: Request.Duplex.int Request.Duplex.segment /\ string /\ \_ req → "TEST"
                   }
             }
         }

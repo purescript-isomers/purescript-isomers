@@ -12,9 +12,10 @@ import Data.Variant.Internal (VariantRep(..))
 import Data.Variant.Prefix (NilExpr, PrefixCases, PrefixStep, UnprefixCases, UnprefixStep)
 import Data.Variant.Prefix (add, remove) as Variant.Prefix
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
-import Heterogeneous.Mapping (class HMap, class HMapWithIndex, class Mapping, class MappingWithIndex, hmap, hmapWithIndex)
+import Heterogeneous.Mapping (class HMap, class HMapWithIndex, class Mapping, class MappingWithIndex, hmap, hmapWithIndex, mappingWithIndex)
 import Hybrid.Api.Spec (Codecs)
 import Hybrid.Contrib.Type.Eval.Tuple (Tuples)
+import Hybrid.HTTP.Request.Method (Method(..))
 import Prim.Row (class Cons, class Union) as Row
 import Prim.RowList (Cons, Nil) as RowList
 import Prim.RowList (class RowToList, kind RowList)
@@ -25,10 +26,12 @@ import Record.Prefix (PrefixProps, add) as Record.Prefix
 import Request.Duplex (RequestDuplex(..), RequestDuplex')
 import Request.Duplex (prefix) as Request.Duplex
 import Request.Duplex.Generic.Variant (Updater, modify, update, variant) as Request.Duplex.Generic.Variant
-import Request.Duplex.Generic.Variant (class VariantParser, class VariantPrinter)
+import Request.Duplex.Generic.Variant (class MethodPrefixRoutes, class VariantParser, class VariantPrinter)
 import Request.Duplex.Parser (RequestParser(..), RouteError(..), RouteResult(..)) as Request.Duplex.Parser
 import Request.Duplex.Parser (RequestParser)
 import Request.Duplex.Printer (RequestPrinter(..))
+import Type.Equality (class TypeEquals)
+import Type.Equality (to) as Type.Equality
 import Type.Eval (class Eval)
 import Type.Eval.Foldable (FoldrWithIndex)
 import Type.Eval.Function (type (<<<))
@@ -128,8 +131,40 @@ duplex (RequestDuplex aprt aprs) (Raw { codecs: codecs@{ request: RequestDuplex 
 
   request' = RequestDuplex prt' prs'
 
+-- instance methodPrefixRoutesRaw ::
+--   (MethodPrefixRoutes (RequestDuplex' req) (RequestDuplex' req')) =>
+--   MethodPrefixRoutes (RowList.Cons sym (Raw req res doc) tail) routes where
+--   methodPrefixRoutes _ = modify prop (method (reflectSymbol prop)) <> methodPrefixRoutes (RLProxy ∷ RLProxy tail)
+--     where
+--     prop = SProxy ∷ SProxy sym
+
+
 data PrefixLabels (sep ∷ Symbol)
   = PrefixLabels
+
+instance prefixLabelsMapping ∷
+  ( HFoldlWithIndex (PrefixLabels sep) (Raw () () ()) v (Raw req res doc)
+  ) ⇒
+  Mapping (PrefixLabels sep) v (Raw req res doc) where
+  mapping pref v =
+    hfoldlWithIndex pref z v
+    where
+      z = Raw { codecs: { request: RequestDuplex mempty fail, response: {} }, renderers: {} } ∷ Raw () () ()
+
+instance foldingWithIndexPrefixMethod ::
+  ( HMap (PrefixLabels sep) (Variant v) (Variant v')
+  ) =>
+  FoldingWithIndex
+    (PrefixLabels sep)
+    (SProxy l)
+    accum
+    (Method v)
+    (Method v') where
+  foldingWithIndex pref prop accum (Method v) =
+    let
+      v' = hmap pref v
+    in
+      Method v'
 
 -- | A recursive call so we are able to prefix nested records.
 instance foldingWithIndexPrefixNested ::

@@ -4,20 +4,25 @@ import Prelude
 
 import Data.Either (Either(..))
 import Data.Lazy (Lazy, defer)
+import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Variant (Variant)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
+import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Hybrid.Api.Server (Result) as Api.Server
 import Hybrid.Api.Server (Result) as Server
 import Hybrid.Api.Spec (ResponseCodec(..))
 import Hybrid.App.Client.Router (RouterInterface)
+import Hybrid.App.Client.Router (print) as Client.Router
 import Hybrid.App.Renderer (Renderer)
 import Hybrid.App.Spec (Raw(..)) as Spec
+import Hybrid.HTTP (Exchange(..)) as Hybrid.HTTP
 import Hybrid.HTTP.Exchange (fromResponse) as Exchange
 import Node.HTTP (Response) as Node.HTTP
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
 import Request.Duplex (Request, parse) as Request.Duplex
+import Type.Equality (class TypeEquals, to)
 import Type.Prelude (class IsSymbol, SProxy)
 
 -- | On the server side we want to work with this type: `Response (Lazy String /\ Lazy doc)`
@@ -33,11 +38,11 @@ render ∷
   ResponseCodec res →
   Renderer router req res doc →
   Server.Result res →
-  Server.Result (Lazy String /\ Lazy doc)
+  Server.Result (Lazy String /\ doc)
 render _ request (ResponseCodec codec) renderer (Left raw) = Left raw
 render clientRouter request (ResponseCodec codec) renderer (Right response) =
   let
-    doc = defer \_ → renderer $ clientRouter /\ Exchange.fromResponse request response
+    doc = renderer $ clientRouter /\ Exchange.fromResponse request response
 
     dump = defer \_ → codec.encode response
   in
@@ -47,8 +52,11 @@ render clientRouter request (ResponseCodec codec) renderer (Right response) =
 type Handler m req res
   = req → m (Server.Result res)
 
-data RouterFolding router handlers resCodecs renderers
-  = RouterFolding router { | handlers } { | resCodecs } { | renderers }
+-- | We should move the renderer context (`clienentRouter` outside of the scope
+-- | of this folding.
+-- | This should be done by preprocessing initial records of handlers / renderers.
+data RouterFolding clientRouter handlers resCodecs renderers
+  = RouterFolding clientRouter { | handlers } { | resCodecs } { | renderers }
 
 -- | This fold pattern maches over a request `Variant` to get
 -- | renderer and handler.
@@ -64,7 +72,7 @@ instance routerFolding ::
     (SProxy sym)
     Unit
     req
-    (m (Either Node.HTTP.Response (Lazy String /\ Lazy doc))) where
+    (m (Either Node.HTTP.Response (Lazy String /\ doc))) where
   foldingWithIndex (RouterFolding clientRouter handlers resCodecs renderers) prop _ req =
     let
       renderer = Record.get prop renderers
@@ -99,21 +107,37 @@ router clientRouter spec@(Spec.Raw { codecs, renderers }) handlers = go
       Right req → Right <$> hfoldlWithIndex (RouterFolding clientRouter handlers codecs.response renderers) unit req
       Left err → pure $ Left NotFound
 
+-- | Currently handler context is just a router printer function.
+data ArgMapping ctx = ArgMapping ctx --
+
+instance handlerContextMapping ∷
+  (TypeEquals a (ctx → h)) ⇒
+  Mapping (ArgMapping ctx) a h where
+  mapping (ArgMapping ctx) f = (to f) ctx
+
 router' ∷
-  ∀ doc handlers m renderers request resCodecs.
+  ∀ doc handlers handlers' m renderers request resCodecs.
   Monad m ⇒
-  HFoldlWithIndex (RouterFolding (RouterInterface request) handlers resCodecs renderers) Unit (Variant request) (m (Api.Server.Result (Lazy String /\ Lazy doc))) ⇒
+  HMap (ArgMapping (Variant request → String)) { | handlers } { | handlers' } ⇒
+  HFoldlWithIndex (RouterFolding (RouterInterface request) handlers' resCodecs renderers) Unit (Variant request) (m (Api.Server.Result (Lazy String /\ doc))) ⇒
   Spec.Raw request resCodecs renderers →
   { | handlers } →
   Request.Duplex.Request →
-  m (Either RoutingError (Api.Server.Result (Lazy String /\ Lazy doc)))
-router' =
+  m (Either RoutingError (Api.Server.Result (Lazy String /\ doc)))
+router' spec@(Spec.Raw { codecs }) handlers =
   let
+    print ∷ Variant request → String
+    print route = Client.Router.print codecs.request (Hybrid.HTTP.Exchange route Nothing)
+
+    handlers' ∷ { | handlers' }
+    handlers' = hmap (ArgMapping print) handlers
+
     fakeClientRouter ∷ RouterInterface request
     fakeClientRouter =
       { navigate: const $ pure unit
       , redirect: const $ pure unit
+      , print
       , submit: const $ pure unit
       }
   in
-    router fakeClientRouter
+    router fakeClientRouter spec handlers'
