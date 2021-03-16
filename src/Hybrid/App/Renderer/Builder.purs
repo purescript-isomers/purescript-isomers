@@ -4,20 +4,25 @@ import Prelude
 
 import Control.Applicative.Indexed (class IxApplicative, class IxApply, class IxFunctor)
 import Control.Apply as Control.Apply
+import Control.Monad.Except (class MonadError)
 import Data.Argonaut (Json)
 import Data.Array (fromFoldable) as Array
 import Data.Either (hush)
 import Data.Functor.Compose (Compose(..))
+import Data.Functor.Variant (on)
+import Data.Functor.Variant (default) as Functor.Variant
 import Data.Identity (Identity)
 import Data.List (fromFoldable) as List
 import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Tuple.Nested ((/\), type (/\))
-import Hybrid.Api.Spec (ResponseCodec, fromDual)
 import Hybrid.App.Renderer.Types (Renderer)
 import Hybrid.HTTP (Exchange(..)) as HTTP
 import Hybrid.HTTP (Response(..))
+import Hybrid.HTTP.Response (OkF(..), Ok, _ok)
+import Hybrid.HTTP.Response.Codec (Codec') as Response
+import Hybrid.HTTP.Response.Codec (fromJsonDual) as Codec
 import Polyform.Batteries.Json (FieldMissing)
 import Polyform.Batteries.Json.Duals (Base, array) as Json.Duals
 import Polyform.Batteries.Json.Parser (dual') as Json.Parser
@@ -28,7 +33,6 @@ import Polyform.Validator.Dual (iso) as Validator.Dual
 import Type.Row (type (+))
 
 -- | TODO: Should we drop `resp` and move to something like: `render ∷ Maybe (Either err b) → m doc` ?
--- |
 newtype BuilderBase resp dual a b doc
   = BuilderBase
   { dual ∷ dual a → dual b
@@ -65,55 +69,60 @@ instance ixApplicativeBuilderBase ∷ (Functor resp) ⇒ IxApplicative (BuilderB
 
 -- | We accumulate parts of the final response content
 -- | using `a` and `b` (which is something like `b ∷ value /\ a`).
-newtype Builder router req err a b doc
+newtype Builder router req res err a b doc
   = Builder
   ( BuilderBase
-      (Compose (Tuple router) (HTTP.Exchange req))
+      (Compose (Tuple router) (HTTP.Exchange res req))
       (Json.Tokenized.Duals.Pure err)
       a
       b
       doc
   )
 
-derive newtype instance functorBuilder ∷ Functor (Builder router req err a b)
+derive newtype instance functorBuilder ∷ Functor (Builder router req res err a b)
 
-derive newtype instance ixFunctorBuilder ∷ IxFunctor (Builder router req err)
+derive newtype instance ixFunctorBuilder ∷ IxFunctor (Builder router req res err)
 
-derive newtype instance ixApplyBuilder ∷ IxApply (Builder router req err)
+derive newtype instance ixApplyBuilder ∷ IxApply (Builder router req res err)
 
-derive newtype instance ixApplicativeBuilder ∷ IxApplicative (Builder router req err)
+derive newtype instance ixApplicativeBuilder ∷ IxApplicative (Builder router req res err)
 
-request :: forall a err req router. Builder router req err a a req
+request :: forall a err req res router. Builder router req res err a a req
 request = Builder $ BuilderBase
   { dual: identity
   , extract: identity
   , render: \(Compose (_ /\ HTTP.Exchange req _)) → req
   }
 
-router :: forall a err req router. Builder router req err a a router
+router :: forall a err req res router. Builder router req res err a a router
 router = Builder $ BuilderBase
   { dual: identity
   , extract: identity
   , render: \(Compose (r /\ _)) → r
   }
 
-response :: forall err req router v. Builder router req err v v (Maybe v)
+response :: forall err req res router v. Builder router req res err v v (Maybe (Response res v))
 response = Builder $ BuilderBase
+  { dual: identity
+  , extract: identity
+  , render: \(Compose (r /\ HTTP.Exchange _ v)) → join (hush <$> v)
+  }
+
+-- | TODO: Rename to `body`
+content :: forall contentType err req res router v. Builder router req (Ok contentType + res) err v v (Maybe v)
+content = Builder $ BuilderBase
   { dual: identity
   , extract: identity
   , render: \(Compose (r /\ HTTP.Exchange _ v)) → join (hush <$> v) >>= unResponse
   }
   where
-    unResponse (Response v) = Just v
-    unResponse _ = Nothing
-
-
+    unResponse = un Response >>> (Functor.Variant.default Nothing # on _ok \(OkF c) → Just c)
 
 builder ∷
-  ∀ a doc err req router st.
+  ∀ a doc err req res router st.
   Json.Duals.Base Identity (FieldMissing + err) Json st →
-  Renderer router req st doc →
-  Builder router req (FieldMissing + err) a (st /\ a) doc
+  Renderer router req res st doc →
+  Builder router req res (FieldMissing + err) a (st /\ a) doc
 builder dual constructor =
   let
     dual' ∷ Json.Tokenized.Duals.Pure (FieldMissing + err) a → Json.Tokenized.Duals.Pure (FieldMissing + err) (st /\ a)
@@ -135,10 +144,12 @@ builder dual constructor =
           }
 
 endpoint ∷
-  ∀ doc err req res router.
+  ∀ aff doc err req res resRow router.
+  MonadError String aff ⇒
   Builder
     router
     req
+    resRow
     ( arrayExpected ∷ Json
     , endExpected ∷ Json
     , jsonDecodingError ∷ String
@@ -147,8 +158,8 @@ endpoint ∷
     Unit
     res
     doc →
-  ResponseCodec res /\ Renderer router req res doc
-endpoint b = fromDual (d b) /\ r b
+  Response.Codec' aff res /\ Renderer router req resRow res doc
+endpoint b = Codec.fromJsonDual (d b) /\ r b
   where
   r (Builder (BuilderBase { render })) = render <<< Compose
   d (Builder (BuilderBase { dual })) =

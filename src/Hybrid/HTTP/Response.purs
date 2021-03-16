@@ -1,16 +1,38 @@
-module Hybrid.HTTP.Response where
+module Hybrid.HTTP.Response
+  ( module Codec
+  , _ok
+  , OkF(..)
+  , Ok
+  , RedirectF(..)
+  , Redirect
+  , Location
+  , Response(..)
+  )
+  where
 
 import Prelude
-import Data.Foldable (class Foldable, foldlDefault, foldrDefault)
-import Data.Traversable (class Traversable, traverseDefault)
+
+import Data.Either (Either(..))
+import Data.Foldable (class Foldable)
+import Data.Functor.Variant (FProxy, VariantF, on)
+import Data.Functor.Variant (default, inj) as Functor.Variant
+import Data.Lazy (force) as Lazy
+import Data.Map (lookup) as Map
+import Data.Maybe (Maybe(..))
+import Data.Newtype (class Newtype)
+import Data.Traversable (class Traversable)
+import Hybrid.HTTP.Response.Codec (Codec(..)) as Codec
+import Hybrid.HTTP.Response.Codec (Codec(..), Codec')
+import Hybrid.HTTP.Response.Fetch (Interface(..)) as Response.Fetch
+import Hybrid.HTTP.Response.Node (Interface(..)) as Response.Node
+import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
+import Type.Row (type (+))
 
 foreign import data ArrayBuffer :: Type
 
 -- | TODO:
 -- | We should have here probably something like: Attachment _ | Redirect _ | Response _
 -- | At the moment I'm just testing simple 200 scenario here.
-type Location
-  = String
 
 -- | * Attachment value indicates whether file was saved or not.
 -- |
@@ -21,22 +43,71 @@ type Location
 -- | * Check if we can turn `ResponseCodec` into something like
 -- | `VariantF response String → Node.HTTP.Response`.
 -- |
-data Response content
-  = Attachment Boolean
-  | Redirect Location
-  | Response content
 
-derive instance functorResponse ∷ Functor Response
+newtype Response response a = Response (VariantF response a)
+instance newtypeResponse ∷ Newtype (Response response a) (VariantF response a) where
+  wrap = Response
+  unwrap (Response v) = v
+derive newtype instance functorResponse ∷ Functor (Response response)
+derive newtype instance foldableResponse ∷ (Foldable (VariantF response)) ⇒ Foldable (Response response)
+derive newtype instance traverseableResponse ∷ (Traversable (VariantF response)) ⇒ Traversable (Response response)
 
-instance foldableResponse ∷ Foldable Response where
-  foldMap f (Attachment _) = mempty
-  foldMap f (Redirect _) = mempty
-  foldMap f (Response content) = f content
-  foldr accum = foldrDefault accum
-  foldl accum = foldlDefault accum
+type Response' res contentType a = Response (Ok contentType + res) a
 
-instance traversableResponse ∷ Traversable Response where
-  sequence (Attachment arr) = pure $ Attachment arr
-  sequence (Redirect loc) = pure $ Redirect loc
-  sequence (Response content) = Response <$> content
-  traverse f = traverseDefault f
+data OkF (contentType ∷ Symbol) a = OkF a
+derive instance functorOkF ∷ Functor (OkF contentType)
+
+type Ok contentType res = (ok ∷ FProxy (OkF contentType) | res)
+
+_ok = SProxy ∷ SProxy "ok"
+
+type Location = String
+
+data RedirectF a = RedirectF Location
+
+derive instance functorRedirectF ∷ Functor RedirectF
+
+_redirect = SProxy ∷ SProxy "redirect"
+
+type Redirect res = (redirect ∷ FProxy RedirectF | res)
+
+ok ∷ ∀ aff content contentType res. IsSymbol contentType ⇒ Monad aff ⇒ Codec' aff content → Codec' aff (Response' res contentType content)
+ok (Codec encode decode) = Codec
+  (\n@(Response.Node.Interface nodeInterface) (Response v) → do
+    let
+      handle = Functor.Variant.default (pure unit)
+        # on _ok \(OkF i) → do
+          nodeInterface.setStatusCode 200
+          nodeInterface.setStatusMessage "OK"
+          nodeInterface.setHeader "Content-Type" (reflectSymbol (SProxy ∷ SProxy contentType))
+          encode n i
+    handle v
+  )
+  (\f@(Response.Fetch.Interface fetchInterface) → do
+      if fetchInterface.ok
+        then do
+          content ← decode f
+          pure $ (Response <<< Functor.Variant.inj _ok <<< OkF) <$> content
+
+        else pure $ Left "Expecting Ok response"
+  )
+
+redirect ∷ ∀ aff content res. Monad aff ⇒ Codec' aff (Response (Redirect + res) content)
+redirect = Codec
+  (\n@(Response.Node.Interface nodeInterface) (Response v) → do
+    let
+      handle = Functor.Variant.default (pure unit)
+        # on _redirect \(RedirectF location) → do
+          -- | TODO: Handle 301 / 302
+          nodeInterface.setStatusCode 302
+          nodeInterface.setStatusMessage "Found"
+          nodeInterface.setHeader "Location" location
+    handle v
+  )
+  (\f@(Response.Fetch.Interface fetchInterface) → do
+      if fetchInterface.redirected
+        then case Map.lookup "Location" (Lazy.force fetchInterface.headers) of
+          Just location → pure $ (Right <<< Response <<< Functor.Variant.inj _redirect <<< RedirectF) location
+          Nothing → pure $ Left "Missing \"Location\" header in redirect response"
+        else pure $ Left "Expecting Ok response"
+  )

@@ -13,26 +13,26 @@ import Type.Equality (to) as Type.Equality
 import Type.Prelude (class TypeEquals)
 import Type.Row (type (+))
 
-newtype Accept (contentTypes ∷ #Type) = Accept (Variant contentTypes)
-derive instance newtypeAccept ∷ Newtype (Accept row) _
+newtype Accept v = Accept v
+derive instance newtypeAccept ∷ Newtype (Accept v) _
 
-instance hmapAccept ∷ (HMap' f (Variant v) (Variant v')) ⇒
-  HMap f (Accept v) (Accept v') where
-  hmap f (Accept v) = Accept (hmap' f v)
+-- instance hmapAccept ∷ (HMap' f (Variant v) (Variant v')) ⇒
+--   HMap f (Accept v) (Accept v') where
+--   hmap f (Accept v) = Accept (hmap' f v)
+-- 
+-- instance foldlAccept ∷ (HFoldl f acc (Variant v) a) ⇒ HFoldl f acc (Accept v) a where
+--   hfoldl f acc (Accept v) = hfoldl f acc v
 
-instance foldlAccept ∷ (HFoldl f acc (Variant v) a) ⇒ HFoldl f acc (Accept v) a where
-  hfoldl f acc (Accept v) = hfoldl f acc v
-
-jpeg ∷ ∀ a cts. a → Accept (Jpeg a + cts)
+jpeg ∷ ∀ a cts. a → Accept (Variant (Jpeg a + cts))
 jpeg = Accept <<< ContentTypes.jpeg
 
-json ∷ ∀ a cts. a → Accept (ContentTypes.Json a + cts)
+json ∷ ∀ a cts. a → Accept (Variant (ContentTypes.Json a + cts))
 json = Accept <<< ContentTypes.json
 
-png ∷ ∀ a cts. a → Accept (Png a + cts)
+png ∷ ∀ a cts. a → Accept (Variant (Png a + cts))
 png = Accept <<< ContentTypes.png
 
-svg ∷ ∀ a cts. a → Accept (Svg a + cts)
+svg ∷ ∀ a cts. a → Accept (Variant (Svg a + cts))
 svg = Accept <<< ContentTypes.svg
 
 

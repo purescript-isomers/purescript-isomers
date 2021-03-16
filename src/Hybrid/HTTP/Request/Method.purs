@@ -2,55 +2,21 @@ module Hybrid.HTTP.Request.Method where
 
 import Prelude
 
-import Data.Functor.Variant (SProxy(..))
-import Data.Newtype (class Newtype)
 import Data.Variant (Variant, inj)
-import Heterogeneous.Folding (class HFoldl, hfoldl)
-import Heterogeneous.Mapping (class HMap, class HMapWithIndex, class Mapping, class MappingWithIndex, mapping)
-import Hybrid.Contrib.Heterogeneous (class HMap', class HMapWithIndex', hmap', hmapWithIndex')
-import Type.Equality (to) as Type.Equality
-import Type.Prelude (class TypeEquals)
+import Hybrid.HTTP.Method (DELETE, GET, Method(..), POST, PUT, _delete, _get, _post, _put)
 import Type.Row (type (+))
 
-newtype Method (row ∷ #Type) = Method (Variant row)
-instance newtypeMethod ∷ Newtype (Method row) (Variant row) where
-  wrap v = Method v
-  unwrap (Method v) = v
-
-instance hmapMethod ∷ (HMap' f (Variant v) (Variant v')) ⇒
-  HMap f (Method v) (Method v') where
-  hmap f (Method v) = Method (hmap' f v)
-
-instance foldlMethod ∷ (HFoldl f acc (Variant v) a) ⇒ HFoldl f acc (Method v) a where
-  hfoldl f acc (Method v) = hfoldl f acc v
-
-type DELETE req methods = ("DELETE" ∷ req | methods)
-type GET req methods = ("GET" ∷ req | methods)
-type POST req methods = ("POST" ∷ req | methods)
-type PUT req methods = ("PUT" ∷ req | methods)
-
-_delete = SProxy ∷ SProxy "DELETE"
-
-_get = SProxy ∷ SProxy "GET"
-
-_post = SProxy ∷ SProxy "POST"
-
-_put = SProxy ∷ SProxy "PUT"
-
-
-delete ∷ ∀ methods req. req → Method (DELETE req + methods)
+delete ∷ ∀ methods req. req → Method (Variant (DELETE req + methods))
 delete = Method <<< inj _delete
 
-get ∷ ∀ methods req. req → Method (GET req + methods)
+get ∷ ∀ methods req. req → Method (Variant (GET req + methods))
 get = Method <<< inj _get
 
-post ∷ ∀ methods req. req → Method (POST req + methods)
+post ∷ ∀ methods req. req → Method (Variant (POST req + methods))
 post = Method <<< inj _post
 
-put ∷ ∀ methods req. req → Method (PUT req + methods)
+put ∷ ∀ methods req. req → Method (Variant (PUT req + methods))
 put = Method <<< inj _put
-
-
 
 -- | This can be a bit confusing but we have three mappings for
 -- | `Method` defined here.

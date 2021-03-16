@@ -32,6 +32,28 @@ in  upstream
       "https://github.com/natefaubion/purescript-typelevel-eval.git"
       "04e86ce3be5c46a7a13270d4fca183af6de648f5"
   with
+    web-fetch = ../purescript-web-fetch/spago.dhall as Location
+    --   { dependencies =
+    --     [ "effect"
+    --     , "foreign-object"
+    --     , "http-methods"
+    --     , "prelude"
+    --     , "record"
+    --     , "typelevel-prelude"
+    --     , "web-file"
+    --     , "web-promise"
+    --     , "web-streams"
+    --     ]
+    --   , repo = "https://github.com/purescript-web/purescript-web-fetch.git"
+    --   , version = "v1.0.1"
+    --   }
+  with
+    web-file =
+    { dependencies = [ "foreign", "media-types", "web-dom" ]
+    , repo = "https://github.com/purescript-web/purescript-web-file.git"
+    , version = "v2.3.0"
+    }
+  with
     webrow = mkPackage
       [ "b64", "console", "crypto", "effect", "homogeneous", "httpure", "logging-journald"
       , "optparse", "polyform-batteries-env", "postgresql-client", "profunctor-lenses"
@@ -42,13 +64,40 @@ in  upstream
       "https://github.com/purescript-webrow/webrow.git"
       "b6b928ede6ed5430f759bb39f268061377d5ccd9"
   with
+    web-promise =
+      { dependencies =
+        [ "effect"
+        , "foldable-traversable"
+        , "exceptions"
+        , "functions"
+        , "maybe"
+        , "prelude"
+        ]
+      , repo = "https://github.com/purescript-web/purescript-web-promise.git"
+      , version = "v1.0.3"
+      }
+  with
     wire-react = mkPackage
       [ "wire", "free", "freet", "react-basic-hooks" ]
       "https://github.com/robertdp/purescript-wire-react"
       "v0.0.1"
   with
     wire-react-router = ../purescript-wire-react-router/spago.dhall as Location
-    -- wire-react-router = mkPackage
-    --   [ "wire", "free", "freet", "react-basic-hooks" ]
-    --   "https://github.com/paluh/purescript-wire-react-router"
-    --   "master"
+  with
+    web-streams =
+      { dependencies =
+        [ "arraybuffer-types"
+        , "effect"
+        , "exceptions"
+        , "nullable"
+        , "prelude"
+        , "tuples"
+        , "web-promise"
+        ]
+      , repo = "https://github.com/purescript-web/purescript-web-streams.git"
+      , version = "v1.0.0"
+      }
+  -- wire-react-router = mkPackage
+  --   [ "wire", "free", "freet", "react-basic-hooks" ]
+  --   "https://github.com/paluh/purescript-wire-react-router"
+  --   "master"
