@@ -6,11 +6,11 @@ module Test.Main where
 -- import Data.Number (fromString) as Number
 -- import Data.Tuple.Nested ((/\))
 -- import Effect (Effect)
--- import Hybrid.Api.Spec (ResponseCodec(..))
--- import Hybrid.App.Spec (Raw(..))
--- import Hybrid.App.Spec (duplex, endpoints, prefix, prefixLabels) as App.Spec
--- import Hybrid.Contrib.Request.Duplex (unitDuplex)
--- import Hybrid.HTTP.Request.Method (get) as Method
+-- import Isomer.Api.Spec (ResponseCodec(..))
+-- import Isomer.App.Spec (Raw(..))
+-- import Isomer.App.Spec (duplex, endpoints, prefix, prefixLabels) as App.Spec
+-- import Isomer.Contrib.Request.Duplex (unitDuplex)
+-- import Isomer.HTTP.Request.Method (get) as Method
 -- import Request.Duplex (int, segment) as Request.Duplex
 -- import Request.Duplex.Generic.Variant (methodVariant)
 -- import Type.Prelude (SProxy(..))
