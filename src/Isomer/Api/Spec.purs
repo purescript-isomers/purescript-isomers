@@ -60,16 +60,20 @@ _request = SProxy ∷ SProxy "request"
 
 _response = SProxy ∷ SProxy "response"
 
-_RequestMapping ∷ Mappings.Compose (Mappings.Record.Get "request") Mappings.Newtype.Unwrap
+type RequestMapping = Mappings.Compose (Mappings.Record.Get "request") Mappings.Newtype.Unwrap
+
+_RequestMapping ∷ RequestMapping
 _RequestMapping = Mappings.Record.Get _request `Mappings.Compose` Mappings.Newtype.Unwrap
 
-_ResponseMapping ∷ Mappings.Compose Mappings.Newtype.Unwrap (Mappings.Compose (Mappings.Record.Get "response") Mappings.Newtype.Unwrap)
-_ResponseMapping = Mappings.Newtype.Unwrap `Mappings.Compose` (Mappings.Record.Get _response `Mappings.Compose` Mappings.Newtype.Unwrap)
+type ResponseMapping = Mappings.Compose (Mappings.Record.Get "response") Mappings.Newtype.Unwrap
+
+_ResponseMapping ∷ ResponseMapping
+_ResponseMapping = Mappings.Record.Get _response `Mappings.Compose` Mappings.Newtype.Unwrap
 
 method ∷
   ∀ t221 t227 t235 t238 t239.
-  HMap (Mappings.Compose Mappings.Newtype.Unwrap (Mappings.Compose (Mappings.Record.Get "response") Mappings.Newtype.Unwrap)) t227 { | t221 } ⇒
-  HMap (Mappings.Compose (Mappings.Record.Get "request") Mappings.Newtype.Unwrap) t227 { | t239 } ⇒
+  HMap ResponseMapping t227 { | t221 } ⇒
+  HMap RequestMapping t227 { | t239 } ⇒
   RowToList t239 t238 ⇒
   Request.Duplex.Generic.Variant.VariantParser t238 t239 t235 ⇒
   Request.Duplex.Generic.Variant.VariantPrinter t238 t239 t235 ⇒
@@ -96,19 +100,17 @@ type PrefixRoutes
 data SpecFolding (sep ∷ Symbol)
   = SpecFolding (SProxy sep) PrefixRoutes
 
-data ApiFolding
-
-prefix ∷ ∀ t173 t174. HFoldlWithIndex (SpecFolding ".") (Spec (Variant ()) (Record ())) t173 t174 ⇒ t173 → t174
+prefix ∷ ∀ t173 t174. HFoldlWithIndex (SpecFolding ".") (Spec (Variant ()) {}) t173 t174 ⇒ t173 → t174
 prefix raw = hfoldlWithIndex (SpecFolding (SProxy ∷ SProxy ".") true) emptyVariantSpec raw
 
-emptyVariantSpec ∷ Spec (Variant ()) (Record ())
+emptyVariantSpec ∷ Spec (Variant ()) {}
 emptyVariantSpec = Spec { request: emptyVariantDuplex, response: {} }
-
-emptyVariantDuplex ∷ RequestDuplex' (Variant ())
-emptyVariantDuplex = RequestDuplex mempty fail
   where
-  fail ∷ RequestParser (Variant ())
-  fail = Request.Duplex.Parser.Chomp $ const $ Request.Duplex.Parser.Fail Request.Duplex.Parser.EndOfPath
+    emptyVariantDuplex ∷ RequestDuplex' (Variant ())
+    emptyVariantDuplex = RequestDuplex mempty fail
+      where
+      fail ∷ RequestParser (Variant ())
+      fail = Request.Duplex.Parser.Chomp $ const $ Request.Duplex.Parser.Fail Request.Duplex.Parser.EndOfPath
 
 -- | We recurse into the records when we encounter them as field value.
 -- | Finally this result should be wrapped into the `RecordCodecs` constructor.

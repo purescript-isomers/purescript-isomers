@@ -2,17 +2,22 @@ module Isomer.Web.Spec where
 
 import Prelude
 import Data.Variant (Variant)
-import Data.Variant (Variant)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
+import Heterogeneous.Mapping (class HMap)
+import Hybrid.Contrib.Heterogeneous.Mappings (Compose(..)) as Mappings
 import Isomer.Api (Spec, SpecFolding(..)) as Api
 import Isomer.Api.Spec (PrefixRoutes)
-import Isomer.Api.Spec (emptyVariantSpec, endpoint) as Api.Spec
+import Isomer.Api.Spec (RequestMapping, ResponseMapping, emptyVariantSpec, endpoint, method) as Api.Spec
+import Isomer.Contrib.Heterogeneous (hmap')
 import Isomer.Contrib.Heterogeneous.Foldings (Flatten(..)) as Heterogeneous.Foldings
+import Isomer.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.Newtype
+import Isomer.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
+import Isomer.HTTP (Method(..))
 import Isomer.HTTP.Request (Data) as Request
-import Isomer.HTTP.Request (Data) as Request
+import Prim.RowList (class RowToList)
 import Request.Duplex (RequestDuplex')
-import Request.Duplex (RequestDuplex')
-import Type.Prelude (SProxy)
+import Request.Duplex.Generic.Variant (class MethodPrefixRoutes, class VariantParser, class VariantPrinter) as Request.Duplex.Generic.Variant
+import Type.Prelude (SProxy(..))
 
 newtype Spec request responseDuplexes renderers
   = Spec
@@ -37,6 +42,45 @@ endpoint =
 emptyVariantSpec ∷ Spec (Variant ()) {} {}
 emptyVariantSpec = Spec { api: Api.Spec.emptyVariantSpec, renderers: {} }
 
+_api = SProxy ∷ SProxy "api"
+
+_renderers = SProxy ∷ SProxy "renderers"
+
+type ApiMapping
+  = Mappings.Compose (Mappings.Record.Get "api") Mappings.Newtype.Unwrap
+
+_ApiMapping ∷ ApiMapping
+_ApiMapping = Mappings.Record.Get _api `Mappings.Compose` Mappings.Newtype.Unwrap
+
+type RenderersMapping
+  = Mappings.Compose (Mappings.Record.Get "renderers") Mappings.Newtype.Unwrap
+
+_RenderersMapping ∷ RenderersMapping
+_RenderersMapping = Mappings.Record.Get _renderers `Mappings.Compose` Mappings.Newtype.Unwrap
+
+method ∷
+  ∀ renderers api t221 t227 t235 t238 t239.
+  HMap ApiMapping t227 api ⇒
+  HMap Api.Spec.ResponseMapping api { | t221 } ⇒
+  HMap Api.Spec.RequestMapping api { | t239 } ⇒
+  HMap RenderersMapping t227 { | renderers } ⇒
+  RowToList t239 t238 ⇒
+  Request.Duplex.Generic.Variant.VariantParser t238 t239 t235 ⇒
+  Request.Duplex.Generic.Variant.VariantPrinter t238 t239 t235 ⇒
+  Request.Duplex.Generic.Variant.MethodPrefixRoutes t238 t239 ⇒
+  t227 →
+  Spec (Method (Variant t235)) (Method { | t221 }) (Method { | renderers })
+method r = Spec { api, renderers }
+  where
+  api = Api.Spec.method (hmap' _ApiMapping r)
+
+  renderers = Method (hmap' _RenderersMapping r)
+
+prefix ∷ ∀ t173 t174. HFoldlWithIndex (SpecFolding ".") (Spec (Variant ()) {} {}) t173 t174 ⇒ t173 → t174
+prefix raw = hfoldlWithIndex (SpecFolding (SProxy ∷ SProxy ".") true) emptyVariantSpec raw
+
+-- | This folding gives us ability to define specs using
+-- | records and intermediate duplexes.
 data SpecFolding (sep ∷ Symbol)
   = SpecFolding (SProxy sep) PrefixRoutes
 
