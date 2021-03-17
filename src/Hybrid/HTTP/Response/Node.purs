@@ -25,4 +25,8 @@ type Body aff r
     | r
     )
 
+-- | TODO: Make this a record again
+-- | so we can use it in a more polymorphic manner.
+-- | Some scenarios doesn't care about streaming
+-- | and can be easier to test etc.
 newtype Interface aff = Interface { | Headers aff + Status aff + Body aff + () }

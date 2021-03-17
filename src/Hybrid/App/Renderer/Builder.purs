@@ -21,8 +21,8 @@ import Hybrid.App.Renderer.Types (Renderer)
 import Hybrid.HTTP (Exchange(..)) as HTTP
 import Hybrid.HTTP (Response(..))
 import Hybrid.HTTP.Response (OkF(..), Ok, _ok)
-import Hybrid.HTTP.Response.Codec (Codec') as Response
-import Hybrid.HTTP.Response.Codec (fromJsonDual) as Codec
+import Hybrid.HTTP.Response.Duplex (Duplex') as Response
+import Hybrid.HTTP.Response.Duplex (fromJsonDual) as Response.Duplex
 import Polyform.Batteries.Json (FieldMissing)
 import Polyform.Batteries.Json.Duals (Base, array) as Json.Duals
 import Polyform.Batteries.Json.Parser (dual') as Json.Parser
@@ -158,8 +158,8 @@ endpoint ∷
     Unit
     res
     doc →
-  Response.Codec' aff res /\ Renderer router req resRow res doc
-endpoint b = Codec.fromJsonDual (d b) /\ r b
+  Response.Duplex' aff res /\ Renderer router req resRow res doc
+endpoint b = Response.Duplex.fromJsonDual (d b) /\ r b
   where
   r (Builder (BuilderBase { render })) = render <<< Compose
   d (Builder (BuilderBase { dual })) =

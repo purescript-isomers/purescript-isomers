@@ -12,7 +12,6 @@ You can edit this file as you like.
   , "effect"
   , "foreign-object"
   , "heterogeneous"
-  , "milkis"
   , "node-http"
   , "node-streams"
   , "polyform"

@@ -1,13 +1,12 @@
 module Hybrid.Api.Client where
 
 import Prelude
-
 import Data.Newtype (class Newtype, wrap)
 import Data.Variant (Variant)
 import Data.Variant (inj) as Variant
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
 import Hybrid.HTTP.Request (Data(..)) as Request
-import Hybrid.HTTP.Response.Codec (Codec') as Response
+import Hybrid.HTTP.Response.Duplex (Duplex') as Response
 import Prim.Row (class Cons, class Lacks) as Row
 import Prim.RowList (class RowToList)
 import Record (insert) as Record
@@ -18,7 +17,8 @@ import Type.Prelude (class IsSymbol, Proxy(..), RLProxy(..), SProxy)
 -- | a record which contains functions which builds a
 -- | request value (nested Variant) which has structure
 -- | corresponding to the labels path.
-data RequestFolding a request = RequestFolding (a → request)
+data RequestFolding a request
+  = RequestFolding (a → request)
 
 instance requestFoldingNewtypeVariantWrapper ::
   ( IsSymbol sym
@@ -27,7 +27,7 @@ instance requestFoldingNewtypeVariantWrapper ::
   , RowToList v vl
   , Row.Lacks sym client
   , Row.Cons sym { | subclient } client client'
-  , HFoldlWithIndex (RequestFolding (Variant v) request) { } (RLProxy vl) { | subclient }
+  , HFoldlWithIndex (RequestFolding (Variant v) request) {} (RLProxy vl) { | subclient }
   ) =>
   FoldingWithIndex
     (RequestFolding (Variant curr) request)
@@ -39,6 +39,7 @@ instance requestFoldingNewtypeVariantWrapper ::
     let
       inj' ∷ Variant v → request
       inj' = inj <<< Variant.inj prop <<< wrap
+
       subclient = hfoldlWithIndex (RequestFolding inj') {} (RLProxy ∷ RLProxy vl)
     Record.insert prop subclient client
 else instance requestFoldingVariant ::
@@ -47,7 +48,7 @@ else instance requestFoldingVariant ::
   , Row.Cons sym (Variant v) curr_ curr
   , Row.Lacks sym client
   , Row.Cons sym { | subclient } client client'
-  , HFoldlWithIndex (RequestFolding (Variant v) request) { } (RLProxy vl) { | subclient }
+  , HFoldlWithIndex (RequestFolding (Variant v) request) {} (RLProxy vl) { | subclient }
   ) =>
   FoldingWithIndex
     (RequestFolding (Variant curr) request)
@@ -59,7 +60,9 @@ else instance requestFoldingVariant ::
     let
       f ∷ Variant v → Variant curr
       f = Variant.inj prop
+
       inj' = inj <<< f
+
       subclient = hfoldlWithIndex (RequestFolding inj') {} (RLProxy ∷ RLProxy vl)
     Record.insert prop subclient client
 else instance requestFoldingData ::
@@ -83,22 +86,22 @@ instance hfoldlWithIndexRequestFoldingVariantWrapper ∷
   ( HFoldlWithIndex (RequestFolding (Variant v) request) {} (RLProxy vl) { | client }
   , Newtype (f (Variant v)) (Variant v)
   , RowToList v vl
-  ) ⇒ HFoldlWithIndex (RequestFolding (f (Variant v)) request) unit (Proxy (f (Variant v))) { | client } where
-  hfoldlWithIndex (RequestFolding f) init _ =
-    hfoldlWithIndex (RequestFolding (f <<< wrap)) {} (RLProxy ∷ RLProxy vl)
-
+  ) ⇒
+  HFoldlWithIndex (RequestFolding (f (Variant v)) request) unit (Proxy (f (Variant v))) { | client } where
+  hfoldlWithIndex (RequestFolding f) init _ = hfoldlWithIndex (RequestFolding (f <<< wrap)) {} (RLProxy ∷ RLProxy vl)
 else instance hfoldlWithIndexRequestFoldingVariant ∷
   ( HFoldlWithIndex (RequestFolding (Variant v) request) {} (RLProxy vl) { | client }
   , RowToList v vl
-  ) ⇒ HFoldlWithIndex (RequestFolding (Variant v) request) unit (Proxy (Variant v)) { | client } where
-  hfoldlWithIndex cf init _ =
-    hfoldlWithIndex cf {} (RLProxy ∷ RLProxy vl)
+  ) ⇒
+  HFoldlWithIndex (RequestFolding (Variant v) request) unit (Proxy (Variant v)) { | client } where
+  hfoldlWithIndex cf init _ = hfoldlWithIndex cf {} (RLProxy ∷ RLProxy vl)
 
 request ∷ ∀ client t. HFoldlWithIndex (RequestFolding t t) {} (Proxy t) { | client } ⇒ Proxy t → { | client }
 request = hfoldlWithIndex (RequestFolding (identity ∷ t → t)) {}
 
+newtype ClientFolding aff a
+  = ClientFolding (Response.Duplex' aff a)
 
-newtype ClientFolding aff a = ClientFolding (Response.Codec' aff a)
 derive instance newtypeClientFolding ∷ Newtype (ClientFolding aff a) _
 
 -- instance clientFoldingNewtypeWrapper ∷ 

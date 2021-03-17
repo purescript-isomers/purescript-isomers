@@ -1,5 +1,5 @@
 module Hybrid.HTTP.Response
-  ( module Codec
+  ( module Duplex
   , _ok
   , OkF(..)
   , Ok
@@ -21,8 +21,8 @@ import Data.Map (lookup) as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
 import Data.Traversable (class Traversable)
-import Hybrid.HTTP.Response.Codec (Codec(..)) as Codec
-import Hybrid.HTTP.Response.Codec (Codec(..), Codec')
+import Hybrid.HTTP.Response.Duplex (Duplex(..)) as Duplex
+import Hybrid.HTTP.Response.Duplex (Duplex(..), Duplex')
 import Hybrid.HTTP.Response.Fetch (Interface(..)) as Response.Fetch
 import Hybrid.HTTP.Response.Node (Interface(..)) as Response.Node
 import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
@@ -40,7 +40,7 @@ foreign import data ArrayBuffer :: Type
 -- | * Experiment with `VariantF` here. We want to probably have
 -- | common shape for the response and expand it when turning
 -- | into http response.
--- | * Check if we can turn `ResponseCodec` into something like
+-- | * Check if we can turn `ResponseDuplex` into something like
 -- | `VariantF response String → Node.HTTP.Response`.
 -- |
 
@@ -71,8 +71,8 @@ _redirect = SProxy ∷ SProxy "redirect"
 
 type Redirect res = (redirect ∷ FProxy RedirectF | res)
 
-ok ∷ ∀ aff content contentType res. IsSymbol contentType ⇒ Monad aff ⇒ Codec' aff content → Codec' aff (Response' res contentType content)
-ok (Codec encode decode) = Codec
+ok ∷ ∀ aff content contentType res. IsSymbol contentType ⇒ Monad aff ⇒ Duplex' aff content → Duplex' aff (Response' res contentType content)
+ok (Duplex encode decode) = Duplex
   (\n@(Response.Node.Interface nodeInterface) (Response v) → do
     let
       handle = Functor.Variant.default (pure unit)
@@ -92,8 +92,8 @@ ok (Codec encode decode) = Codec
         else pure $ Left "Expecting Ok response"
   )
 
-redirect ∷ ∀ aff content res. Monad aff ⇒ Codec' aff (Response (Redirect + res) content)
-redirect = Codec
+redirect ∷ ∀ aff content res. Monad aff ⇒ Duplex' aff (Response (Redirect + res) content)
+redirect = Duplex
   (\n@(Response.Node.Interface nodeInterface) (Response v) → do
     let
       handle = Functor.Variant.default (pure unit)
