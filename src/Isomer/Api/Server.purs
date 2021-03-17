@@ -7,7 +7,7 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.Symbol (class IsSymbol, SProxy)
 import Data.Variant (Variant)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
-import Isomer.Api.Spec (ResponseCodecs(..), Spec(..))
+import Isomer.Api.Spec (Spec(..))
 import Isomer.HTTP.Request (Data(..)) as Request
 import Isomer.HTTP.Response.Duplex (Duplex) as Response
 import Isomer.HTTP.Response.Duplex (encode) as Response.Duplex
@@ -100,7 +100,7 @@ router ∷
   { | handlers } →
   Request.Duplex.Request →
   m (Either RoutingError String)
-router spec@(Spec { request, response: ResponseCodecs response }) handlers = go
+router spec@(Spec { request, response }) handlers = go
   where
   go raw = do
     case Request.Duplex.parse request raw of

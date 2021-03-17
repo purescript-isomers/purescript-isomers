@@ -1,50 +1,76 @@
 module Isomer.Web.Spec where
 
--- import Prelude
--- 
--- import Control.Alt ((<|>))
--- import Data.Maybe (Maybe, fromMaybe)
--- import Data.Tuple (fst, snd)
--- import Data.Tuple.Nested ((/\), type (/\))
--- import Data.Variant (Variant)
--- import Data.Variant (class Contractable, contract, expand) as Variant
--- import Data.Variant.Internal (VariantRep(..))
--- import Data.Variant.Prefix (NilExpr, PrefixCases, PrefixStep, UnprefixCases, UnprefixStep)
--- import Data.Variant.Prefix (add, remove) as Variant.Prefix
--- import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
--- import Heterogeneous.Mapping (class HMap, class HMapWithIndex, class Mapping, class MappingWithIndex, hmap, hmapWithIndex, mappingWithIndex)
--- import Isomer.Api.Spec (Raw(..)) as Api.Spec
--- import Isomer.Contrib.Type.Eval.Tuple (Tuples)
--- import Isomer.HTTP.Request.Method (Method(..))
--- import Prim.Row (class Cons, class Union) as Row
--- import Prim.RowList (Cons, Nil) as RowList
--- import Prim.RowList (class RowToList, kind RowList)
--- import Prim.Symbol (class Webend) as Symbol
--- import Record (union) as Record
--- import Record.Builder (Builder) as Record.Builder
--- import Record.Prefix (PrefixProps, add) as Record.Prefix
--- import Request.Duplex (RequestDuplex(..), RequestDuplex')
--- import Request.Duplex (prefix) as Request.Duplex
--- import Request.Duplex.Generic.Variant (Updater, modify, update, variant) as Request.Duplex.Generic.Variant
--- import Request.Duplex.Generic.Variant (class MethodPrefixRoutes, class VariantParser, class VariantPrinter)
--- import Request.Duplex.Parser (RequestParser(..), RouteError(..), RouteResult(..)) as Request.Duplex.Parser
--- import Request.Duplex.Parser (RequestParser)
--- import Request.Duplex.Printer (RequestPrinter(..))
--- import Type.Equality (class TypeEquals)
--- import Type.Equality (to) as Type.Equality
--- import Type.Eval (class Eval)
--- import Type.Eval.Foldable (FoldrWithIndex)
--- import Type.Eval.Function (type (<<<))
--- import Type.Eval.RowList (FromRow, ToRow)
--- import Type.Prelude (class IsSymbol, RLProxy(..), RProxy, SProxy(..), reflectSymbol)
--- import Unsafe.Coerce (unsafeCoerce)
--- 
--- newtype Raw req res rnd
---   = Raw
---   { codecs ∷ Api.Spec.Raw req res
---   , renderers ∷ { | rnd }
---   }
--- 
+import Prelude
+import Data.Variant (Variant)
+import Data.Variant (Variant)
+import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
+import Isomer.Api (Spec, SpecFolding(..)) as Api
+import Isomer.Api.Spec (PrefixRoutes)
+import Isomer.Api.Spec (emptyVariantSpec, endpoint) as Api.Spec
+import Isomer.Contrib.Heterogeneous.Foldings (Flatten(..)) as Heterogeneous.Foldings
+import Isomer.HTTP.Request (Data) as Request
+import Isomer.HTTP.Request (Data) as Request
+import Request.Duplex (RequestDuplex')
+import Request.Duplex (RequestDuplex')
+import Type.Prelude (SProxy)
+
+newtype Spec request responseDuplexes renderers
+  = Spec
+  { api ∷ Api.Spec request responseDuplexes
+  , renderers ∷ renderers
+  }
+
+endpoint ::
+  ∀ req aRes iRes rnd.
+  { api ∷ RequestDuplex' req → aRes → Spec (Request.Data req) aRes {}
+  , iso ∷ RequestDuplex' req → iRes → rnd → Spec (Request.Data req) iRes rnd
+  }
+endpoint =
+  { api
+  , iso
+  }
+  where
+  api req = Spec <<< { api: _, renderers: {} } <<< Api.Spec.endpoint req
+
+  iso req res renderer = Spec { api: Api.Spec.endpoint req res, renderers: renderer }
+
+emptyVariantSpec ∷ Spec (Variant ()) {} {}
+emptyVariantSpec = Spec { api: Api.Spec.emptyVariantSpec, renderers: {} }
+
+data SpecFolding (sep ∷ Symbol)
+  = SpecFolding (SProxy sep) PrefixRoutes
+
+instance specFoldingRec ∷
+  ( HFoldlWithIndex (SpecFolding sep) (Spec (Variant ()) {} {}) { | r } r'
+  , FoldingWithIndex (SpecFolding sep) l acc r' (Spec req res rnd)
+  ) ⇒
+  FoldingWithIndex (SpecFolding sep) l acc { | r } (Spec req res rnd) where
+  foldingWithIndex wf l acc r = do
+    let
+      r' = hfoldlWithIndex wf emptyVariantSpec r
+    foldingWithIndex wf l acc r'
+-- | We split this folding into separate foldings over request and response codecs rows.
+else instance specFoldingSpec ∷
+  ( FoldingWithIndex (Heterogeneous.Foldings.Flatten sep) (SProxy l) rndAcc rnd rnd'
+  , FoldingWithIndex (Api.SpecFolding sep) (SProxy l) (Api.Spec reqAcc resAcc) (Api.Spec req res) (Api.Spec req' res')
+  ) ⇒
+  FoldingWithIndex
+    (SpecFolding sep)
+    (SProxy l)
+    (Spec reqAcc resAcc rndAcc)
+    (Spec req res rnd)
+    (Spec req' res' rnd') where
+  foldingWithIndex sf@(SpecFolding sep prefixRoutes) l (Spec acc) (Spec { api, renderers }) = do
+    let
+      api' = foldingWithIndex (Api.SpecFolding sep prefixRoutes) l acc.api api
+
+      renderers' = foldingWithIndex (Heterogeneous.Foldings.Flatten sep) l acc.renderers renderers
+    Spec { api: api', renderers: renderers' }
+
+instance hfoldlWithIndexSpec ∷
+  HFoldlWithIndex (Api.SpecFolding sep) acc (Spec request response renderers) (Spec request response renderers) where
+  hfoldlWithIndex _ _ r = r
+
 -- -- | A "magic wrapper" around `Codecs` record which exposes API type using more convenient type signature.
 -- -- | newtype Spec ... = Spec ...
 -- type PrefixRouters
@@ -81,15 +107,12 @@ module Isomer.Web.Spec where
 --       aprt a <> vprt v'
 -- 
 --   request' = RequestDuplex prt' prs'
-
 -- instance methodPrefixRoutesRaw ::
 --   (MethodPrefixRoutes (RequestDuplex' req) (RequestDuplex' req')) =>
 --   MethodPrefixRoutes (RowList.Cons sym (Raw req res doc) tail) routes where
 --   methodPrefixRoutes _ = modify prop (method (reflectSymbol prop)) <> methodPrefixRoutes (RLProxy ∷ RLProxy tail)
 --     where
 --     prop = SProxy ∷ SProxy sym
-
-
 -- data PrefixLabels (sep ∷ Symbol)
 --   = PrefixLabels
 -- 
@@ -266,8 +289,6 @@ module Isomer.Web.Spec where
 --   { | i } →
 --   Raw req res rnd
 -- prefix sep request = prefixLabels sep (Request.Duplex.Generic.Variant.update (prefixPath (RLProxy ∷ RLProxy il)) request)
-
-
 -- | This was moved to more generic place like `Isomer.Conrib.*`
 -- 
 -- 
