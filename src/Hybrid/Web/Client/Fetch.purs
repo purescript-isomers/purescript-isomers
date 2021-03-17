@@ -1,4 +1,4 @@
-module Hybrid.App.Client.Fetch where
+module Hybrid.Web.Client.Fetch where
 
 -- import Request.Duplex (RequestDuplex')
 -- 

@@ -1,4 +1,4 @@
-module Hybrid.App.Client.Render where
+module Hybrid.Web.Client.Render where
 
 -- import Prelude
 -- 
@@ -10,8 +10,8 @@ module Hybrid.App.Client.Render where
 -- import Data.Variant (Variant)
 -- import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
 -- import Hybrid.Api.Spec (ResponseCodec(..))
--- import Hybrid.App.Renderer (Renderer)
--- import Hybrid.App.Spec (Raw(..)) as Spec
+-- import Hybrid.Web.Renderer (Renderer)
+-- import Hybrid.Web.Spec (Raw(..)) as Spec
 -- import Hybrid.HTTP.Exchange (Exchange(..)) as HTTP
 -- import Hybrid.HTTP.Exchange (FetchError(..))
 -- import Hybrid.HTTP.Response (Response)

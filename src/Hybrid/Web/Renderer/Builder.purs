@@ -1,4 +1,4 @@
-module Hybrid.App.Renderer.Builder where
+module Hybrid.Web.Renderer.Builder where
 
 import Prelude
 
@@ -17,7 +17,7 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Tuple.Nested ((/\), type (/\))
-import Hybrid.App.Renderer.Types (Renderer)
+import Hybrid.Web.Renderer.Types (Renderer)
 import Hybrid.HTTP (Exchange(..)) as HTTP
 import Hybrid.HTTP (Response(..))
 import Hybrid.HTTP.Response (OkF(..), Ok, _ok)

@@ -1,4 +1,4 @@
-module Hybrid.App.Renderer.Types where
+module Hybrid.Web.Renderer.Types where
 
 import Data.Tuple.Nested (type (/\))
 import Hybrid.HTTP.Exchange (Exchange)

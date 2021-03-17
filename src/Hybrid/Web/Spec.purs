@@ -1,4 +1,4 @@
-module Hybrid.App.Spec where
+module Hybrid.Web.Spec where
 
 -- import Prelude
 -- 
@@ -19,7 +19,7 @@ module Hybrid.App.Spec where
 -- import Prim.Row (class Cons, class Union) as Row
 -- import Prim.RowList (Cons, Nil) as RowList
 -- import Prim.RowList (class RowToList, kind RowList)
--- import Prim.Symbol (class Append) as Symbol
+-- import Prim.Symbol (class Webend) as Symbol
 -- import Record (union) as Record
 -- import Record.Builder (Builder) as Record.Builder
 -- import Record.Prefix (PrefixProps, add) as Record.Prefix
@@ -141,7 +141,7 @@ module Hybrid.App.Spec where
 --   ( IsSymbol l
 --   , IsSymbol sep
 --   , IsSymbol sym
---   , Symbol.Append l sep sym
+--   , Symbol.Webend l sep sym
 --   , Row.Union response piresponse response'
 --   , Row.Union piresponse response response'
 --   , Row.Union render pirender render'

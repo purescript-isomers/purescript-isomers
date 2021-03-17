@@ -1,4 +1,4 @@
-module Hybrid.App.Server where
+module Hybrid.Web.Server where
 
 -- import Prelude
 -- 
@@ -12,10 +12,10 @@ module Hybrid.App.Server where
 -- import Hybrid.Api.Server (Result) as Api.Server
 -- import Hybrid.Api.Server (Result) as Server
 -- import Hybrid.Api.Spec (ResponseCodec(..))
--- import Hybrid.App.Client.Router (RouterInterface)
--- import Hybrid.App.Client.Router (print) as Client.Router
--- import Hybrid.App.Renderer (Renderer)
--- import Hybrid.App.Spec (Raw(..)) as Spec
+-- import Hybrid.Web.Client.Router (RouterInterface)
+-- import Hybrid.Web.Client.Router (print) as Client.Router
+-- import Hybrid.Web.Renderer (Renderer)
+-- import Hybrid.Web.Spec (Raw(..)) as Spec
 -- import Hybrid.HTTP (Exchange(..)) as Hybrid.HTTP
 -- import Hybrid.HTTP.Exchange (fromResponse) as Exchange
 -- import Node.HTTP (Response) as Node.HTTP

@@ -1,4 +1,4 @@
-module Hybrid.App.Client.Router where
+module Hybrid.Web.Client.Router where
 
 -- import Prelude
 -- 
@@ -17,9 +17,9 @@ module Hybrid.App.Client.Router where
 -- import Effect.Ref (new, read, write) as Ref
 -- import Heterogeneous.Folding (class HFoldlWithIndex)
 -- import Hybrid.Api.Client.Fetch (exchange) as Client.Fetch
--- import Hybrid.App.Client.Render (RenderFolding)
--- import Hybrid.App.Client.Render (render) as Client.Render
--- import Hybrid.App.Spec (Raw(..)) as Spec
+-- import Hybrid.Web.Client.Render (RenderFolding)
+-- import Hybrid.Web.Client.Render (render) as Client.Render
+-- import Hybrid.Web.Spec (Raw(..)) as Spec
 -- import Hybrid.HTTP (Exchange(..)) as HTTP
 -- import Hybrid.HTTP (Exchange(..)) as Hybrid.HTTP
 -- import Hybrid.HTTP.Exchange (FetchError)
