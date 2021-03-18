@@ -11,14 +11,14 @@ import Debug.Trace (traceM)
 import Global.Unsafe (unsafeStringify)
 import Heterogeneous.Folding (hfoldl)
 import Heterogeneous.Mapping (class Mapping, class MappingWithIndex, hmap, hmapWithIndex)
-import Isomer.Api.Spec (Spec(..), endpoint, method, prefix) as Spec
-import Isomer.Contrib.Heterogeneous (hmap', hmapWithIndex')
-import Isomer.HTTP.Request.Accept (Accept(..))
-import Isomer.HTTP.Request.Accept (json) as Accept
-import Isomer.HTTP.Request.Data (Data(..))
-import Isomer.HTTP.Request.Duplex (dataRecordInsert, dataTupleCons)
-import Isomer.HTTP.Method (Method(..))
-import Isomer.HTTP.Request.Method (get) as Method
+import Isomers.Api.Spec (Spec(..), endpoint, method, prefix) as Spec
+import Isomers.Contrib.Heterogeneous (hmap', hmapWithIndex')
+import Isomers.HTTP.Request.Accept (Accept(..))
+import Isomers.HTTP.Request.Accept (json) as Accept
+import Isomers.HTTP.Request.Data (Data(..))
+import Isomers.HTTP.Request.Duplex (dataRecordInsert, dataTupleCons)
+import Isomers.HTTP.Method (Method(..))
+import Isomers.HTTP.Request.Method (get) as Method
 import Prim.Row (class Cons) as Row
 import Request.Duplex (RequestDuplex(..), RequestDuplex', int, segment)
 import Request.Duplex (int, parse, segment, string) as Request.Duplex

@@ -5,10 +5,10 @@ module Test.Api where
 -- import Data.Number (fromString) as Number
 -- import Data.Tuple.Nested ((/\))
 -- import Effect (Effect)
--- import Isomer.Api.Spec (ResponseCodec(..))
--- import Isomer.App.Spec (Raw(..))
--- import Isomer.App.Spec (duplex, endpoints, prefixLabels) as App.Spec
--- import Isomer.Contrib.Request.Duplex (unitDuplex)
+-- import Isomers.Api.Spec (ResponseCodec(..))
+-- import Isomers.App.Spec (Raw(..))
+-- import Isomers.App.Spec (duplex, endpoints, prefixLabels) as App.Spec
+-- import Isomers.Contrib.Request.Duplex (unitDuplex)
 -- import Request.Duplex (int, segment) as Request.Duplex
 -- import Type.Prelude (SProxy(..))
 -- 
