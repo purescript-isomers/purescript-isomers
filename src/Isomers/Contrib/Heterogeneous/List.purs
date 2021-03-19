@@ -14,18 +14,18 @@ infixr 8 type HCons as :
 
 infixr 8 HCons as :
 
-instance hfoldlHNil :: HFoldl f x HNil x where
-  hfoldl _ x _ = x
+instance hfoldlHNil :: HFoldl f acc HNil acc where
+  hfoldl _ acc _ = acc
 else instance hfoldlHConsOne ::
-  Folding f x a z =>
-  HFoldl f x (HCons a HNil) z where
-  hfoldl f x (HCons a _) = folding f x a
+  Folding f acc a z =>
+  HFoldl f acc (HCons a HNil) z where
+  hfoldl f acc (HCons a _) = folding f acc a
 else instance hfoldlHConsMany ::
-  ( Folding f x a y
-  , HFoldl f y (HCons b c) z
+  ( Folding f acc a acc'
+  , HFoldl f acc' (HCons b c) acc''
   ) =>
-  HFoldl f x (HCons a (HCons b c)) z where
-  hfoldl f x (HCons a rest) = hfoldl f (folding f x a) rest
+  HFoldl f acc (HCons a (HCons b c)) acc'' where
+  hfoldl f acc (HCons a rest) = hfoldl f (folding f acc a) rest
 
 instance hmapHNil :: HMap f HNil HNil where
   hmap _ x = x
@@ -35,3 +35,4 @@ else instance hmapHCons ::
   ) =>
   HMap f (HCons a t) (b : t') where
   hmap f (a : t) = mapping f a : hmap f t
+

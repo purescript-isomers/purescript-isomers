@@ -1,7 +1,6 @@
 module Isomers.Api.Spec where
 
 import Prelude
-
 import Control.Alt ((<|>))
 import Data.Lens (Iso, Iso')
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -49,23 +48,18 @@ derive instance newtypeSpec ∷ Newtype (Spec req res) _
 _Data ∷ ∀ a. Iso (Request.Data a) (Request.Data a) a a
 _Data = _Newtype
 
--- | We use `Data` wrapper to simplify upcomming transformations.
-endpoint ∷ ∀ t38 t40. RequestDuplex' t38 → t40 → Spec (Request.Data t38) t40
-endpoint request response = Spec { request: request', response }
-  where
-  -- _Newtype ∷ ∀ t a s b. Newtype t a ⇒ Newtype s b ⇒ Iso t s a b
-  request' = _Data request
-
 _request = SProxy ∷ SProxy "request"
 
 _response = SProxy ∷ SProxy "response"
 
-type RequestMapping = Mappings.Compose (Mappings.Record.Get "request") Mappings.Newtype.Unwrap
+type RequestMapping
+  = Mappings.Compose (Mappings.Record.Get "request") Mappings.Newtype.Unwrap
 
 _RequestMapping ∷ RequestMapping
 _RequestMapping = Mappings.Record.Get _request `Mappings.Compose` Mappings.Newtype.Unwrap
 
-type ResponseMapping = Mappings.Compose (Mappings.Record.Get "response") Mappings.Newtype.Unwrap
+type ResponseMapping
+  = Mappings.Compose (Mappings.Record.Get "response") Mappings.Newtype.Unwrap
 
 _ResponseMapping ∷ ResponseMapping
 _ResponseMapping = Mappings.Record.Get _response `Mappings.Compose` Mappings.Newtype.Unwrap
@@ -107,11 +101,11 @@ prefix raw = hfoldlWithIndex (SpecFolding (SProxy ∷ SProxy ".") true) emptyVar
 emptyVariantSpec ∷ Spec (Variant ()) {}
 emptyVariantSpec = Spec { request: emptyVariantDuplex, response: {} }
   where
-    emptyVariantDuplex ∷ RequestDuplex' (Variant ())
-    emptyVariantDuplex = RequestDuplex mempty fail
-      where
-      fail ∷ RequestParser (Variant ())
-      fail = Request.Duplex.Parser.Chomp $ const $ Request.Duplex.Parser.Fail Request.Duplex.Parser.EndOfPath
+  emptyVariantDuplex ∷ RequestDuplex' (Variant ())
+  emptyVariantDuplex = RequestDuplex mempty fail
+    where
+    fail ∷ RequestParser (Variant ())
+    fail = Request.Duplex.Parser.Chomp $ const $ Request.Duplex.Parser.Fail Request.Duplex.Parser.EndOfPath
 
 -- | We recurse into the records when we encounter them as field value.
 -- | Finally this result should be wrapped into the `RecordCodecs` constructor.
@@ -228,3 +222,20 @@ else instance specFoldingRequestDuplexNonVariantField ∷
 instance hfoldlWithIndexSpec ∷
   HFoldlWithIndex (SpecFolding sep) acc (Spec request response) (Spec request response) where
   hfoldlWithIndex _ _ r = r
+
+-- | TODO: Provide instances which are building
+-- | `Accept` duplex from the response rows.
+-- -- endpoint ∷ ∀ t38 t40. RequestDuplex' t38 → t40 → Spec (Request.Data t38) t40
+-- instance hfoldWithIndexEndpointContentTypeRestricted ∷
+--   HFoldlWithIndex (SpecFolding sep) acc (RequestDuplex request request /\ Response.Duplex aff (Response response) (Spec (Request.Data request) response) where
+-- 
+-- instance hfoldWithIndexNonContentTypeRestricted ∷
+--   HFoldlWithIndex (SpecFolding sep) acc (RequestDuplex request request /\ response) (Spec (Request.Data request) response) where
+--     hfoldlWithIndex _ _ (request /\ response) = Spec { request: request', response }
+--       where
+--         request' = _Data request
+endpoint ∷ ∀ t38 t40. RequestDuplex' t38 → t40 → Spec (Request.Data t38) t40
+endpoint request response = Spec { request: request', response }
+  where
+  -- _Newtype ∷ ∀ t a s b. Newtype t a ⇒ Newtype s b ⇒ Iso t s a b
+  request' = _Data request

@@ -2,8 +2,8 @@ module Isomers.Api.Server where
 
 import Prelude
 
+import Control.Comonad (class Comonad, extract)
 import Data.Either (Either(..))
-import Data.Newtype (class Newtype, unwrap)
 import Data.Symbol (class IsSymbol, SProxy)
 import Data.Variant (Variant)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
@@ -49,9 +49,9 @@ else instance routerFoldingNewtypeRec ::
   ( IsSymbol sym
   , Row.Cons sym (f { | subhandlers }) handlers_ handlers
   , Row.Cons sym (f { | subcodecs }) resDuplexes_ resDuplexes
-  , Newtype (f { | subhandlers }) { | subhandlers }
-  , Newtype (f { | subcodecs }) { | subcodecs }
-  , Newtype (f (Variant req)) (Variant req)
+  -- | I prefer `Comonad` here because it doesn't break
+  -- | a possible `newtype` invariant.
+  , Comonad f
   , HFoldlWithIndex (RouterFolding subhandlers subcodecs) (Variant req) Unit (Response.Node.Interface m → m Unit)
   , Monad m
   ) =>
@@ -63,11 +63,11 @@ else instance routerFoldingNewtypeRec ::
     (Response.Node.Interface m → m Unit) where
   foldingWithIndex (RouterFolding handlers resDuplexes) prop _ req =
     let
-      subhandlers = unwrap (Record.get prop handlers)
+      subhandlers = extract (Record.get prop handlers)
 
-      subcodecs = unwrap (Record.get prop resDuplexes)
+      subcodecs = extract (Record.get prop resDuplexes)
     in
-      hfoldlWithIndex (RouterFolding subhandlers subcodecs) (unwrap req) unit
+      hfoldlWithIndex (RouterFolding subhandlers subcodecs) (extract req) unit
 else instance routerFoldingRec ::
   ( IsSymbol sym
   , Row.Cons sym { | subhandlers } handlers_ handlers

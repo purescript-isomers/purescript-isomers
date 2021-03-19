@@ -9,20 +9,19 @@ import Data.Argonaut (Json)
 import Data.Array (fromFoldable) as Array
 import Data.Either (hush)
 import Data.Functor.Compose (Compose(..))
-import Data.Functor.Variant (on)
 import Data.Functor.Variant (default) as Functor.Variant
+import Data.Functor.Variant (on)
 import Data.Identity (Identity)
 import Data.List (fromFoldable) as List
 import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
 import Data.Tuple (Tuple(..), fst, snd)
 import Data.Tuple.Nested ((/\), type (/\))
-import Isomers.Web.Renderer.Types (Renderer)
 import Isomers.HTTP (Exchange(..)) as HTTP
-import Isomers.HTTP (Response(..))
-import Isomers.HTTP.Response (OkF(..), Ok, _ok)
-import Isomers.HTTP.Response.Duplex (Duplex') as Response
-import Isomers.HTTP.Response.Duplex (fromJsonDual) as Response.Duplex
+import Isomers.HTTP (Response)
+import Isomers.HTTP.Response (Duplex', fromJsonDual) as Response
+import Isomers.HTTP.Response (Ok, OkF(..), Response', _ok)
+import Isomers.Web.Renderer.Types (Renderer)
 import Polyform.Batteries.Json (FieldMissing)
 import Polyform.Batteries.Json.Duals (Base, array) as Json.Duals
 import Polyform.Batteries.Json.Parser (dual') as Json.Parser
@@ -116,7 +115,7 @@ content = Builder $ BuilderBase
   , render: \(Compose (r /\ HTTP.Exchange _ v)) → join (hush <$> v) >>= unResponse
   }
   where
-    unResponse = un Response >>> (Functor.Variant.default Nothing # on _ok \(OkF c) → Just c)
+    unResponse = Functor.Variant.default Nothing # on _ok \(OkF c) → Just c
 
 builder ∷
   ∀ a doc err req res router st.
@@ -158,12 +157,11 @@ endpoint ∷
     Unit
     res
     doc →
-  Response.Duplex' aff res /\ Renderer router req resRow res doc
-endpoint b = Response.Duplex.fromJsonDual (d b) /\ r b
+  Response.Duplex' aff (Response' () "application/json" res) /\ Renderer router req resRow res doc
+endpoint b = Response.fromJsonDual (d b) /\ r b
   where
   r (Builder (BuilderBase { render })) = render <<< Compose
   d (Builder (BuilderBase { dual })) =
     Polyform.Tokenized.Dual.unliftUntokenized (dual Json.Tokenized.Duals.end)
       <<< Validator.Dual.iso List.fromFoldable Array.fromFoldable
       <<< Json.Duals.array
-      <<< Json.Parser.dual'

@@ -10,6 +10,7 @@ You can edit this file as you like.
   , "arraybuffer-types"
   , "console"
   , "effect"
+  , "foldable-traversable"
   , "foreign-object"
   , "heterogeneous"
   , "node-http"

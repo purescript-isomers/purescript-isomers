@@ -6,7 +6,9 @@ import Type.Row (type (+))
 
 type Jpeg a cts = ("image/jpeg" ∷ a | cts)
 
-type Json a cts = ("text/json" ∷ a | cts)
+type JsonMime = "application/json"
+
+type Json a cts = ("application/json" ∷ a | cts)
 
 type Png a cts = ("image/png" ∷ a | cts)
 
@@ -14,7 +16,7 @@ type Svg a cts = ("image/svg+xml" ∷ a | cts)
 
 _jpeg = SProxy ∷ SProxy "image/jpeg"
 
-_json = SProxy ∷ SProxy "text/json"
+_json = SProxy ∷ SProxy JsonMime
 
 _png = SProxy ∷ SProxy "image/png"
 

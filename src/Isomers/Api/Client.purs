@@ -1,6 +1,8 @@
 module Isomers.Api.Client where
 
 import Prelude
+
+import Data.Functor.Variant (VariantF)
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Variant (Variant)
 import Data.Variant (inj) as Variant
@@ -147,7 +149,7 @@ else instance clientFoldingResponseData ∷
   , Row.Cons sym (d → Aff (Exchange res request a)) client client'
   ) =>
   FoldingWithIndex
-    (ClientFolding request (Response.Duplex Aff (Response res a) (Response res a)))
+    (ClientFolding request (Response.Duplex Aff (VariantF res a) (VariantF res a)))
     (SProxy sym)
     { | client }
     (d → request)

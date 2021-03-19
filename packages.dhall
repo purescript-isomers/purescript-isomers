@@ -9,7 +9,7 @@ in  upstream
     http-types =
       { dependencies = [ "tuples", "unicode", "generics-rep" ]
       , repo = "https://github.com/Woody88/purescript-http-types.git"
-      , version = "master"
+      , version = "7c39cb9da789ccfafc1c687a7397c961431f09b8"
       }
   with
     polyform = ../polyform/spago.dhall as Location

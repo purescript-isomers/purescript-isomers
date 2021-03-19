@@ -9,7 +9,7 @@ import Data.Foldable (class Foldable, foldlDefault, foldrDefault)
 import Data.Functor.Variant (VariantF)
 import Data.Maybe (Maybe(..))
 import Data.Traversable (class Traversable, sequence, traverse, traverseDefault)
-import Isomers.HTTP.Response (Response(..))
+import Isomers.HTTP.Response (Response)
 
 data FetchError
   = FetchError String
@@ -38,4 +38,4 @@ instance traversableExchange ∷ (Traversable (VariantF res), Foldable (VariantF
   traverse f = traverseDefault f
 
 fromResponse ∷ ∀ req res content. req → VariantF res content → Exchange res req content
-fromResponse req res = Exchange req $ Just $ Right $ Response res
+fromResponse req res = Exchange req $ Just $ Right $ res

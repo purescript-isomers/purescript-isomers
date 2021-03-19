@@ -1,6 +1,7 @@
 module Isomers.Web.Spec where
 
 import Prelude
+
 import Data.Variant (Variant)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
 import Heterogeneous.Mapping (class HMap)
@@ -9,11 +10,12 @@ import Isomers.Api.Spec (PrefixRoutes)
 import Isomers.Api.Spec (RequestMapping, ResponseMapping, emptyVariantSpec, endpoint, method) as Api.Spec
 import Isomers.Contrib.Heterogeneous (hmap')
 import Isomers.Contrib.Heterogeneous.Foldings (Flatten(..)) as Heterogeneous.Foldings
+import Isomers.Contrib.Heterogeneous.Mappings (Compose(..)) as Mappings
 import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.Newtype
 import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
-import Isomers.Contrib.Heterogeneous.Mappings (Compose(..)) as Mappings
 import Isomers.HTTP (Method(..))
 import Isomers.HTTP.Request (Data) as Request
+import Isomers.Web.Renderer (Renderer)
 import Prim.RowList (class RowToList)
 import Request.Duplex (RequestDuplex')
 import Request.Duplex.Generic.Variant (class MethodPrefixRoutes, class VariantParser, class VariantPrinter) as Request.Duplex.Generic.Variant
@@ -78,6 +80,9 @@ method r = Spec { api, renderers }
 
 prefix ∷ ∀ t173 t174. HFoldlWithIndex (SpecFolding ".") (Spec (Variant ()) {} {}) t173 t174 ⇒ t173 → t174
 prefix raw = hfoldlWithIndex (SpecFolding (SProxy ∷ SProxy ".") true) emptyVariantSpec raw
+
+newtype RendererEndpoint (sourceContentType ∷ Symbol) router req res content doc = RendererEndpoint
+  (Renderer router req res content doc)
 
 -- | This folding gives us ability to define specs using
 -- | records and intermediate duplexes.

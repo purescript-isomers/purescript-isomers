@@ -1,6 +1,8 @@
 module Isomers.HTTP.Method where
 
+import Prelude
 
+import Control.Comonad (class Comonad, class Extend)
 import Data.Functor.Variant (SProxy(..))
 import Data.Newtype (class Newtype)
 import Heterogeneous.Folding (class HFoldl, class HFoldlWithIndex, hfoldl, hfoldlWithIndex)
@@ -9,6 +11,8 @@ import Isomers.Contrib.Heterogeneous (class HMap', class HMapWithIndex', hmap', 
 
 newtype Method m = Method m
 derive instance newtypeMethod ∷ Newtype (Method m) _
+
+derive instance functorMethod ∷ Functor Method
 
 instance hmapMethod ∷ (HMap' f v v') ⇒ HMap f (Method v) (Method v') where
   hmap f (Method v) = Method (hmap' f v)
@@ -21,6 +25,12 @@ instance hfoldlMethod ∷ (HFoldl f acc v a) ⇒ HFoldl f acc (Method v) a where
 
 instance hfoldlWithIndexMethod ∷ (HFoldlWithIndex f acc v a) ⇒ HFoldlWithIndex f acc (Method v) a where
   hfoldlWithIndex f acc (Method v) = hfoldlWithIndex f acc v
+
+instance extendIdentity :: Extend Method where
+  extend f m = Method (f m)
+
+instance comonadIdentity :: Comonad Method where
+  extract (Method x) = x
 
 type DELETE a methods = ("DELETE" ∷ a | methods)
 type GET a methods = ("GET" ∷ a | methods)

@@ -2,16 +2,11 @@ module Isomers.HTTP.Response.Duplex where
 
 import Prelude
 
-import Control.Monad.Except (class MonadError, ExceptT(..), catchError, runExceptT)
-import Data.Bifunctor (lmap)
+import Control.Alt (class Alt)
+import Control.Monad.Except (ExceptT(..), runExceptT)
 import Data.Either (Either(..))
-import Data.Newtype (un)
-import Data.Validation.Semigroup (V(..))
-import Global.Unsafe (unsafeStringify)
-import Isomers.HTTP.Response.Fetch (Interface(..)) as Fetch
-import Isomers.HTTP.Response.Node (Interface(..)) as Node
-import Node.Encoding (Encoding(..))
-import Polyform.Validator.Dual.Pure (Dual, runSerializer, runValidator) as Polyform.Validator.Dual.Pure
+import Isomers.HTTP.Response.Fetch (Interface) as Fetch
+import Isomers.HTTP.Response.Node (Interface) as Node
 
 -- | TODO:
 -- | I don't have time right now to think about a good API which unifies
@@ -24,6 +19,8 @@ import Polyform.Validator.Dual.Pure (Dual, runSerializer, runValidator) as Polyf
 data Duplex aff i o
   = Duplex
     (Node.Interface aff → i → aff Unit)
+    -- | TODO: I think that we should accumlate errors
+    -- | and use `V` here.
     (Fetch.Interface aff → aff (Either String o))
 
 derive instance functorDuplex ∷ Functor aff ⇒ Functor (Duplex aff i)
@@ -37,25 +34,21 @@ instance applyDuplex ∷ (Monad aff, Semigroup (aff Unit)) ⇒ Apply (Duplex aff
 instance applicativeDuplex ∷ (Monad aff, Semigroup (aff Unit)) ⇒ Applicative (Duplex aff i) where
   pure a = Duplex (\_ _ → pure unit) (const $ pure $ Right a)
 
+instance altDuplex ∷ Monad aff ⇒ Alt (Duplex aff i) where
+  alt (Duplex e1 d1) (Duplex e2 d2) =
+    Duplex
+      (\n i → do
+        e1 n i
+        e2 n i
+      )
+      (\f → do
+        d1 f >>= case _ of
+          Left _ → d2 f
+          r → pure r
+      )
+
 type Duplex' aff a
   = Duplex aff a a
-
-fromJsonDual ∷ ∀ aff err o. MonadError String aff ⇒ Polyform.Validator.Dual.Pure.Dual err String o → Duplex' aff o
-fromJsonDual dual =
-  Duplex
-    ( \(Node.Interface nodeInterface) o → do
-        let
-          str = Polyform.Validator.Dual.Pure.runSerializer dual o
-        nodeInterface.setHeader "Content-Type" "application/json"
-        nodeInterface.body.writeString UTF8 str
-    )
-    -- | Check "Content-Type" header
-    ( \(Fetch.Interface fetchInterface) → do
-        ((Right <$> fetchInterface.text) `catchError` \err → pure (Left (unsafeStringify err)))
-          >>= case _ of
-              Right str → pure $ lmap unsafeStringify <<< un V <<< Polyform.Validator.Dual.Pure.runValidator dual $ str
-              Left err → pure (Left err)
-    )
 
 decode ∷ ∀ aff i o. Fetch.Interface aff → Duplex aff i o → aff (Either String o)
 decode f (Duplex _ d) = d f
