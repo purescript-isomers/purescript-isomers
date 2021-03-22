@@ -1,6 +1,8 @@
-module Isomers.Web
-  ( module Spec
-  ) where
+module Isomers.Web where
 
-import Isomers.Web.Spec (Spec(..)) as Spec
+-- | XXX: New Spec migration
+--   ( module Spec
+--   ) where
+-- 
+-- import Isomers.Web.Spec (Spec(..)) as Spec
 

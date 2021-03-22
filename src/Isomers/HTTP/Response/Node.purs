@@ -1,27 +1,29 @@
 module Isomers.HTTP.Response.Node where
 
 import Prelude
+
+import Effect.Aff (Aff)
 import Node.Encoding (Encoding)
 import Type.Row (type (+))
 
-type Headers aff r
-  = ( setHeader ∷ String → String → aff Unit -- Effect Unit
-    , setHeaders ∷ String → Array String → aff Unit -- Effect Unit
+type Headers r
+  = ( setHeader ∷ String → String → Aff Unit -- Effect Unit
+    , setHeaders ∷ String → Array String → Aff Unit -- Effect Unit
     | r
     )
 
-type Status aff r
-  = ( setStatusCode ∷ Int → aff Unit
-    , setStatusMessage ∷ String → aff Unit -- Effect Unit
+type Status r
+  = ( setStatusCode ∷ Int → Aff Unit
+    , setStatusMessage ∷ String → Aff Unit -- Effect Unit
     | r
     )
 
 -- | We provide an API for body writing here directly
 -- | instead of the original:
 -- | ( asStream ∷ Node.Stream.Writable () )
-type Body aff r
+type Body r
   = ( body ∷
-        { writeString ∷ Encoding → String → aff Unit }
+        { writeString ∷ Encoding → String → Aff Unit }
     | r
     )
 
@@ -29,4 +31,4 @@ type Body aff r
 -- | so we can use it in a more polymorphic manner.
 -- | Some scenarios doesn't care about streaming
 -- | and can be easier to test etc.
-newtype Interface aff = Interface { | Headers aff + Status aff + Body aff + () }
+newtype Interface = Interface { | Headers + Status + Body + () }

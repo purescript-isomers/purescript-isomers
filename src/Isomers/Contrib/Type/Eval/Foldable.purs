@@ -1,9 +1,11 @@
 module Isomers.Contrib.Type.Eval.Foldable where
 
 import Isomers.Contrib.Heterogeneous.List (HCons, HNil)
+import Prim.RowList (Cons, Nil) as RL
 import Type.Eval (class Eval, kind TypeExpr)
 import Type.Eval.Boolean (Bool, TrueExpr, FalseExpr)
 import Type.Eval.Foldable (Foldr, FoldrWithIndex)
+import Type.Prelude (RLProxy)
 
 foreign import data SomeFoldWithIndex ∷ (Type → Type → TypeExpr) → Type → Type → TypeExpr → TypeExpr
 
@@ -21,6 +23,12 @@ type SomeWithIndex (f ∷ Type → Type → TypeExpr) =
 -- | but allows us to add more instances.
 foreign import data Foldr' ∷ (Type → TypeExpr → TypeExpr) → TypeExpr → Type → TypeExpr
 
+
+--instance foldr_Tuple ::
+--  ( Eval (fn a (Foldr fn z b)) ty
+--  ) =>
+--  Eval (Foldr fn z (Tuple a b)) ty
+
 instance foldrHConsMany ::
   ( Eval (fn a (Foldr' fn z (HCons b t))) ty
   ) =>
@@ -36,3 +44,16 @@ else instance foldrHNil ::
 else instance foldRFoldrFallack ∷
   (Eval (Foldr f acc a) ty) ⇒
   Eval (Foldr' f acc a) ty
+
+-- | A strict version of foldl...
+-- | Just a quick signature reminder ;-)
+-- | foldl' ∷ (acc → b → acc) → acc → f b → acc
+foreign import data Foldl' ∷ (Type → Type → TypeExpr) → Type → Type → TypeExpr
+
+instance foldlRowListCons' ::
+  ( Eval (fn acc a) acc'
+  , Eval (Foldl' fn acc' (RLProxy rl)) ty
+  ) =>
+  Eval (Foldl' fn acc (RLProxy (RL.Cons sym a rl))) ty
+
+instance foldlRowListNil :: Eval (Foldl' fn acc (RLProxy RL.Nil)) acc

@@ -1,13 +1,11 @@
 module Isomers.HTTP.Request
-  ( module Data
-  , module Method
+  ( module Method
   ) where
 
 import Data.Variant (SProxy, Variant)
 import Data.Variant (inj) as Variant
 import Isomers.HTTP.Method (Method(..)) as Method
 import Isomers.HTTP.Method (_get, _post)
-import Isomers.HTTP.Request.Data (Data(..)) as Data
 import Prim.Row (class Cons) as Row
 import Type.Prelude (class IsSymbol)
 

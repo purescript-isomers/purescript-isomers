@@ -40,7 +40,7 @@ toAff = Control.Promise.toAff <<< toAffPromise
 toAffE :: forall t7. Effect (Web.Promise.Promise t7) -> Aff t7
 toAffE = Control.Promise.toAffE <<< map toAffPromise
 
-fetch ∷ ∀ req. RequestDuplex' req → req → Aff (Either FetchError (Response.Fetch.Interface Aff))
+fetch ∷ ∀ req. RequestDuplex' req → req → Aff (Either FetchError Response.Fetch.Interface)
 fetch duplex req =
   map Right go `catchError` (pure <<< Left <<< FetchError <<< unsafeStringify)
   where
@@ -72,7 +72,7 @@ fetch duplex req =
             , url: Web.Fetch.Response.url response
             }
 
-exchange ∷ ∀ a req res. RequestDuplex' req → req → Response.Duplex' Aff (Response res a) → Aff (Isomers.HTTP.Exchange res req a)
+exchange ∷ ∀ a req res. RequestDuplex' req → req → Response.Duplex' (Response res a) → Aff (Isomers.HTTP.Exchange res req a)
 exchange requestDuplex request responseDuplex = do
   response ← fetch requestDuplex request >>= case _ of
     Left err → pure $ Left err

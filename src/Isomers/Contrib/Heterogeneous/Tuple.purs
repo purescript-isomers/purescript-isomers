@@ -1,4 +1,4 @@
-module Isomers.Contrid.Heterogenous.Tuple where
+module Isomers.Contrib.Heterogenous.Tuple where
 
 import Data.Tuple.Nested ((/\), type (/\))
 import Heterogeneous.Folding (class Folding)

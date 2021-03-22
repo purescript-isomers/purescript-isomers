@@ -22,6 +22,7 @@ You can edit this file as you like.
   , "record-extra"
   , "record-prefix"
   , "request-duplex-variant"
+  , "routing-duplex"
   , "routing"
   , "run"
   , "stringutils"

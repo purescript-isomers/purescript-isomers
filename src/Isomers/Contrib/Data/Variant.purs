@@ -31,3 +31,9 @@ matchesTagPrefix p v =
   in
     c \s _ → isJust (String.stripPrefix (String.Pattern $ reflectSymbol p) (reflectSymbol s))
 
+tag ∷ ∀ v. Variant v → String
+tag v = do
+  let
+    Unvariant c = unvariant v
+  c \s _ → reflectSymbol s
+

@@ -24,7 +24,6 @@ import Isomers.HTTP.Response (Ok, OkF(..), Response', _ok)
 import Isomers.Web.Renderer.Types (Renderer)
 import Polyform.Batteries.Json (FieldMissing)
 import Polyform.Batteries.Json.Duals (Base, array) as Json.Duals
-import Polyform.Batteries.Json.Parser (dual') as Json.Parser
 import Polyform.Batteries.Json.Tokenized.Duals (Pure, end, item) as Json.Tokenized.Duals
 import Polyform.Tokenized.Dual ((~))
 import Polyform.Tokenized.Dual (Dual(..), unliftUntokenized) as Polyform.Tokenized.Dual
@@ -143,8 +142,7 @@ builder dual constructor =
           }
 
 endpoint ∷
-  ∀ aff doc err req res resRow router.
-  MonadError String aff ⇒
+  ∀ doc err req res resRow router.
   Builder
     router
     req
@@ -157,7 +155,7 @@ endpoint ∷
     Unit
     res
     doc →
-  Response.Duplex' aff (Response' () "application/json" res) /\ Renderer router req resRow res doc
+  Response.Duplex' (Response' () "application/json" res) /\ Renderer router req resRow res doc
 endpoint b = Response.fromJsonDual (d b) /\ r b
   where
   r (Builder (BuilderBase { render })) = render <<< Compose
