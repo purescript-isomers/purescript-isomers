@@ -19,8 +19,7 @@ import Isomers.Contrib.Heterogeneous.Foldings (Flatten(..)) as Heterogeneous.Fol
 import Isomers.Contrib.Heterogeneous.Mappings (Compose(..)) as Mappings
 import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.Newtype
 import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
-import Isomers.HTTP (Method(..)) as Isomers.HTTP
-import Isomers.HTTP.Method (Method) as HTTP
+import Isomers.HTTP (Method(..)) as HTTP
 import Isomers.Request (Duplex(..))
 import Isomers.Request (Duplex(..), Duplex') as Request
 import Isomers.Request.Duplex.Generic (VariantStep(..)) as Request.Duplex.Generic

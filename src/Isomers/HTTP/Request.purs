@@ -1,11 +1,13 @@
 module Isomers.HTTP.Request
   ( module Method
+  , module Interfaces
   ) where
 
 import Data.Variant (SProxy, Variant)
 import Data.Variant (inj) as Variant
-import Isomers.HTTP.Method (Method(..)) as Method
-import Isomers.HTTP.Method (_get, _post)
+import Isomers.HTTP.Request.Method (Method(..)) as Method
+import Isomers.HTTP.Request.Method (_get, _post)
+import Isomers.HTTP.Request.Interfaces (Web, Node) as Interfaces
 import Prim.Row (class Cons) as Row
 import Type.Prelude (class IsSymbol)
 

@@ -5,21 +5,20 @@ import Prelude
 import Control.Alt ((<|>))
 import Data.Array (uncons) as Array
 import Data.Foldable (foldl)
-import Data.Functor.Variant (FProxy, VariantF)
 import Data.Maybe (Maybe(..))
 import Data.MediaType (MediaType(..))
 import Data.Tuple (lookup) as Tuple
 import Data.Tuple.Nested ((/\), type (/\))
 import Data.Variant (Variant)
 import Data.Variant (case_, expand, inj, on) as Variant
-import Data.Variant.Prefix (NilExpr)
 import Heterogeneous.Folding (class Folding, class HFoldl, hfoldl)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
-import Isomers.HTTP.Headers.Accept (MediaPattern(..), matches, parseHeader, printMediaPattern) as Accept
-import Isomers.HTTP.Headers.Accept (MediaPattern)
-import Isomers.HTTP.Response (Duplex) as Response
-import Isomers.HTTP.Response (OkF)
+import Isomers.HTTP.Request.Headers.Accept (MediaPattern(..), parse) as Accept
+import Isomers.HTTP.Request.Headers.Accept (MediaPattern)
+import Isomers.HTTP.Request.Headers.Accept.MediaPattern (matchedBy, print) as Accept.MediaPattern
 import Isomers.Request (Duplex(..), Duplex') as Request
+import Isomers.Response (Duplex) as Response
+import Isomers.Response (Response)
 import Isomers.Spec.Spec (Spec(..))
 import Network.HTTP.Types (hAccept)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
@@ -28,40 +27,24 @@ import Request.Duplex.Parser (RequestParser(..), RouteError(..), RouteResult(..)
 import Request.Duplex.Parser (RequestParser, runRequestParser)
 import Request.Duplex.Parser (RouteError(..), RequestParser(..)) as RequestDuplex.Parser
 import Request.Duplex.Printer (RequestPrinter)
-import Type.Eval (class Eval, kind TypeExpr)
-import Type.Eval.Foldable (FoldrWithIndex)
-import Type.Eval.Function (type (<<<))
-import Type.Eval.RowList (FromRow)
-import Type.Prelude (class IsSymbol, class TypeEquals, RProxy, SProxy(..), reflectSymbol)
+import Type.Prelude (class IsSymbol, class TypeEquals, SProxy(..), reflectSymbol)
 
 newtype Accept v
   = Accept v
-
-foreign import data ResponseContentTypeStep ∷ Type → Type → TypeExpr → TypeExpr
-
-type ResponseContentType res
-  = (FoldrWithIndex ResponseContentTypeStep NilExpr <<< FromRow) (RProxy res)
-
-instance evalResponseContentTypeStepMatch ∷
-  Eval (ResponseContentTypeStep (SProxy "ok") (FProxy (OkF contentType)) acc) (SProxy contentType)
-else instance evalResponseContentTypeStepNoMatch ∷
-  (Eval acc acc') ⇒
-  Eval (ResponseContentTypeStep idx t acc) acc'
 
 -- | Given a hlist of responses create a record with content types as labels.
 data ResponseRecFolding
   = ResponseRecFolding
 
 instance foldingResponseRecFolding ∷
-  ( Eval (ResponseContentType res) (SProxy contentType)
-  , IsSymbol contentType
+  ( IsSymbol contentType
   , Row.Lacks contentType response
-  , Row.Cons contentType (Response.Duplex (VariantF res i) (VariantF res o)) response response'
+  , Row.Cons contentType (Response.Duplex (Response contentType res i) (Response contentType res o)) response response'
   ) ⇒
   Folding
     ResponseRecFolding
     { | response }
-    (Response.Duplex (VariantF res i) (VariantF res o))
+    (Response.Duplex (Response contentType res i) (Response contentType res o))
     { | response' } where
   folding _ acc r = Record.insert (SProxy ∷ SProxy contentType) r acc
 
@@ -99,13 +82,13 @@ instance foldingRequestParserFolding ∷
 parserBuilder ∷ ∀ a. MediaType → RequestParser a → MediaPattern → RequestParser a
 parserBuilder mediaType@(MediaType mtStr) prs = do
   let
-    match = (mediaType `Accept.matches` _)
+    match = (mediaType `Accept.MediaPattern.matchedBy` _)
   \pattern →
     if match pattern then
       prs
     else
       Request.Duplex.Parser.Chomp \_ →
-        Request.Duplex.Parser.Fail (Request.Duplex.Parser.Expected mtStr $ Accept.printMediaPattern pattern)
+        Request.Duplex.Parser.Fail (Request.Duplex.Parser.Expected mtStr $ Accept.MediaPattern.print pattern)
 
 
 newtype RequestPrinterFolding i
@@ -130,8 +113,7 @@ data ResponseContentTypesMapping
   = ResponseContentTypesMapping
 
 instance mappingContentTypesMapping ∷
-  ( Eval (ResponseContentType res) (SProxy contentType)
-  , TypeEquals f (Response.Duplex (VariantF res i) (VariantF res o))
+  ( TypeEquals f (Response.Duplex (Response contentType res i) (Response contentType res o))
   , IsSymbol contentType
   ) ⇒
   Mapping
@@ -176,7 +158,7 @@ request (Request.Duplex prt prs) cts = do
       where
       chomp state@{ headers } = do
         let
-          parseMediaPatternParsers = map (buildParser <<< _.pattern) <$> Accept.parseHeader
+          parseMediaPatternParsers = map (buildParser <<< _.pattern) <$> Accept.parse
 
           ps = case (parseMediaPatternParsers <$> Tuple.lookup hAccept headers) >>= Array.uncons of
             Just ht → ht

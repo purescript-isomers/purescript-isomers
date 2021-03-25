@@ -3,5 +3,5 @@ module Isomers.Request.Duplex
   )
   where
 
-import Isomers.Request.Duplex.Duplex (Duplex(..), Duplex', parse', print, insert) as Duplex
+import Isomers.Request.Duplex.Duplex (Duplex(..), Duplex', parse', print) as Duplex
 

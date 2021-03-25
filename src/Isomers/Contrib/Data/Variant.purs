@@ -9,12 +9,14 @@ import Isomers.Contrib.Type.Eval.Foldable (SomeWithIndex)
 import Isomers.Contrib.Type.Eval.Symbol (IsPrefixOf)
 import Isomers.Contrib.Type.Eval.Tuple (Curry')
 import Prim.Boolean (True)
+import Prim.Row (class Cons, class Lacks) as Row
 import Type.Eval (class Eval)
 import Type.Eval.Boolean (BProxy)
 import Type.Eval.Function (type (<<<))
 import Type.Eval.RowList (FromRow)
 import Type.Eval.Tuple (Fst)
 import Type.Prelude (class IsSymbol, RProxy, SProxy, reflectSymbol)
+import Unsafe.Coerce (unsafeCoerce)
 
 type IsPrefixOfSome (prefix ∷ Symbol) (row ∷ # Type) = (SomeWithIndex (Curry' (IsPrefixOf (SProxy prefix) <<< Fst)) <<< FromRow) (RProxy row)
 
@@ -36,4 +38,7 @@ tag v = do
   let
     Unvariant c = unvariant v
   c \s _ → reflectSymbol s
+
+append ∷ ∀ a l v v'. Row.Lacks l v ⇒ Row.Cons l a v v' ⇒ SProxy l → Variant v → Variant v'
+append _ v = unsafeCoerce v
 

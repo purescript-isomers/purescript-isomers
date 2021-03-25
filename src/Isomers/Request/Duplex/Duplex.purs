@@ -4,14 +4,11 @@ import Prelude
 
 import Data.Either (Either)
 import Data.Profunctor (class Profunctor)
-import Prim.Row (class Cons, class Lacks) as Row
-import Record (get, insert) as Record
-import Request.Duplex (Request, RequestDuplex(..))
+import Request.Duplex (Request)
 import Request.Duplex.Parser (RequestParser)
 import Request.Duplex.Parser (RouteError, prefix, run) as Parser
 import Request.Duplex.Printer (RequestPrinter)
 import Request.Duplex.Printer (prefix, run) as Printer
-import Type.Prelude (class IsSymbol, SProxy)
 
 data Duplex r i o
   = Duplex (i → RequestPrinter) (RequestParser (r → o))
@@ -43,18 +40,6 @@ parse' d req = parse d req {}
 
 print ∷ ∀ i r o. Duplex r i o → i → Request
 print (Duplex enc _) = Printer.run <<< enc
-
-insert ∷
-  ∀ i a l r ri ri_ ro ro_.
-  IsSymbol l ⇒
-  Row.Lacks l r ⇒
-  Row.Cons l a r ro ⇒
-  Row.Cons l i ri_ ri ⇒
-  SProxy l →
-  RequestDuplex a a →
-  Duplex (Record r) (Record ro) (Record ro)
-insert l (RequestDuplex prt prs) =
-  Duplex (prt <<< Record.get l) (Record.insert l <$> prs)
 
 prefix :: forall a b r. String -> Duplex r a b -> Duplex r a b
 prefix s (Duplex enc dec) = Duplex (Printer.prefix s <<< enc) (Parser.prefix s dec)
