@@ -27,7 +27,6 @@ import Type.Prelude (SProxy(..))
 
 responseDuplex = Response.Duplex.asJson (Dual.Pure.runSerializer d) (lmap unsafeStringify <<< un V <<< Dual.Pure.runValidator d)
   where
-    d ∷ Json.Duals.Pure _ { a ∷ Int, b ∷ String }
     d = Json.Duals.object >>> rec
       where
         rec = Dual.Record.build

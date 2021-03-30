@@ -106,9 +106,6 @@ json = readBody (SProxy ∷ SProxy "json")
 string ∷ Parser String
 string = readBody (SProxy ∷ SProxy "string")
 
-stream ∷ Parser (Web.Streams.ReadableStream Uint8Array)
-stream = readBody (SProxy ∷ SProxy "stream")
-
 status ∷ Parser HTTP.Types.Status
 status = Parser $ Reader.asks _.status
 

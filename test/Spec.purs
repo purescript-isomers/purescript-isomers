@@ -6,6 +6,7 @@ import Data.Newtype (un)
 import Data.Tuple.Nested ((/\))
 import Data.Validation.Semigroup (V(..))
 import Global.Unsafe (unsafeStringify)
+import Isomers.Client (client)
 import Isomers.Node (spec) as Node
 import Isomers.Request (Duplex(..), Duplex') as Request
 import Isomers.Request.Duplex.Parser (int) as Parser
@@ -13,7 +14,7 @@ import Isomers.Request.Duplex.Parser (int) as Request.Duplex
 import Isomers.Request.Duplex.Record (Root, empty, intSegment, segment) as Request.Duplex.Record
 import Isomers.Response (Duplex(..), Duplex') as Response
 import Isomers.Response.Duplex (asJson) as Response.Duplex
-import Isomers.Spec (spec) as Spec
+import Isomers.Spec (Spec(..), spec) as Spec
 import Isomers.Spec (spec) as Spec.Builder
 import Polyform.Batteries.Json.Duals ((:=))
 import Polyform.Batteries.Json.Duals (Pure, int, object, string) as Json.Duals
@@ -49,3 +50,10 @@ x =
         { shop: requestDuplex /\ responseDuplex
         }
     }
+
+c = do
+  let
+    Spec.Spec { request: reqDpl, response: resDpls } = x
+  client reqDpl resDpls
+
+z = c.sub.shop { productId: 8 }

@@ -50,7 +50,7 @@ type ClientBodyRow =
   -- | TODO: This was `Eff` originally. I've changed it to `Aff`
   -- | because it was easier.
   , json ∷ Fiber Json
-  , stream ∷ Fiber (Web.Streams.ReadableStream Uint8Array)
+  -- , stream ∷ Fiber (Web.Streams.ReadableStream Uint8Array)
   , string ∷ Fiber String -- Effect (Promise String)
   )
 

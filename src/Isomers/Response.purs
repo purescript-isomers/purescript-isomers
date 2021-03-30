@@ -5,6 +5,9 @@ module Isomers.Response
   , fromEither
   , roundtripEither
   , unsafeFromEither
+  , fromFetchResponse
+  , print
+  , parse
   , Response
   , _ok
   , ok
@@ -28,23 +31,39 @@ import Prelude
 
 import Control.Alt (class Alt, alt)
 import Data.Argonaut (Json)
+import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Foldable (class Foldable, foldMap, foldl, foldr)
 import Data.Lens (iso)
+import Data.Map (fromFoldable) as Map
+import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Traversable (class Traversable, sequenceDefault, traverse)
 import Data.Variant (Variant)
 import Data.Variant (inj, on) as Variant
+import Effect (Effect)
+import Effect.Aff (Aff, Fiber, launchSuspendedAff)
 import Isomers.Contrib.Data.Variant (append) as Contrib.Data.Variant
+import Isomers.Contrib.Web.Fetch (json) as Contrib.Web.Fetch.Response
+import Isomers.Contrib.Web.Promise (toAffE) as Contrib.Web.Promise
 import Isomers.HTTP.ContentTypes (_json)
 import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
+import Isomers.Response.Duplex (Duplex(..), withStatus)
 import Isomers.Response.Duplex (json, reqHeader, withHeaderValue, withStatus) as Duplex
-import Isomers.Response.Duplex (Duplex, withStatus)
+import Isomers.Response.Duplex.Parser (ParsingError)
+import Isomers.Response.Duplex.Parser (run) as Parser
+import Isomers.Response.Duplex.Printer (run) as Printer
 import Isomers.Response.Duplex.Variant (empty, injInto) as Duplex.Variant
+import Isomers.Response.Types (ClientBodyRow, ClientHeaders, ClientResponse, ServerResponse) as Exports
+import Isomers.Response.Types (ClientResponse, ServerResponse)
 import Network.HTTP.Types (found302, hContentType, hLocation, movedPermanently301, notFound404, ok200)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
 import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
 import Type.Row (type (+))
 import Unsafe.Coerce (unsafeCoerce)
+import Web.Fetch.Headers (toArray) as Web.Fetch.Headers
+import Web.Fetch.Response (Response) as Web.Fetch
+import Web.Fetch.Response (arrayBuffer, headers, status, statusText, text, url) as Web.Fetch.Response
+import Web.Promise (Promise) as Web
 
 _ok = SProxy ∷ SProxy "ok"
 
@@ -144,10 +163,10 @@ injInto ∷
 injInto l o v = do
   wrapVariantDuplex (Duplex.Variant.injInto l o (unwrapToVariantDuplex v))
 
-wrapVariantDuplex ∷ ∀ a b ct vi vo. Duplex (Variant (ok ∷ a | vi)) (Variant (ok ∷ b | vo)) → Duplex (Response ct vi a) (Response ct vo b)
+wrapVariantDuplex ∷ ∀ a b ct vi vo. Duplex (Variant ( ok ∷ a | vi )) (Variant ( ok ∷ b | vo )) → Duplex (Response ct vi a) (Response ct vo b)
 wrapVariantDuplex = iso toVariant (fromVariant (SProxy ∷ SProxy ct))
 
-unwrapToVariantDuplex ∷ ∀ a b ct vi vo. Duplex (Response ct vi a) (Response ct vo b) → Duplex (Variant (ok ∷ a | vi)) (Variant (ok ∷ b | vo))
+unwrapToVariantDuplex ∷ ∀ a b ct vi vo. Duplex (Response ct vi a) (Response ct vo b) → Duplex (Variant ( ok ∷ a | vi )) (Variant ( ok ∷ b | vo ))
 unwrapToVariantDuplex = iso (fromVariant (SProxy ∷ SProxy ct)) toVariant
 
 -- | The baseline of our composition
@@ -224,4 +243,39 @@ notFound' ∷
     (Response ct (NotFound Unit + res) i)
     (Response ct (NotFound Unit + res) o)
 notFound' res = notFound (pure unit) res
+
+fromFetchResponse ∷ Web.Fetch.Response → Effect ClientResponse
+fromFetchResponse res = do
+  let
+    headers = Map.fromFoldable <<< map (lmap CaseInsensitiveString) <<< Web.Fetch.Headers.toArray <<< Web.Fetch.Response.headers $ res
+
+    status =
+      { code: Web.Fetch.Response.status res
+      , message: Web.Fetch.Response.statusText res
+      }
+
+    url = Web.Fetch.Response.url res
+
+    toFiber ∷ ∀ a. Effect (Web.Promise a) → Effect (Fiber a)
+    toFiber = launchSuspendedAff <<< Contrib.Web.Promise.toAffE
+  body ←
+    { arrayBuffer: _
+    , json: _
+    , string: _
+    }
+      <$> (toFiber $ Web.Fetch.Response.arrayBuffer res)
+      <*> (toFiber $ Contrib.Web.Fetch.Response.json res)
+      <*> (toFiber $ Web.Fetch.Response.text res)
+  pure
+    { body
+    , headers
+    , status
+    , url
+    }
+
+parse ∷ ∀ i o. Duplex i o → ClientResponse → Aff (Either ParsingError o)
+parse (Duplex _ prs) = Parser.run prs
+
+print :: forall i o. Duplex i o → i → ServerResponse
+print (Duplex prt _) i = Printer.run (prt i)
 

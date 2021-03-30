@@ -13,7 +13,7 @@ import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mapping
 import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mapping.Record
 import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
 import Isomers.Contrib.Type.Eval.Foldable (Foldl')
-import Isomers.Request.Duplex (Duplex(..)) as Request
+import Isomers.Request (Duplex(..)) as Request
 import Isomers.Request.Duplex.Generic (PrefixRoutes, variant) as Request.Duplex.Generic
 import Isomers.Request.Duplex.Generic (class HFoldlVariantStep, VariantStep(..))
 import Isomers.Request.Duplex.Variant (empty, injInto) as Request.Duplex.Variant

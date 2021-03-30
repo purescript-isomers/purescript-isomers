@@ -9,11 +9,20 @@ import Data.Foldable (class Foldable, foldlDefault, foldrDefault)
 import Data.Maybe (Maybe)
 import Data.Traversable (class Traversable, sequence, traverse, traverseDefault)
 import Data.Variant (Variant)
+import Data.Variant (inj) as Variant
+import Type.Prelude (SProxy(..))
+import Type.Row (type (+))
 
-data FetchError = FetchError String
+_fetchError = SProxy ∷ SProxy "fetchError"
 
-data Exchange errs req res
-  = Exchange req (Maybe (Either (Variant (fetchError ∷ String | errs)) res))
+type FetchError err = (fetchError ∷ String | err)
+
+error :: forall errs. String -> Variant (FetchError + errs)
+error = Variant.inj _fetchError
+
+data Exchange errs req res = Exchange
+  req
+  (Maybe (Either (Variant (fetchError ∷ String | errs)) res))
 
 derive instance functorExchange ∷ Functor (Exchange errs req)
 
@@ -28,4 +37,3 @@ instance foldableExchange ∷ Foldable (Exchange errs req) where
 instance traversableExchange ∷ Traversable (Exchange errs req) where
   sequence (Exchange req res) = Exchange req <$> (traverse sequence) res
   traverse f = traverseDefault f
-

@@ -2,44 +2,16 @@ module Isomers.Request.Duplex.Record where
 
 import Prelude
 
-import Control.Alt (class Alt, (<|>))
-import Control.Alternative (class Alternative, empty)
-import Control.Lazy (class Lazy)
-import Data.Array as Array
-import Data.Array.NonEmpty (NonEmptyArray)
-import Data.Array.NonEmpty as NEA
-import Data.Either (Either(..))
 import Data.Either (Either)
-import Data.Foldable (foldl)
-import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
-import Data.Int as Int
-import Data.Lazy (Lazy)
-import Data.Lazy (force) as Lazy
-import Data.Lazy as Z
-import Data.Map (Map)
-import Data.Map (lookup) as Map
-import Data.Maybe (Maybe(..), maybe)
-import Data.Tuple as Tuple
-import Data.Variant (Variant)
-import Effect.Aff (Aff, Fiber)
-import Isomers.Request.Duplex.Parser (Parser(..), body) as Parser
+import Effect.Aff (Fiber)
+import Isomers.Request.Duplex.Parser (as, body, int, param, take) as Parser
 import Isomers.Request.Duplex.Parser (Parser)
-import Isomers.Request.Duplex.Parser (as, int, param, take) as Parser
-import Isomers.Request.Duplex.Path (Parts, parse) as Path
-import Isomers.Request.Duplex.Printer (Printer(..))
-import Isomers.Request.Duplex.Printer (Printer(..), body) as Printer
 import Isomers.Request.Duplex.Printer (Printer)
-import Isomers.Request.Duplex.Printer (param, put) as Printer
+import Isomers.Request.Duplex.Printer (body, param, put) as Printer
 import Isomers.Request.Duplex.Type (Duplex(..))
-import Isomers.Request.Duplex.Type (Duplex(..))
-import Isomers.Request.Duplex.Type (Duplex(..), Duplex', parse', print) as Type
-import Isomers.Request.Types (ClientBody, ServerRequest)
-import Network.HTTP.Types (HeaderName)
-import Prim.Row (class Cons) as Row
+import Isomers.Request.Types (ClientBody)
 import Prim.Row (class Cons, class Lacks) as Row
 import Record (get, insert) as Record
-import Type.Prelude (class IsSymbol, SProxy(..))
 import Type.Prelude (class IsSymbol, SProxy, reflectSymbol)
 
 type Root body o
