@@ -22,7 +22,7 @@ import Effect.Aff (Aff, Fiber, joinFiber)
 import Effect.Aff.Class (liftAff)
 import Effect.Exception (Error) as Effect.Exception
 import Isomers.Contrib.Data.Variant (tag) as Contrib.Data.Variant
-import Isomers.HTTP.Response (Web, WebBodyRow, WebHeaders) as HTTP.Response
+import Isomers.Response.Types (ClientHeaders, ClientResponse, ClientBodyRow) as Response.Types
 import Network.HTTP.Types (HeaderName)
 import Network.HTTP.Types (Status) as HTTP.Types
 import Prim.Row (class Cons) as Row
@@ -43,7 +43,7 @@ data ParsingError
 -- | so it is easier to avoid type level indexing here I think.
 newtype Parser o
   = Parser
-  (ExceptT ParsingError (StateT (Maybe (Variant HTTP.Response.WebBodyRow)) (ReaderT HTTP.Response.Web Aff)) o)
+  (ExceptT ParsingError (StateT (Maybe (Variant Response.Types.ClientBodyRow)) (ReaderT Response.Types.ClientResponse Aff)) o)
 
 derive instance newtypeParser ∷ Newtype (Parser o) _
 
@@ -72,7 +72,7 @@ instance altParser ∷ Alt (Parser) where
 
 readBody ∷
   ∀ a br_ l.
-  Row.Cons l (Fiber a) br_ HTTP.Response.WebBodyRow ⇒
+  Row.Cons l (Fiber a) br_ Response.Types.ClientBodyRow ⇒
   IsSymbol l ⇒
   SProxy l → Parser a
 readBody l =
@@ -119,7 +119,7 @@ statusEquals { code: expected } =
         when (expected /= got) do
           throwError $ Expected ("Status code: " <> show expected) (show got)
 
-headers ∷ Parser HTTP.Response.WebHeaders
+headers ∷ Parser Response.Types.ClientHeaders
 headers = Parser $ Reader.asks _.headers
 
 header ∷ HeaderName → Parser (Maybe String)
@@ -132,7 +132,7 @@ reqHeader hn =
         Nothing → throwError (HeaderMissing hn)
         Just v → pure v
 
-run ∷ ∀ a. Parser a → HTTP.Response.Web → Aff (Either ParsingError a)
+run ∷ ∀ a. Parser a → Response.Types.ClientResponse → Aff (Either ParsingError a)
 run (Parser prs) i = go `catchError` (JSError >>> Left >>> pure)
   where
   go = flip runReaderT i <<< flip evalStateT Nothing <<< runExceptT $ prs

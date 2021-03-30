@@ -5,7 +5,7 @@ import Prelude
 import Data.Either (Either)
 import Data.Profunctor (class Profunctor)
 import Effect.Aff (Aff)
-import Isomers.HTTP.Response (Web, Node) as HTTP.Response
+import Isomers.Response.Types (ClientResponse, ServerResponse) as Response.Types
 import Isomers.Response.Duplex.Parser (Parser, ParsingError)
 import Isomers.Response.Duplex.Parser (run) as Parser
 import Isomers.Response.Duplex.Printer (Printer)
@@ -38,9 +38,9 @@ instance profunctor ∷ Profunctor (Duplex) where
 
 type Duplex' o = Duplex o o
 
-decode ∷ ∀ i o. Duplex i o → HTTP.Response.Web → Aff (Either ParsingError o)
+decode ∷ ∀ i o. Duplex i o → Response.Types.ClientResponse → Aff (Either ParsingError o)
 decode (Duplex enc dec) w = Parser.run dec w
 
-encode ∷ ∀ i o. Duplex i o → i → HTTP.Response.Node
+encode ∷ ∀ i o. Duplex i o → i → Response.Types.ServerResponse
 encode (Duplex enc _) = Printer.run <<< enc
 

@@ -1,4 +1,4 @@
-module Isomers.HTTP.Response.Interfaces where
+module Isomers.Response.Types where
 
 import Prelude
 
@@ -18,6 +18,7 @@ type Base body extra =
   | extra
   }
 
+-- | TODO: Move this to the `Isomers.Node.Response.Types`
 data NodeBody
   = NodeBuffer Node.HTTP.Buffer
   | NodeStream (∀ r. Node.Stream.Readable r)
@@ -25,6 +26,9 @@ data NodeBody
   -- | String
   | NodeWriter (∀ r. Node.Stream.Writable r → Aff Unit)
 
+-- | TODO: Parametrize by `body` so other backends can work with this
+-- | lib easily.
+-- |
 -- | I'm not able to confirm but it seems that headers value differ between
 -- | `fetch` and `node`.
 -- | When accessing fetch header we are getting back a "ByteString" value.
@@ -32,12 +36,11 @@ data NodeBody
 -- | In the case of node we can use `setHeader` or `setHeaders`.
 -- | I'm going to use one of these according to the number of values
 -- | in the array.
-type Node = Base
+type ServerResponse = Base
   (Maybe NodeBody)
   (headers ∷ Array Header)
 
--- | Fiber is an `Aff` + memoization
-type WebBodyRow =
+type ClientBodyRow =
   ( arrayBuffer ∷ Fiber ArrayBuffer -- Effect (Promise ArrayBuffer)
   -- , blob ∷ Fiber Web.File.Blob -- Effect (Promise Blob)
   -- , blob ∷ Fiber Blob
@@ -51,11 +54,10 @@ type WebBodyRow =
   , string ∷ Fiber String -- Effect (Promise String)
   )
 
-type WebHeaders = Map HeaderName String
+type ClientHeaders = Map HeaderName String
 
-type Web = Base
-  { | WebBodyRow }
-  ( headers ∷ WebHeaders
+type ClientResponse = Base
+  { | ClientBodyRow }
+  ( headers ∷ ClientHeaders
   , url ∷ String
   )
-

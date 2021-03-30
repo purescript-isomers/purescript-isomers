@@ -17,6 +17,7 @@ import Foreign.Object (toUnfoldable) as Object
 import Isomers.Node.Request.Body (buff, str) as Body
 import Isomers.Request.Duplex.Parser (runParser) as Request.Duplex.Parser
 import Isomers.Request.Duplex.Path (parse) as Request.Duplex.Path
+import Isomers.Request.Duplex.Record (Root) as Isomers.Request.Duplex.Record
 import Node.HTTP (httpVersion, requestHeaders, requestMethod, requestURL) as Node.HTTP
 import Node.HTTP (requestHeaders) as HTTP
 import Node.HTTP (requestMethod)

@@ -1,7 +1,6 @@
 module Isomers.HTTP.Fetch where
 
-
--- | TODO: Response migration
+-- import Isomers.Request (Duplex') as Request
 -- 
 -- import Prelude
 -- 
@@ -20,9 +19,9 @@ module Isomers.HTTP.Fetch where
 -- import Global.Unsafe (unsafeStringify)
 -- import Isomers.HTTP (Exchange(..)) as Isomers.HTTP
 -- import Isomers.HTTP.Exchange (FetchError(..))
--- import Isomers.HTTP.Response (Response)
--- import Isomers.HTTP.Response.Duplex (Duplex', decode) as Response
--- import Isomers.HTTP.Response.Fetch (Interface(..)) as Response.Fetch
+-- -- import Isomers.HTTP.Response (Response)
+-- -- import Isomers.HTTP.Response.Duplex (Duplex', decode) as Response
+-- -- import Isomers.HTTP.Response.Fetch (Interface(..)) as Response.Fetch
 -- import Request.Duplex (RequestDuplex')
 -- import Request.Duplex (print) as Request.Duplex
 -- import Type.Prelude (SProxy(..))
@@ -33,17 +32,18 @@ module Isomers.HTTP.Fetch where
 -- import Web.Fetch.RequestRedirect (RequestRedirect(..), toString) as Web.Fetch.RequestRedirect
 -- import Web.Fetch.Response (arrayBuffer, blob, body, headers, ok, redirected, status, statusText, text, url) as Web.Fetch.Response
 -- import Web.Promise (Promise) as Web.Promise
+-- -- 
+-- -- toAffPromise ∷ ∀ a. Web.Promise.Promise a → Control.Promise.Promise a
+-- -- toAffPromise = unsafeCoerce
+-- -- 
+-- -- toAff :: forall t17. Web.Promise.Promise t17 -> Aff t17
+-- -- toAff = Control.Promise.toAff <<< toAffPromise
+-- -- 
+-- -- toAffE :: forall t7. Effect (Web.Promise.Promise t7) -> Aff t7
+-- -- toAffE = Control.Promise.toAffE <<< map toAffPromise
 -- 
--- toAffPromise ∷ ∀ a. Web.Promise.Promise a → Control.Promise.Promise a
--- toAffPromise = unsafeCoerce
--- 
--- toAff :: forall t17. Web.Promise.Promise t17 -> Aff t17
--- toAff = Control.Promise.toAff <<< toAffPromise
--- 
--- toAffE :: forall t7. Effect (Web.Promise.Promise t7) -> Aff t7
--- toAffE = Control.Promise.toAffE <<< map toAffPromise
--- 
--- fetch ∷ ∀ req. RequestDuplex' req → req → Aff (Either FetchError Response.Fetch.Interface)
+-- -- | TODO: Replace `Request.Duplex'` with `Request.Duplex`. Should be trivial.
+-- fetch ∷ ∀ body req. Request.Duplex' body req → req → Aff (Either FetchError Response.Fetch.Interface)
 -- fetch duplex req =
 --   map Right go `catchError` (pure <<< Left <<< FetchError <<< unsafeStringify)
 --   where
@@ -75,10 +75,10 @@ module Isomers.HTTP.Fetch where
 --             , url: Web.Fetch.Response.url response
 --             }
 -- 
--- exchange ∷ ∀ a req res. RequestDuplex' req → req → Response.Duplex' (Response res a) → Aff (Isomers.HTTP.Exchange res req a)
--- exchange requestDuplex request responseDuplex = do
---   response ← fetch requestDuplex request >>= case _ of
---     Left err → pure $ Left err
---     Right i → lmap FetchError <$> Response.decode i responseDuplex
---   pure $ Isomers.HTTP.Exchange request (Just $ response)
--- 
+-- -- exchange ∷ ∀ a req res. RequestDuplex' req → req → Response.Duplex' (Response res a) → Aff (Isomers.HTTP.Exchange res req a)
+-- -- exchange requestDuplex request responseDuplex = do
+-- --   response ← fetch requestDuplex request >>= case _ of
+-- --     Left err → pure $ Left err
+-- --     Right i → lmap FetchError <$> Response.decode i responseDuplex
+-- --   pure $ Isomers.HTTP.Exchange request (Just $ response)
+-- -- 

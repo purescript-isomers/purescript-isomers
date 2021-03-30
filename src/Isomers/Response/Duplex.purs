@@ -43,7 +43,7 @@ withHeaderValue hn@(CaseInsensitiveString str) expected (Duplex prt prs) = Duple
       prs
   )
 
-withStatus ∷ ∀ a b. HTTP.Types.Status → Duplex a b → Duplex a b
+withStatus ∷ ∀ i o. HTTP.Types.Status → Duplex i o → Duplex i o
 withStatus s (Duplex prt prs) = Duplex prt' prs'
   where
     prt' i = Printer.status s <> prt i

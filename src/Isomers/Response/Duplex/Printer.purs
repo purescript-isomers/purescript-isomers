@@ -9,14 +9,14 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
 import Data.Tuple.Nested ((/\))
 import Effect.Unsafe (unsafePerformEffect)
-import Isomers.HTTP.Response (Node, NodeBody) as HTTP.Response
-import Isomers.HTTP.Response.Interfaces (NodeBody(..))
+import Isomers.Response.Types (NodeBody(..))
+import Isomers.Response.Types (NodeBody, ServerResponse) as Response.Types
 import Network.HTTP.Types (HeaderName, Status)
 import Network.HTTP.Types (ok200) as Status
 import Node.Buffer (fromString) as Node.Buffer
 import Node.Encoding (Encoding(..))
 
-newtype Printer = Printer (HTTP.Response.Node → HTTP.Response.Node)
+newtype Printer = Printer (Response.Types.ServerResponse → Response.Types.ServerResponse)
 
 derive instance newtypePrinter ∷ Newtype Printer _
 
@@ -37,7 +37,7 @@ reqHeader name val = header name (Just val)
 status ∷ Status → Printer
 status s = Printer \state → state { status = s }
 
-body ∷ HTTP.Response.NodeBody → Printer
+body ∷ Response.Types.NodeBody → Printer
 body b = Printer _ { body = Just b }
 
 json ∷ Json → Printer
@@ -46,12 +46,12 @@ json = Argonaut.stringify >>> string
 string ∷ String → Printer
 string str = body $ NodeBuffer $ unsafePerformEffect $ Node.Buffer.fromString str UTF8
 
-defaultResponse ∷ HTTP.Response.Node
+defaultResponse ∷ Response.Types.ServerResponse
 defaultResponse =
   { body: Nothing
   , headers: []
   , status: Status.ok200
   }
 
-run ∷ Printer → HTTP.Response.Node
+run ∷ Printer → Response.Types.ServerResponse
 run (Printer prt) = prt defaultResponse

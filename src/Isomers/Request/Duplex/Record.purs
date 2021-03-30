@@ -42,6 +42,9 @@ import Record (get, insert) as Record
 import Type.Prelude (class IsSymbol, SProxy(..))
 import Type.Prelude (class IsSymbol, SProxy, reflectSymbol)
 
+type Root body o
+  = Duplex body {} { | o } { | o }
+
 insert ∷
   ∀ body i l o r ri ro.
   IsSymbol l ⇒
