@@ -1,5 +1,5 @@
 module Isomers.Response
-  ( module DuplexE
+  ( module Exports
   , injInto
   , toEither
   , fromEither
@@ -36,7 +36,7 @@ import Data.Variant (Variant)
 import Data.Variant (inj, on) as Variant
 import Isomers.Contrib.Data.Variant (append) as Contrib.Data.Variant
 import Isomers.HTTP.ContentTypes (_json)
-import Isomers.Response.Duplex (Duplex(..)) as DuplexE
+import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
 import Isomers.Response.Duplex (json, reqHeader, withHeaderValue, withStatus) as Duplex
 import Isomers.Response.Duplex (Duplex, withStatus)
 import Isomers.Response.Duplex.Variant (empty, injInto) as Duplex.Variant

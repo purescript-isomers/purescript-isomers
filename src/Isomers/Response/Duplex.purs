@@ -1,5 +1,6 @@
 module Isomers.Response.Duplex
   ( module Type
+  , asJson
   , header
   , json
   , reqHeader
@@ -14,9 +15,10 @@ import Prelude
 
 import Control.Monad.Error.Class (throwError)
 import Data.Argonaut (Json)
+import Data.Either (Either)
 import Data.Maybe (Maybe)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
-import Isomers.Response.Duplex.Parser (ParsingError(..), header, json, reqHeader, status, statusEquals, string) as Parser
+import Isomers.Response.Duplex.Parser (ParsingError(..), fromJson, header, json, reqHeader, status, statusEquals, string) as Parser
 import Isomers.Response.Duplex.Printer (header, json, reqHeader, status, string) as Printer
 import Isomers.Response.Duplex.Type (Duplex(..), Duplex')
 import Isomers.Response.Duplex.Type (Duplex(..), Duplex') as Type
@@ -32,7 +34,7 @@ header headerName = Duplex (Printer.header headerName) (Parser.header headerName
 reqHeader ∷ HeaderName → Duplex' String
 reqHeader headerName = Duplex (Printer.reqHeader headerName) (Parser.reqHeader headerName)
 
-withHeaderValue ∷ ∀ i o. HeaderName → String -> Duplex i o → Duplex i o
+withHeaderValue ∷ ∀ i o. HeaderName → String → Duplex i o → Duplex i o
 withHeaderValue hn@(CaseInsensitiveString str) expected (Duplex prt prs) = Duplex
   (\i → Printer.reqHeader hn str <> prt i)
   ( Parser.reqHeader hn >>= \got → do
@@ -52,4 +54,7 @@ json = Duplex Printer.json Parser.json
 
 string ∷ Duplex' String
 string = Duplex Printer.string Parser.string
+
+asJson ∷ ∀ i o. (i → Json) → (Json → Either String o) → Duplex i o
+asJson f g = Duplex (Printer.json <<< f) (Parser.fromJson g)
 

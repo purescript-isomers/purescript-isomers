@@ -1,5 +1,6 @@
 module Isomers.Spec
   ( module Builder
+  , module Type
   ) where
 
 import Prelude
@@ -23,6 +24,7 @@ import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.N
 import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
 import Isomers.HTTP (Method(..)) as HTTP
 import Isomers.Spec.Builder (spec) as Spec.Builder
+import Isomers.Spec.Type (Spec(..)) as Type
 import Prim.Row (class Cons, class Union) as Row
 import Prim.RowList (class RowToList)
 import Prim.Symbol (class Append) as Symbol

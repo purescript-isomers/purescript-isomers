@@ -35,6 +35,7 @@ import Web.Streams.ReadableStream (ReadableStream) as Web.Streams
 -- | * Provide proper error type
 data ParsingError
   = Expected String String
+  | BodyParsingError String
   | HeaderMissing HeaderName
   | JSError Effect.Exception.Error
 
@@ -57,7 +58,6 @@ derive newtype instance bindParser ∷ Bind (Parser)
 derive newtype instance monadParser ∷ Monad (Parser)
 
 derive newtype instance monadParserThrow ∷ MonadThrow ParsingError (Parser)
-
 
 _responseParserError = SProxy ∷ SProxy "responseParserError"
 
@@ -83,7 +83,8 @@ readBody l =
             >>= case _ of
                 Just fb → do
                   let
-                    Parser err = throwError
+                    Parser err =
+                      throwError
                         $ Expected (reflectSymbol l)
                         $ (Contrib.Data.Variant.tag fb)
                   Variant.on l pure (Variant.default err) fb
@@ -95,6 +96,7 @@ readBody l =
                         State.put (Just (Variant.inj l fb))
                         pure fb
         liftAff $ joinFiber fb
+
 arrayBuffer ∷ Parser ArrayBuffer
 arrayBuffer = readBody (SProxy ∷ SProxy "arrayBuffer")
 
@@ -112,8 +114,10 @@ status = Parser $ Reader.asks _.status
 
 statusEquals ∷ HTTP.Types.Status → Parser Unit
 statusEquals { code: expected } =
-  status >>= \{ code: got } → when (expected /= got) do
-     throwError $ Expected ("Status code: " <> show expected) (show got)
+  status
+    >>= \{ code: got } →
+        when (expected /= got) do
+          throwError $ Expected ("Status code: " <> show expected) (show got)
 
 headers ∷ Parser HTTP.Response.WebHeaders
 headers = Parser $ Reader.asks _.headers
@@ -122,12 +126,28 @@ header ∷ HeaderName → Parser (Maybe String)
 header hn = headers <#> Map.lookup hn
 
 reqHeader ∷ HeaderName → Parser String
-reqHeader hn = header hn >>= case _ of
-  Nothing → throwError (HeaderMissing hn)
-  Just v → pure v
+reqHeader hn =
+  header hn
+    >>= case _ of
+        Nothing → throwError (HeaderMissing hn)
+        Just v → pure v
 
 run ∷ ∀ a. Parser a → HTTP.Response.Web → Aff (Either ParsingError a)
 run (Parser prs) i = go `catchError` (JSError >>> Left >>> pure)
   where
   go = flip runReaderT i <<< flip evalStateT Nothing <<< runExceptT $ prs
+
+fromString ∷ ∀ a b. (a → String) → (a → Either String b) → Parser a → Parser b
+fromString print decode p = do
+  a ← p
+  case decode a of
+    Left err → throwError $ Expected err (print a)
+    Right b → pure b
+
+fromJson ∷ ∀ b. (Json → Either String b) → Parser b
+fromJson decode = do
+  json >>= \j → case decode j  of
+    Left err → throwError $ BodyParsingError err
+    Right b → pure b
+
 

@@ -14,31 +14,28 @@ import Web.Fetch.RequestCredentials (RequestCredentials) as Fetch
 import Web.Fetch.RequestMode (RequestMode) as Fetch
 import Web.Fetch.RequestRedirect (RequestRedirect) as Fetch
 
-type Base body middleware =
-  { body ∷ body
-  , httpVersion ∷ String
-  , method ∷ String
-  , url ∷ String
-  | middleware
-  }
+type Base request
+  = { httpVersion ∷ String
+    , method ∷ String
+    , url ∷ String
+    | request
+    }
 
--- | TODO:
--- | I'm not sure if I'm able to easily carry this middleware parameter up
--- | in the context of our generic `Spec` machinery.
-type Node middleware =
-  Base
-  { stream ∷ Node.Stream.Readable () }
-  (headers ∷ Map HeaderName String | middleware)
+type Node
+  = Base
+      ( headers ∷ Map HeaderName String
+      , body ∷ Node.Stream.Readable ()
+      )
 
-type Web =
-  Base
-  Fetch.RequestBody
-  ( headers ∷ Array Header
-  , credentials :: Fetch.RequestCredentials
-  , cache :: Fetch.RequestCache
-  , mode :: Fetch.RequestMode
-  , redirect ∷ Fetch.RequestRedirect
-  , referrer :: Maybe Fetch.Referrer
-  , referrerPolicy :: Fetch.ReferrerPolicy
-  , integrity :: Fetch.Integrity
-  )
+type Web
+  = Base
+      ( body ∷ Fetch.RequestBody
+      , headers ∷ Array Header
+      , credentials :: Fetch.RequestCredentials
+      , cache :: Fetch.RequestCache
+      , mode :: Fetch.RequestMode
+      , redirect ∷ Fetch.RequestRedirect
+      , referrer :: Maybe Fetch.Referrer
+      , referrerPolicy :: Fetch.ReferrerPolicy
+      , integrity :: Fetch.Integrity
+      )
