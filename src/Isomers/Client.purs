@@ -2,7 +2,8 @@ module Isomers.Client where
 
 import Prelude
 
-import Control.Monad.Except (catchError)
+import Control.Monad.Except (ExceptT(..), catchError)
+import Control.Monad.Except.Checked (ExceptV)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
@@ -126,13 +127,15 @@ requestBuilders = hfoldlWithIndex (RequestBuildersStep (identity ∷ t → t)) {
 data ClientStep request responseDuplexes
   = ClientStep (request → Request.Printer) responseDuplexes
 
+newtype ResponseM errs a = ResponseM (ExceptV (FetchError + errs) Aff a)
+
 -- | TODO: parameterize the client by fetching function
 -- | so the whole exchange can be performed purely.
 instance clientFoldingResponseConstructor ∷
   ( IsSymbol sym
   , Row.Lacks sym client
   , Row.Cons sym (Response.Duplex i res) resDpls_ resDpls
-  , Row.Cons sym (d → Aff (Either (Variant (FetchError + errs)) res)) client client'
+  , Row.Cons sym (d → ResponseM errs res) client client'
   ) =>
   FoldingWithIndex
     (ClientStep request { | resDpls })
@@ -143,7 +146,7 @@ instance clientFoldingResponseConstructor ∷
   foldingWithIndex (ClientStep reqPrt resDpls) prop c reqBld = do
     let
       resDpl = Record.get prop resDpls
-      f d = do
+      f d = ResponseM $ ExceptT do
         let r = reqBld d
         res ← fetch (Request.Duplex.Printer.run (reqPrt r)) >>= case _ of
           Right res → lmap (HTTP.Exchange.error <<< unsafeStringify) <$> Response.parse resDpl res
@@ -163,13 +166,12 @@ else instance clientFoldingResponseDuplexRec ∷
     { | client }
     { | requestBuilders }
     { | client' } where
-  foldingWithIndex (ClientStep reqPrt resDpl) prop c reqBld = do
+  foldingWithIndex (ClientStep reqPrt resDpls) prop c reqBld = do
     let
-      sResDpl = Record.get prop resDpl
+      sResDpls = Record.get prop resDpls
 
-      -- sReqBld = Record.get prop reqBld
+      subclient = hfoldlWithIndex (ClientStep reqPrt sResDpls) {} reqBld
 
-      subclient = hfoldlWithIndex (ClientStep reqPrt sResDpl) {} reqBld
     Record.insert prop subclient c
 else instance clientFoldingResponseDuplexNewtypeWrapper ∷
   ( Newtype (f responseDuplexes) responseDuplexes

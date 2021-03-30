@@ -36,9 +36,11 @@ data NodeBody
 -- | In the case of node we can use `setHeader` or `setHeaders`.
 -- | I'm going to use one of these according to the number of values
 -- | in the array.
-type ServerResponse = Base
-  (Maybe NodeBody)
-  (headers ∷ Array Header)
+type ServerResponse =
+  (Base
+    (Maybe NodeBody)
+    (headers ∷ Array Header)
+  )
 
 type ClientBodyRow =
   ( arrayBuffer ∷ Fiber ArrayBuffer -- Effect (Promise ArrayBuffer)
