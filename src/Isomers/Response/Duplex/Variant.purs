@@ -3,6 +3,7 @@ module Isomers.Response.Duplex.Variant where
 import Prelude
 
 import Control.Alt ((<|>))
+import Control.Lazy (defer) as Control.Lazy
 import Data.Variant (Variant)
 import Data.Variant (case_, expand, inj, on) as Variant
 import Isomers.Response.Duplex.Parser (Parser(..))
@@ -12,7 +13,7 @@ import Prim.Row (class Cons, class Union) as Row
 import Type.Prelude (class IsSymbol, SProxy)
 
 empty ∷ Duplex (Variant ()) (Variant ())
-empty = Duplex Variant.case_ (Parser $ unsafeCrashWith "Isomers.Response.Duplex.Variant.empty")
+empty = Duplex Variant.case_ (Control.Lazy.defer \_ → Parser $ unsafeCrashWith "Isomers.Response.Duplex.Variant.empty")
 
 -- | You can use this `inj` in a similar "style" as `Variant.on` can be used.
 -- |
@@ -24,7 +25,7 @@ empty = Duplex Variant.case_ (Parser $ unsafeCrashWith "Isomers.Response.Duplex.
 -- | I'm not able to split this into subfunctions (like `inj` and `extend`) because
 -- | theses would have partial printers.
 injInto ∷
-  ∀ errs l i o li lo vi vi' vo vo'.
+  ∀ l i o li lo vi vi' vo vo'.
   IsSymbol l ⇒
   Row.Cons l o () lo ⇒
   Row.Cons l o vo vo' ⇒

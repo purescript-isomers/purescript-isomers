@@ -1,24 +1,30 @@
-module Test.Request where
+module Test.Spec where
 
 import Prelude
+
 import Data.Bifunctor (lmap)
+import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
 import Data.Tuple.Nested ((/\))
 import Data.Validation.Semigroup (V(..))
-import Effect.Aff (Aff)
+import Effect (Effect)
+import Effect.Aff (Aff, launchAff_)
+import Effect.Console (log)
 import Global.Unsafe (unsafeStringify)
-import Isomers.Client (ResponseM(..), client)
+import Heterogeneous.Folding (class HFoldlWithIndex)
+import Isomers.Client (RequestBuildersStep(..), ResponseM(..), requestBuilders, runResponseM)
 import Isomers.Client (client) as Client
-import Isomers.Node (ServerRequest, spec) as Node
-import Isomers.Request (Duplex(..), Duplex') as Request
+import Isomers.Node.Server (serve) as Node.Server
+import Isomers.Request (Duplex(..), Duplex', print) as Request
 import Isomers.Request.Duplex.Parser (int) as Parser
 import Isomers.Request.Duplex.Parser (int) as Request.Duplex
 import Isomers.Request.Duplex.Record (Root, empty, intSegment, segment) as Request.Duplex.Record
 import Isomers.Response (Duplex(..), Duplex') as Response
 import Isomers.Response.Duplex (asJson) as Response.Duplex
 import Isomers.Server (router) as Server
-import Isomers.Spec (Spec(..), spec) as Spec
+import Isomers.Spec (Spec(..), root, spec) as Spec
 import Isomers.Spec (spec) as Spec.Builder
+import Node.Stream (onClose)
 import Polyform.Batteries.Json.Duals ((:=))
 import Polyform.Batteries.Json.Duals (Pure, int, object, string) as Json.Duals
 import Polyform.Dual (Dual(..))
@@ -26,7 +32,7 @@ import Polyform.Dual.Record (build) as Dual.Record
 import Polyform.Validator.Dual (runSerializer, runValidator)
 import Polyform.Validator.Dual.Pure (runSerializer, runValidator) as Dual.Pure
 import Prim.Row (class Lacks) as Row
-import Type.Prelude (SProxy(..))
+import Type.Prelude (Proxy(..), SProxy(..))
 
 responseDuplex = Response.Duplex.asJson (Dual.Pure.runSerializer d) (lmap unsafeStringify <<< un V <<< Dual.Pure.runValidator d)
   where
@@ -46,7 +52,7 @@ requestDuplex ::
 requestDuplex = Request.Duplex.Record.intSegment (SProxy ∷ SProxy "productId")
 
 api =
-  Spec.spec
+  Spec.root
     { shop: requestDuplex /\ responseDuplex
     , admin: Request.Duplex.Record.empty /\ (pure unit ∷ Response.Duplex' Unit)
     , sub:
@@ -58,6 +64,13 @@ client = do
     Spec.Spec { request: reqDpl, response: resDpls } = api
   Client.client reqDpl resDpls
 
+handlers =
+  { shop: const $ pure { a: 8, b: "test" }
+  , admin: const $ pure unit
+  , sub:
+      { shop: \r → pure { a: r.productId, b: "sub-test" } }
+  }
+
 router = do
   Server.router
     api
@@ -66,3 +79,31 @@ router = do
     , sub:
         { shop: const $ pure { a: 8, b: "test" } }
     }
+
+z ::
+  forall t419.
+  ResponseM t419
+    { a :: Int
+    , b :: String
+    }
+z = client.shop { productId: 8 }
+
+specRequestBuilder ∷
+  ∀ body input request requestBuilders response.
+  HFoldlWithIndex (RequestBuildersStep request request) {} (Proxy request) { | requestBuilders } ⇒
+  Spec.Spec body input request response → { | requestBuilders }
+specRequestBuilder (Spec.Spec _) = requestBuilders (Proxy ∷ Proxy request)
+
+print (Spec.Spec { request: reqDpl }) = Request.print reqDpl
+
+req = specRequestBuilder api
+
+main :: Effect Unit
+main = do
+  onClose ← Node.Server.serve api handlers { hostname: "127.0.0.1", port: 9000, backlog: Nothing } (log "127.0.0.1:9000")
+  onClose (log "Closed")
+
+  log $ _.path <<< print api $ req.admin {}
+  log $ _.path <<< print api $ req.sub.shop {productId: 8}
+
+  launchAff_ $ runResponseM z

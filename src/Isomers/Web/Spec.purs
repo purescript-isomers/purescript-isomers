@@ -1,33 +1,31 @@
 module Isomers.Web.Spec where
 
 -- | XXX: New Spec migration
--- import Prelude
--- 
--- import Data.Variant (Variant)
--- import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
--- import Heterogeneous.Mapping (class HMap)
--- import Isomers.Api (Spec, SpecFolding(..)) as Api
--- import Isomers.Api.Spec (PrefixRoutes)
--- import Isomers.Api.Spec (RequestMapping, ResponseMapping, emptyVariantSpec, endpoint, method) as Api.Spec
--- import Isomers.Contrib.Heterogeneous (hmap')
--- import Isomers.Contrib.Heterogeneous.Foldings (Flatten(..)) as Heterogeneous.Foldings
--- import Isomers.Contrib.Heterogeneous.Mappings (Compose(..)) as Mappings
--- import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.Newtype
--- import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
--- import Isomers.HTTP (Method(..))
--- import Isomers.HTTP.Request (Data) as Request
--- import Isomers.Web.Renderer (Renderer)
--- import Prim.RowList (class RowToList)
--- import Request.Duplex (RequestDuplex')
--- import Request.Duplex.Generic.Variant (class MethodPrefixRoutes, class VariantParser, class VariantPrinter) as Request.Duplex.Generic.Variant
--- import Type.Prelude (SProxy(..))
--- 
--- newtype Spec request responseDuplexes renderers
---   = Spec
---   { api ∷ Api.Spec request responseDuplexes
---   , renderers ∷ renderers
---   }
--- 
+
+import Prelude
+
+import Data.Variant (Variant)
+import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
+import Heterogeneous.Mapping (class HMap)
+import Isomers.Contrib.Heterogeneous (hmap')
+import Isomers.Contrib.Heterogeneous.Foldings (Flatten(..)) as Heterogeneous.Foldings
+import Isomers.Contrib.Heterogeneous.Mappings (Compose(..)) as Mappings
+import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.Newtype
+import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
+import Isomers.HTTP (Method(..))
+import Isomers.Spec (Spec(..)) as Spec
+import Isomers.Web.Renderer (Renderer)
+import Prim.RowList (class RowToList)
+import Request.Duplex (RequestDuplex')
+import Request.Duplex.Generic.Variant (class MethodPrefixRoutes, class VariantParser, class VariantPrinter) as Request.Duplex.Generic.Variant
+import Type.Prelude (SProxy(..))
+
+newtype Spec body input request responseDuplexes renderers
+  = Spec
+  { api ∷ Spec.Spec body input request responseDuplexes
+  , renderers ∷ renderers
+  }
+
 -- endpoint ::
 --   ∀ req aRes iRes rnd.
 --   { api ∷ RequestDuplex' req → aRes → Spec (Request.Data req) aRes {}

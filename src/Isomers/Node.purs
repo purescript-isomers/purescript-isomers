@@ -1,21 +1,16 @@
-module Isomers.Node where
+module Isomers.Node
+  ( module Exports
+  , root
+  , spec
+  )
+  where
 
-import Isomers.Node.Request.Body (Str, Buff) as Body
-import Isomers.Request (ServerRequest) as Request
-import Isomers.Spec (class Builder, Spec, spec) as Spec
-import Type.Row (type (+))
-
-type Body = (Body.Buff + Body.Str + ())
-
-type Spec i req res = Spec.Spec Body i req res
-
-type Root payload res = Spec {} { | payload } res
-
-type ServerRequest = Request.ServerRequest Body
+import Isomers.Node.Types (Body, Root, Spec)
+import Isomers.Node.Types (Body, Root, Spec) as Exports
+import Isomers.Spec (class Builder, root, spec) as Spec
 
 spec ∷ ∀ a i req res. Spec.Builder a Body i req res ⇒ a → Spec i req res
 spec = Spec.spec
 
--- | TODO: root slash handling
-root ∷ ∀ a req res. Spec.Builder a Body {} { | req } res ⇒ a → Root req res
-root = Spec.spec
+root ∷ ∀ a req res. Spec.Builder a Body {} { | req } res ⇒ a → Root { | req } res
+root = Spec.root

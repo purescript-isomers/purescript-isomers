@@ -3,14 +3,15 @@ module Isomers.Response.Duplex.Parser where
 import Prelude
 
 import Control.Alt (class Alt)
+import Control.Lazy (class Lazy) as Control
 import Control.Monad.Error.Class (class MonadThrow, catchError)
 import Control.Monad.Except (ExceptT(..), runExceptT, throwError)
 import Control.Monad.Reader (ReaderT, runReaderT)
 import Control.Monad.Reader (ask, asks) as Reader
-import Control.Monad.State (StateT, evalStateT)
+import Control.Monad.State (StateT(..), evalStateT)
 import Control.Monad.State (get, put) as State
 import Data.Argonaut (Json)
-import Data.ArrayBuffer.Types (ArrayBuffer, Uint8Array)
+import Data.ArrayBuffer.Types (ArrayBuffer)
 import Data.Either (Either(..))
 import Data.Map (lookup) as Map
 import Data.Maybe (Maybe(..))
@@ -28,7 +29,6 @@ import Network.HTTP.Types (Status) as HTTP.Types
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
 import Type.Prelude (class IsSymbol, reflectSymbol)
-import Web.Streams.ReadableStream (ReadableStream) as Web.Streams
 
 -- | TODO: Error handling
 -- | * Use `V` here.
@@ -58,6 +58,13 @@ derive newtype instance bindParser ∷ Bind (Parser)
 derive newtype instance monadParser ∷ Monad (Parser)
 
 derive newtype instance monadParserThrow ∷ MonadThrow ParsingError (Parser)
+
+-- newtype StateT s m a = StateT (s -> m (Tuple a s))
+instance lazyParser ∷ Control.Lazy (Parser a) where
+  defer f = Parser $ ExceptT $ StateT \s → do
+    let
+      Parser (ExceptT (StateT f')) = f unit
+    f' s
 
 _responseParserError = SProxy ∷ SProxy "responseParserError"
 

@@ -5,8 +5,8 @@ import Prelude
 import Data.Variant (Variant)
 import Heterogeneous.Mapping (class HMap, hmap)
 import Isomers.Contrib.Type.Eval.Foldable (Foldl')
-import Isomers.Request.Duplex.Generic (variant) as Request.Duplex.Generic
 import Isomers.Request.Duplex.Generic (class HFoldlVariantStep)
+import Isomers.Request.Duplex.Generic (variant) as Request.Duplex.Generic
 import Isomers.Spec.Type (RequestMapping, ResponseMapping, Spec(..), _RequestMapping, _ResponseMapping)
 import Type.Eval (class Eval, kind TypeExpr)
 import Type.Eval.Function (type (<<<))
@@ -29,6 +29,8 @@ type SubspecBody row
 
 instance evalSubspecBodyUnit ∷ Eval (SubspecBodyStep Unit (Spec body i req res)) (RProxy body)
 else instance evalSubspecBodyStep ∷ (TypeEquals (RProxy body) (RProxy body')) ⇒ Eval (SubspecBodyStep (RProxy body) (Spec body' j req res)) (RProxy body)
+
+type PrefixRoutes = Boolean
 
 -- | 1. We assume here that record fields are already `Spec` values.
 -- |
@@ -61,5 +63,4 @@ spec b r = do
     { response: hmap _ResponseMapping r
     , request: Request.Duplex.Generic.variant b reqs
     }
-
 

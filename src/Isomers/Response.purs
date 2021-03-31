@@ -5,7 +5,6 @@ module Isomers.Response
   , fromEither
   , roundtripEither
   , unsafeFromEither
-  , fromFetchResponse
   , print
   , parse
   , Response
@@ -31,20 +30,14 @@ import Prelude
 
 import Control.Alt (class Alt, alt)
 import Data.Argonaut (Json)
-import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Foldable (class Foldable, foldMap, foldl, foldr)
 import Data.Lens (iso)
-import Data.Map (fromFoldable) as Map
-import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Traversable (class Traversable, sequenceDefault, traverse)
 import Data.Variant (Variant)
 import Data.Variant (inj, on) as Variant
-import Effect (Effect)
-import Effect.Aff (Aff, Fiber, launchSuspendedAff)
+import Effect.Aff (Aff)
 import Isomers.Contrib.Data.Variant (append) as Contrib.Data.Variant
-import Isomers.Contrib.Web.Fetch (json) as Contrib.Web.Fetch.Response
-import Isomers.Contrib.Web.Promise (toAffE) as Contrib.Web.Promise
 import Isomers.HTTP.ContentTypes (_json)
 import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
 import Isomers.Response.Duplex (Duplex(..), withStatus)
@@ -60,10 +53,6 @@ import Prim.Row (class Cons, class Lacks, class Union) as Row
 import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
 import Type.Row (type (+))
 import Unsafe.Coerce (unsafeCoerce)
-import Web.Fetch.Headers (toArray) as Web.Fetch.Headers
-import Web.Fetch.Response (Response) as Web.Fetch
-import Web.Fetch.Response (arrayBuffer, headers, status, statusText, text, url) as Web.Fetch.Response
-import Web.Promise (Promise) as Web
 
 _ok = SProxy ∷ SProxy "ok"
 
@@ -243,35 +232,6 @@ notFound' ∷
     (Response ct (NotFound Unit + res) i)
     (Response ct (NotFound Unit + res) o)
 notFound' res = notFound (pure unit) res
-
-fromFetchResponse ∷ Web.Fetch.Response → Effect ClientResponse
-fromFetchResponse res = do
-  let
-    headers = Map.fromFoldable <<< map (lmap CaseInsensitiveString) <<< Web.Fetch.Headers.toArray <<< Web.Fetch.Response.headers $ res
-
-    status =
-      { code: Web.Fetch.Response.status res
-      , message: Web.Fetch.Response.statusText res
-      }
-
-    url = Web.Fetch.Response.url res
-
-    toFiber ∷ ∀ a. Effect (Web.Promise a) → Effect (Fiber a)
-    toFiber = launchSuspendedAff <<< Contrib.Web.Promise.toAffE
-  body ←
-    { arrayBuffer: _
-    , json: _
-    , string: _
-    }
-      <$> (toFiber $ Web.Fetch.Response.arrayBuffer res)
-      <*> (toFiber $ Contrib.Web.Fetch.Response.json res)
-      <*> (toFiber $ Web.Fetch.Response.text res)
-  pure
-    { body
-    , headers
-    , status
-    , url
-    }
 
 parse ∷ ∀ i o. Duplex i o → ClientResponse → Aff (Either ParsingError o)
 parse (Duplex _ prs) = Parser.run prs

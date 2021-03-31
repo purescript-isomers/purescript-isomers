@@ -4,11 +4,11 @@ import Prelude
 
 import Data.Either (Either)
 import Effect.Aff (Fiber)
-import Isomers.Request.Duplex.Parser (as, body, int, param, take) as Parser
 import Isomers.Request.Duplex.Parser (Parser)
+import Isomers.Request.Duplex.Parser (as, body, int, param, take) as Parser
 import Isomers.Request.Duplex.Printer (Printer)
 import Isomers.Request.Duplex.Printer (body, param, put) as Printer
-import Isomers.Request.Duplex.Type (Duplex(..))
+import Isomers.Request.Duplex.Type (Duplex(..), path)
 import Isomers.Request.Types (ClientBody)
 import Prim.Row (class Cons, class Lacks) as Row
 import Record (get, insert) as Record

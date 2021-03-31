@@ -2,34 +2,31 @@ module Isomers.Client where
 
 import Prelude
 
-import Control.Monad.Except (ExceptT(..), catchError)
+import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Except.Checked (ExceptV)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap, wrap)
-import Data.Traversable (traverse)
 import Data.Variant (Variant)
 import Data.Variant (inj) as Variant
 import Effect.Aff (Aff)
-import Effect.Class (liftEffect)
 import Global.Unsafe (unsafeStringify)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
-import Isomers.Contrib.Web.Promise (toAffE) as Contrib.Web.Pomise
+import Isomers.Client.Fetch (fetch)
 import Isomers.HTTP (Exchange(..)) as HTTP
 import Isomers.HTTP.Exchange (FetchError)
 import Isomers.HTTP.Exchange (error) as HTTP.Exchange
-import Isomers.Request (ClientRequest, toFetchRequest)
+import Isomers.Request (ClientRequest)
 import Isomers.Request (Duplex(..), Duplex', Printer) as Request
 import Isomers.Request.Duplex.Printer (run) as Request.Duplex.Printer
-import Isomers.Response (ClientResponse, fromFetchResponse)
+import Isomers.Response (ClientResponse)
 import Isomers.Response (Duplex, parse) as Response
 import Prim.Row (class Cons, class Lacks) as Row
 import Prim.RowList (class RowToList)
 import Record (get, insert) as Record
 import Type.Prelude (class IsSymbol, Proxy(..), RLProxy(..), SProxy)
 import Type.Row (type (+))
-import Web.Fetch (fetch) as Web.Fetch
 
 -- | This folding creates a request builder:
 -- | a record which contains functions which put a
@@ -129,6 +126,9 @@ data ClientStep request responseDuplexes
 
 newtype ResponseM errs a = ResponseM (ExceptV (FetchError + errs) Aff a)
 
+runResponseM :: forall t4 t5.  ResponseM t4 t5 -> Aff (Either (Variant ( fetchError :: String | t4)) t5)
+runResponseM (ResponseM e) = runExceptT e
+
 -- | TODO: parameterize the client by fetching function
 -- | so the whole exchange can be performed purely.
 instance clientFoldingResponseConstructor ∷
@@ -185,14 +185,6 @@ else instance clientFoldingResponseDuplexNewtypeWrapper ∷
     { | client' } where
   foldingWithIndex (ClientStep reqPrt resDpl) prop c reqBld = do
     foldingWithIndex (ClientStep reqPrt (unwrap resDpl)) prop c reqBld
-
-fetch ∷ ClientRequest → Aff (Either String ClientResponse)
-fetch req = do
-  req' ← liftEffect $ toFetchRequest req
-  let
-    res = Contrib.Web.Pomise.toAffE $ Web.Fetch.fetch req'
-  ((Right <<< fromFetchResponse) <$> res) `catchError` (pure <<< Left <<< unsafeStringify) >>= traverse liftEffect
-
 
 exchange ∷ ∀ errs. ClientRequest → HTTP.Exchange errs ClientRequest ClientResponse
 exchange clientRequest = HTTP.Exchange clientRequest Nothing

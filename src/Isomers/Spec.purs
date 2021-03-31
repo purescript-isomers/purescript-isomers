@@ -4,7 +4,7 @@ module Isomers.Spec
   ) where
 
 import Prelude
-import Isomers.Spec.Builder (spec, class Builder) as Builder
+import Isomers.Spec.Builder (root, spec, class Builder) as Builder
 import Control.Alt ((<|>))
 import Data.Lens (Iso, Iso')
 import Data.Lens.Iso.Newtype (_Newtype)

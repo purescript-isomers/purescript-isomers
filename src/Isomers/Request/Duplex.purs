@@ -1,4 +1,4 @@
-module Isomers.Request.Duplex (body) where
+module Isomers.Request.Duplex (body, root) where
 
 import Control.Alt (class Alt, (<|>))
 import Control.Alternative (class Alternative, empty)
@@ -24,8 +24,8 @@ import Isomers.Request.Duplex.Parser (Parser(..), body) as Parser
 import Isomers.Request.Duplex.Path (Parts, parse) as Path
 import Isomers.Request.Duplex.Printer (Printer(..))
 import Isomers.Request.Duplex.Printer (Printer(..)) as Printer
-import Isomers.Request.Duplex.Type (Duplex(..))
 import Isomers.Request.Duplex.Type (Duplex(..), Duplex', parse', print) as Type
+import Isomers.Request.Duplex.Type (Duplex(..), path)
 import Isomers.Request.Types (ServerRequest)
 import Network.HTTP.Types (HeaderName)
 import Prim.Row (class Cons) as Row
@@ -33,4 +33,7 @@ import Type.Prelude (class IsSymbol, SProxy(..))
 
 body ∷ ∀ t3 t4 t5 t6 t7 t8. IsSymbol t7 ⇒ Row.Cons t7 (Fiber (t5 → t3)) t8 t6 ⇒ SProxy t7 → (t4 → Printer) → Duplex t6 t5 t4 t3
 body l prt = Duplex prt (Parser.body l)
+
+root :: forall body r i o. Duplex body r i o -> Duplex body r i o
+root = path ""
 

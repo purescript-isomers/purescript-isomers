@@ -95,7 +95,8 @@ router ∷
   HFoldlWithIndex (RouterStep handlers resCodecs) Unit (Variant request) (Aff ServerResponseWrapper) ⇒
   Spec body {} (Variant request) { | resCodecs } →
   { | handlers } →
-  (ServerRequest body → Aff (Either RoutingError ServerResponse))
+  ServerRequest body →
+  Aff (Either RoutingError ServerResponse)
 router spec@(Spec { request, response }) handlers = do
   let
     handle = hfoldlWithIndex (RouterStep handlers response) unit

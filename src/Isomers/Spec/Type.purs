@@ -52,42 +52,11 @@ type ResponseMapping
 _ResponseMapping ∷ ResponseMapping
 _ResponseMapping = Mappings.Record.Get _response `Mappings.Compose` Mappings.Newtype.Unwrap
 
+-- duplex l dpl (Spec { request, response }) = Spec
+--   { 
+
 -- -- --   HMap RequestMapping t227 { | t239 } ⇒
 
--- -- -- method ∷
--- -- --   ∀ t221 t227 t235 t238 t239.
--- -- --   HMap ResponseMapping t227 { | t221 } ⇒
--- -- --   HMap RequestMapping t227 { | t239 } ⇒
--- -- --   RowToList t239 t238 ⇒
--- -- --   Request.Duplex.Generic.Variant.VariantParser t238 t239 t235 ⇒
--- -- --   Request.Duplex.Generic.Variant.VariantPrinter t238 t239 t235 ⇒
--- -- --   Request.Duplex.Generic.Variant.MethodPrefixRoutes t238 t239 ⇒
--- -- --   t227 →
--- -- --   Spec (Isomers.HTTP.Method (Variant t235)) (Isomers.HTTP.Method { | t221 })
--- -- -- method r = Spec { request, response }
--- -- --   where
--- -- --   -- | Drop `Spec` from the values
--- -- --   requests = hmap' _RequestMapping r
--- -- -- 
--- -- --   -- | TODO: Move to HTTP.Method
--- -- --   _Method ∷ ∀ a. Iso' (HTTP.Method a) a
--- -- --   _Method = _Newtype
--- -- -- 
--- -- --   request = _Method (Request.Duplex.Generic.Variant.methodVariant requests)
--- -- -- 
--- -- --   response = Isomers.HTTP.Method (hmap' _ResponseMapping r)
--- 
--- type PrefixRoutes
---   = Boolean
--- 
--- -- | We reuse this folding in the context of `Web.Spec` by
--- -- | separating specific cases with namespace.
--- data SpecFolding (sep ∷ Symbol)
---   = SpecFolding (SProxy sep) PrefixRoutes
--- 
--- prefix ∷ ∀ t173 t174. HFoldlWithIndex (SpecFolding ".") (Spec (Variant ()) {}) t173 t174 ⇒ t173 → t174
--- prefix raw = hfoldlWithIndex (SpecFolding (SProxy ∷ SProxy ".") true) emptyVariantSpec raw
--- 
 -- emptyVariantSpec ∷ ∀ reqBody. Spec reqBody (Variant ()) {}
 -- emptyVariantSpec = Spec { request: Request.Duplex.Variant.empty, response: {} }
 

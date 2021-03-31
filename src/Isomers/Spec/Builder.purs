@@ -7,6 +7,7 @@ import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Isomers.Contrib.Heterogeneous.List (type (:))
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern)
 import Isomers.Request (Duplex, Parser, Printer) as Request
+import Isomers.Request.Duplex (root) as Request.Duplex
 import Isomers.Request.Duplex.Generic (class HFoldlVariantStep)
 import Isomers.Response (Duplex) as Response
 import Isomers.Spec.Accept (Accept, RequestParserFolding, RequestPrinterFolding, ResponseContentTypesMapping)
@@ -66,4 +67,12 @@ instance recBuilderRecord ∷
   spec r = Spec.Record.spec true r'
     where
       r' = hmap SpecStep r
+
+root ∷ ∀ a i rb req res.  Builder a rb i req res ⇒ a → Spec rb i req res
+root a = do
+  let
+    Spec { request, response } = spec a
+    request' = Request.Duplex.root request
+
+  Spec { request: request', response }
 
