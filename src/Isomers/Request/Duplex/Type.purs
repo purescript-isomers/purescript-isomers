@@ -4,13 +4,14 @@ import Prelude
 
 import Data.Either (Either)
 import Data.Foldable (foldr)
+import Data.HTTP.Method (Method) as HTTP.Method
 import Data.Profunctor (class Profunctor)
 import Data.String (Pattern(..), split) as String
 import Effect.Aff (Aff)
 import Isomers.Request.Duplex.Parser (Parser, ParsingError)
-import Isomers.Request.Duplex.Parser (prefix, run) as Parser
+import Isomers.Request.Duplex.Parser (method, prefix, run) as Parser
 import Isomers.Request.Duplex.Printer (Printer)
-import Isomers.Request.Duplex.Printer (prefix, run) as Printer
+import Isomers.Request.Duplex.Printer (method, prefix, run) as Printer
 import Isomers.Request.Types (ClientRequest, ServerRequest)
 
 data Duplex body r i o
@@ -46,6 +47,9 @@ print (Duplex enc _) = Printer.run <<< enc
 
 prefix ∷ ∀ body i o r. String → Duplex body r i o → Duplex body r i o
 prefix s (Duplex enc dec) = Duplex (Printer.prefix s <<< enc) (Parser.prefix s dec)
+
+method ∷ ∀ body i o r. HTTP.Method.Method → Duplex body r i o → Duplex body r i o
+method m (Duplex enc dec) = Duplex (append (Printer.method m) <<< enc) (Parser.method m dec)
 
 path ∷ ∀ body i o r. String → Duplex body r i o → Duplex body r i o
 path = flip (foldr prefix) <<< String.split (String.Pattern "/")

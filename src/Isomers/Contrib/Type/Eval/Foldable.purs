@@ -1,6 +1,7 @@
 module Isomers.Contrib.Type.Eval.Foldable where
 
 import Isomers.Contrib.Heterogeneous.List (HCons, HNil)
+import Isomers.Contrib.Type.Data.Maybe (Just', MProxy, Nothing')
 import Prim.RowList (Cons, Nil) as RL
 import Type.Eval (class Eval, kind TypeExpr)
 import Type.Eval.Boolean (Bool, TrueExpr, FalseExpr)
@@ -41,9 +42,14 @@ else instance foldrHNil ::
   ( Eval z ty
   ) =>
   Eval (Foldr' fn z HNil) ty
+else instance foldrNothing ∷ Eval acc ty ⇒
+  Eval (Foldr' fn acc (MProxy Nothing')) ty
+else instance foldrJust ∷ (Eval (fn a (Foldr' fn acc (MProxy Nothing'))) ty) ⇒
+  Eval (Foldr' fn acc (MProxy (Just' a))) ty
 else instance foldRFoldrFallack ∷
   (Eval (Foldr f acc a) ty) ⇒
   Eval (Foldr' f acc a) ty
+
 
 -- | A strict version of foldl...
 -- | Just a quick signature reminder ;-)

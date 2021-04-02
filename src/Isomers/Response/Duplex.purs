@@ -5,7 +5,6 @@ module Isomers.Response.Duplex
   , json
   , reqHeader
   , status
-  , string
   , withHeaderValue
   , withStatus
   )
@@ -18,43 +17,49 @@ import Data.Argonaut (Json)
 import Data.Either (Either)
 import Data.Maybe (Maybe)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
-import Isomers.Response.Duplex.Parser (ParsingError(..), fromJson, header, json, reqHeader, status, statusEquals, string) as Parser
-import Isomers.Response.Duplex.Printer (header, json, reqHeader, status, string) as Printer
+import Isomers.HTTP.ContentTypes (JsonMime)
+import Isomers.Response.Duplex.Parser (ParsingError(..), fromJson, header, json, reqHeader, status, statusEquals, withContentType) as Parser
+import Isomers.Response.Duplex.Printer (header, json, reqHeader, status) as Printer
 import Isomers.Response.Duplex.Type (Duplex(..), Duplex')
 import Isomers.Response.Duplex.Type (Duplex(..), Duplex') as Type
-import Network.HTTP.Types (HeaderName)
+import Network.HTTP.Types (HeaderName, hContentType)
 import Network.HTTP.Types (Status) as HTTP.Types
+import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
 
-status ∷ Duplex' HTTP.Types.Status
+status ∷ ∀ ct. Duplex' ct HTTP.Types.Status
 status = Duplex Printer.status Parser.status
 
-header ∷ HeaderName → Duplex' (Maybe String)
+header ∷ ∀ ct. HeaderName → Duplex' ct (Maybe String)
 header headerName = Duplex (Printer.header headerName) (Parser.header headerName)
 
-reqHeader ∷ HeaderName → Duplex' String
+reqHeader ∷ ∀ ct. HeaderName → Duplex' ct String
 reqHeader headerName = Duplex (Printer.reqHeader headerName) (Parser.reqHeader headerName)
 
-withHeaderValue ∷ ∀ i o. HeaderName → String → Duplex i o → Duplex i o
+withHeaderValue ∷ ∀ ct i o. HeaderName → String → Duplex ct i o → Duplex ct i o
 withHeaderValue hn@(CaseInsensitiveString str) expected (Duplex prt prs) = Duplex
-  (\i → Printer.reqHeader hn str <> prt i)
+  (\i → Printer.reqHeader hn expected <> prt i)
   ( Parser.reqHeader hn >>= \got → do
       when (expected /= got) do
         throwError (Parser.Expected (str <> ":" <> expected) got)
       prs
   )
 
-withStatus ∷ ∀ i o. HTTP.Types.Status → Duplex i o → Duplex i o
+withContentType ∷ ∀ ct i o. IsSymbol ct ⇒ Duplex ct i o → Duplex ct i o
+withContentType (Duplex prt prs) = Duplex prt' prs'
+  where
+  ct = reflectSymbol (SProxy ∷ SProxy ct)
+  prt' i = Printer.reqHeader hContentType ct <> prt i
+  prs' = Parser.withContentType ct prs
+
+withStatus ∷ ∀ ct i o. HTTP.Types.Status → Duplex ct i o → Duplex ct i o
 withStatus s (Duplex prt prs) = Duplex prt' prs'
   where
     prt' i = Printer.status s <> prt i
     prs' = Parser.statusEquals s *> prs
 
-json ∷ Duplex' Json
-json = Duplex Printer.json Parser.json
+json ∷ Duplex' JsonMime Json
+json = withContentType (Duplex Printer.json Parser.json)
 
-string ∷ Duplex' String
-string = Duplex Printer.string Parser.string
-
-asJson ∷ ∀ i o. (i → Json) → (Json → Either String o) → Duplex i o
-asJson f g = Duplex (Printer.json <<< f) (Parser.fromJson g)
+asJson ∷ ∀ i o. (i → Json) → (Json → Either String o) → Duplex JsonMime i o
+asJson f g = withContentType $ Duplex (Printer.json <<< f) (Parser.fromJson g)
 

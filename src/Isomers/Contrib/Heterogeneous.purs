@@ -15,6 +15,7 @@ foreign import data MappingWithIndexExpr :: Type → Type -> Type -> TypeExpr
 
 instance evalMappingIndex :: (MappingWithIndex fn l a b) => Eval (MappingWithIndexExpr fn l a) b
 
+-- | TODO: Do we really need this?
 -- | A version of HMap which closes result record in the case of `Variant`
 class HMap' f a b | f a -> b where
   hmap' :: f -> a -> b

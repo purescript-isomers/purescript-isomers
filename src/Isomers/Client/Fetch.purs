@@ -19,7 +19,7 @@ import Isomers.Contrib.Web.Fetch.Request (fromJson) as Contrib.Web.Fetch.Request
 import Isomers.Contrib.Web.Promise (toAffE) as Contrib.Web.Pomise
 import Isomers.Contrib.Web.Promise (toAffE) as Contrib.Web.Promise
 import Isomers.Request.Types (ClientBody(..), ClientRequest)
-import Isomers.Response.Types (ClientResponse)
+import Isomers.Response.Duplex.Encodings (ClientResponse)
 import Web.Fetch (fetch) as Web.Fetch
 import Web.Fetch.Headers (fromFoldable) as Fetch.Headers
 import Web.Fetch.Headers (toArray) as Web.Fetch.Headers

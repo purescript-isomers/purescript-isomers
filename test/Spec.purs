@@ -3,24 +3,30 @@ module Test.Spec where
 import Prelude
 
 import Data.Bifunctor (lmap)
+import Data.Either (Either(..))
+import Data.HTTP.Method (Method)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
+import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Tuple.Nested ((/\))
 import Data.Validation.Semigroup (V(..))
 import Effect (Effect)
-import Effect.Aff (Aff, launchAff_)
 import Effect.Console (log)
 import Global.Unsafe (unsafeStringify)
 import Heterogeneous.Folding (class HFoldlWithIndex)
 import Isomers.Client (RequestBuildersStep(..), ResponseM(..), requestBuilders, runResponseM)
 import Isomers.Client (client) as Client
+import Isomers.Contrib.Heterogeneous.List (HNil(..), (:))
+import Isomers.HTTP.ContentTypes (TextMime, _json)
+import Isomers.HTTP.Request (Method(..))
 import Isomers.Node.Server (serve) as Node.Server
 import Isomers.Request (Duplex(..), Duplex', print) as Request
 import Isomers.Request.Duplex.Parser (int) as Parser
-import Isomers.Request.Duplex.Parser (int) as Request.Duplex
 import Isomers.Request.Duplex.Record (Root, empty, intSegment, segment) as Request.Duplex.Record
-import Isomers.Response (Duplex(..), Duplex') as Response
-import Isomers.Response.Duplex (asJson) as Response.Duplex
+import Isomers.Response (Okayish, OkayishDuplex') as Response
+import Isomers.Response.Duplex (header, withHeaderValue) as Response.Duplex
+import Isomers.Response.Okayish.Duplexes (asJson) as Response.Okayish.Duplexes
+import Isomers.Response.Okayish.Type (fromEither) as Response.Okayish
 import Isomers.Server (router) as Server
 import Isomers.Spec (Spec(..), root, spec) as Spec
 import Isomers.Spec (spec) as Spec.Builder
@@ -31,12 +37,11 @@ import Polyform.Dual (Dual(..))
 import Polyform.Dual.Record (build) as Dual.Record
 import Polyform.Validator.Dual (runSerializer, runValidator)
 import Polyform.Validator.Dual.Pure (runSerializer, runValidator) as Dual.Pure
-import Prim.Row (class Lacks) as Row
 import Type.Prelude (Proxy(..), SProxy(..))
 
-responseDuplex = Response.Duplex.asJson (Dual.Pure.runSerializer d) (lmap unsafeStringify <<< un V <<< Dual.Pure.runValidator d)
+responseDuplex = Response.Duplex.withHeaderValue (CaseInsensitiveString "X-TEST") "TEST value" $ Response.Okayish.Duplexes.asJson (Dual.Pure.runSerializer d) (lmap unsafeStringify <<< un V <<< Dual.Pure.runValidator d)
   where
-  d ∷ Json.Duals.Pure _ { a ∷ Int, b ∷ String }
+  d ∷ Json.Duals.Pure _ { a ∷ Int, b ∷ String, method ∷ String }
   d = Json.Duals.object >>> rec
     where
     rec =
@@ -44,6 +49,8 @@ responseDuplex = Response.Duplex.asJson (Dual.Pure.runSerializer d) (lmap unsafe
         $ (SProxy ∷ SProxy "a")
         := Json.Duals.int
         <<< (SProxy ∷ SProxy "b")
+        := Json.Duals.string
+        <<< (SProxy ∷ SProxy "method")
         := Json.Duals.string
 
 requestDuplex ::
@@ -53,10 +60,14 @@ requestDuplex = Request.Duplex.Record.intSegment (SProxy ∷ SProxy "productId")
 
 api =
   Spec.root
-    { shop: requestDuplex /\ responseDuplex
-    , admin: Request.Duplex.Record.empty /\ (pure unit ∷ Response.Duplex' Unit)
+    { shop: requestDuplex /\ (responseDuplex : HNil)
+    , admin: Request.Duplex.Record.empty /\ ((pure $ pure unit) ∷ Response.OkayishDuplex' TextMime () Unit)
     , sub:
-        { shop: requestDuplex /\ responseDuplex }
+        { shop: Method
+          { "GET": requestDuplex /\ responseDuplex
+          , "POST": requestDuplex /\ responseDuplex
+          }
+        }
     }
 
 client = do
@@ -65,28 +76,22 @@ client = do
   Client.client reqDpl resDpls
 
 handlers =
-  { shop: const $ pure { a: 8, b: "test" }
-  , admin: const $ pure unit
+  { shop: { "application/json": const $ pure $ Response.Okayish.fromEither $ Right { a: 8, b: "test", method: "ANY" }}
+  , admin: const $ pure (pure unit)
   , sub:
-      { shop: \r → pure { a: r.productId, b: "sub-test" } }
+    { shop:
+      { "GET": \r → pure $ Response.Okayish.fromEither $ Right { a: r.productId, b: "sub-test", method: "received GET" }
+      , "POST": \r → pure $ Response.Okayish.fromEither $ Right { a: r.productId, b: "sub-test", method: "received POST" }
+      }
+    }
   }
 
 router = do
   Server.router
     api
-    { shop: const $ pure { a: 8, b: "test" }
-    , admin: const $ pure unit
-    , sub:
-        { shop: const $ pure { a: 8, b: "test" } }
-    }
+    handlers
 
-z ::
-  forall t419.
-  ResponseM t419
-    { a :: Int
-    , b :: String
-    }
-z = client.shop { productId: 8 }
+z = client.shop."application/json" { productId: 8 }
 
 specRequestBuilder ∷
   ∀ body input request requestBuilders response.
@@ -104,6 +109,7 @@ main = do
   onClose (log "Closed")
 
   log $ _.path <<< print api $ req.admin {}
-  log $ _.path <<< print api $ req.sub.shop {productId: 8}
+  log $ _.path <<< print api $ req.sub.shop."GET" {productId: 8}
+  log $ unsafeStringify <<< print api $ req.shop."application/json" { productId: 8 }
 
-  launchAff_ $ runResponseM z
+  -- launchAff_ $ runResponseM z

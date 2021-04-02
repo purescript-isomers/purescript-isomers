@@ -15,17 +15,16 @@ import Global.Unsafe (unsafeStringify)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
 import Isomers.Client.Fetch (fetch)
 import Isomers.HTTP (Exchange(..)) as HTTP
-import Isomers.HTTP.Exchange (FetchError)
-import Isomers.HTTP.Exchange (error) as HTTP.Exchange
+import Isomers.HTTP.Exchange (Error(..)) as Exchange
 import Isomers.Request (ClientRequest)
 import Isomers.Request (Duplex(..), Duplex', Printer) as Request
 import Isomers.Request.Duplex.Printer (run) as Request.Duplex.Printer
-import Isomers.Response (ClientResponse)
+import Isomers.Response.Duplex.Encodings (ClientResponse)
 import Isomers.Response (Duplex, parse) as Response
 import Prim.Row (class Cons, class Lacks) as Row
 import Prim.RowList (class RowToList)
 import Record (get, insert) as Record
-import Type.Prelude (class IsSymbol, Proxy(..), RLProxy(..), SProxy)
+import Type.Prelude (class IsSymbol, Proxy(..), RLProxy(..), SProxy(..))
 import Type.Row (type (+))
 
 -- | This folding creates a request builder:
@@ -36,29 +35,7 @@ import Type.Row (type (+))
 data RequestBuildersStep a request
   = RequestBuildersStep (a → request)
 
-instance requestFoldingNewtypeVariantWrapper ::
-  ( IsSymbol sym
-  , Newtype (f (Variant v)) (Variant v)
-  , Row.Cons sym (f (Variant v)) curr_ curr
-  , RowToList v vl
-  , Row.Lacks sym requestBuilders
-  , Row.Cons sym { | subrequestBuilders } requestBuilders requestBuilders'
-  , HFoldlWithIndex (RequestBuildersStep (Variant v) request) {} (RLProxy vl) { | subrequestBuilders }
-  ) =>
-  FoldingWithIndex
-    (RequestBuildersStep (Variant curr) request)
-    (SProxy sym)
-    { | requestBuilders }
-    (Proxy (f (Variant v)))
-    { | requestBuilders' } where
-  foldingWithIndex (RequestBuildersStep inj) prop rb _ = do
-    let
-      inj' ∷ Variant v → request
-      inj' = inj <<< Variant.inj prop <<< wrap
-
-      subrequestBuilders = hfoldlWithIndex (RequestBuildersStep inj') {} (RLProxy ∷ RLProxy vl)
-    Record.insert prop subrequestBuilders rb
-else instance requestFoldingVariant ::
+instance requestFoldingVariant ::
   ( IsSymbol sym
   , RowToList v vl
   , Row.Cons sym (Variant v) curr_ curr
@@ -124,9 +101,16 @@ requestBuilders = hfoldlWithIndex (RequestBuildersStep (identity ∷ t → t)) {
 data ClientStep request responseDuplexes
   = ClientStep (request → Request.Printer) responseDuplexes
 
-newtype ResponseM errs a = ResponseM (ExceptV (FetchError + errs) Aff a)
+_exchangeError = SProxy ∷ SProxy "exchangeError"
 
-runResponseM :: forall t4 t5.  ResponseM t4 t5 -> Aff (Either (Variant ( fetchError :: String | t4)) t5)
+type ExchangeError err = (exchangeError ∷ Exchange.Error | err)
+
+exchangeError :: forall errs. Exchange.Error -> Variant (ExchangeError + errs)
+exchangeError = Variant.inj _exchangeError
+
+newtype ResponseM errs a = ResponseM (ExceptV (ExchangeError + errs) Aff a)
+
+runResponseM :: forall t4 t5.  ResponseM t4 t5 -> Aff (Either (Variant ( ExchangeError + t4)) t5)
 runResponseM (ResponseM e) = runExceptT e
 
 -- | TODO: parameterize the client by fetching function
@@ -134,7 +118,7 @@ runResponseM (ResponseM e) = runExceptT e
 instance clientFoldingResponseConstructor ∷
   ( IsSymbol sym
   , Row.Lacks sym client
-  , Row.Cons sym (Response.Duplex i res) resDpls_ resDpls
+  , Row.Cons sym (Response.Duplex ct i res) resDpls_ resDpls
   , Row.Cons sym (d → ResponseM errs res) client client'
   ) =>
   FoldingWithIndex
@@ -149,8 +133,8 @@ instance clientFoldingResponseConstructor ∷
       f d = ResponseM $ ExceptT do
         let r = reqBld d
         res ← fetch (Request.Duplex.Printer.run (reqPrt r)) >>= case _ of
-          Right res → lmap (HTTP.Exchange.error <<< unsafeStringify) <$> Response.parse resDpl res
-          Left err → pure $ Left $ HTTP.Exchange.error err
+          Right res → lmap (exchangeError <<< Exchange.Error <<< unsafeStringify) <$> Response.parse resDpl res
+          Left err → pure $ Left $ exchangeError $ Exchange.Error err
         pure $ res
     Record.insert prop f c
 else instance clientFoldingResponseDuplexRec ∷
@@ -186,7 +170,7 @@ else instance clientFoldingResponseDuplexNewtypeWrapper ∷
   foldingWithIndex (ClientStep reqPrt resDpl) prop c reqBld = do
     foldingWithIndex (ClientStep reqPrt (unwrap resDpl)) prop c reqBld
 
-exchange ∷ ∀ errs. ClientRequest → HTTP.Exchange errs ClientRequest ClientResponse
+exchange ∷ ClientRequest → HTTP.Exchange ClientRequest ClientResponse
 exchange clientRequest = HTTP.Exchange clientRequest Nothing
 
 -- | TODO: In this folding we pass response duplex around but we need only response parser.

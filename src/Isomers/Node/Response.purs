@@ -5,11 +5,10 @@ import Prelude
 import Data.Foldable (for_)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Tuple.Nested ((/\))
+import Debug.Trace (traceM)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
-import Effect.Class.Console (log)
-import Isomers.Response (ServerResponse)
-import Isomers.Response.Types (NodeBody(..))
+import Isomers.Response.Duplex.Encodings (ServerResponse, NodeBody(..))
 import Network.HTTP.Types (Status) as HTTP.Types
 import Node.HTTP (Response, responseAsStream, setHeader, setStatusCode, setStatusMessage) as Node.HTTP
 import Node.Stream (end, write) as Node.Stream
@@ -22,7 +21,9 @@ setStatus res { code, message } = do
 writeNodeResponse ∷ ServerResponse → Node.HTTP.Response → Effect Unit
 writeNodeResponse sr response = do
   setStatus response sr.status
-  for_ sr.headers \(CaseInsensitiveString n /\ v) →
+  for_ sr.headers \(CaseInsensitiveString n /\ v) → do
+    traceM n
+    traceM v
     Node.HTTP.setHeader response n v
   let
     stream = Node.HTTP.responseAsStream response

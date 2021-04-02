@@ -12,6 +12,8 @@ import Data.Either (Either(..))
 import Data.Foldable (foldl)
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
+import Data.HTTP.Method (Method) as HTTP
+import Data.HTTP.Method (print) as HTTP.Method
 import Data.Int as Int
 import Data.Lazy (Lazy)
 import Data.Lazy (force) as Lazy
@@ -170,8 +172,8 @@ chompPrefix pre state = case Array.head state.path.segments of
 prefix :: forall a body. String -> Parser body a -> Parser body a
 prefix = Prefix
 
-method :: forall a body. String -> Parser body a -> Parser body a
-method = Method
+method :: forall a body. HTTP.Method -> Parser body a -> Parser body a
+method = Method <<< HTTP.Method.print <<< Left
 
 body :: forall  a body body_ l. IsSymbol l => Row.Cons l (Fiber a) body_ body => SProxy l -> Parser body a
 body l = Chomp \state -> case state.body of

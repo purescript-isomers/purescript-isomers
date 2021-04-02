@@ -1,14 +1,18 @@
 module Isomers.HTTP.Request.Method where
 
 import Prelude
-import Data.Variant (Variant, inj)
-import Type.Row (type (+))
+
 import Control.Comonad (class Comonad, class Extend)
 import Data.Functor.Variant (SProxy(..))
+import Data.HTTP.Method (Method(..)) as HTTP.Method
+import Data.HTTP.Method (Method) as HTTP
 import Data.Newtype (class Newtype)
+import Data.Variant (Variant, inj)
+import Data.Variant (case_, on) as Variant
 import Heterogeneous.Folding (class HFoldl, class HFoldlWithIndex, hfoldl, hfoldlWithIndex)
 import Heterogeneous.Mapping (class HMap, class HMapWithIndex)
 import Isomers.Contrib.Heterogeneous (class HMap', class HMapWithIndex', hmap', hmapWithIndex')
+import Type.Row (type (+))
 
 newtype Method m
   = Method m
@@ -66,6 +70,25 @@ post = Method <<< inj _post
 
 put ∷ ∀ methods req. req → Method (Variant (PUT req + methods))
 put = Method <<< inj _put
+
+toHTTPMethod :: forall g t103 t85 t94.
+   Method
+     (Variant
+        ( "DELETE" :: t85
+        , "GET" ∷ g
+        , "POST" :: t103
+        , "PUT" :: t94
+        )
+     )
+   -> HTTP.Method
+toHTTPMethod (Method v) = convert v
+  where
+    convert = Variant.case_
+      # Variant.on _delete (const $ HTTP.Method.DELETE)
+      # Variant.on _put (const $ HTTP.Method.PUT)
+      # Variant.on _post (const $ HTTP.Method.POST)
+      # Variant.on _get (const $ HTTP.Method.GET)
+
 
 -- | This can be a bit confusing but we have three mappings for
 -- | `Method` defined here.

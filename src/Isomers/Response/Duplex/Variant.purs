@@ -12,7 +12,7 @@ import Partial.Unsafe (unsafeCrashWith)
 import Prim.Row (class Cons, class Union) as Row
 import Type.Prelude (class IsSymbol, SProxy)
 
-empty ∷ Duplex (Variant ()) (Variant ())
+empty ∷ ∀ ct. Duplex ct (Variant ()) (Variant ())
 empty = Duplex Variant.case_ (Control.Lazy.defer \_ → Parser $ unsafeCrashWith "Isomers.Response.Duplex.Variant.empty")
 
 -- | You can use this `inj` in a similar "style" as `Variant.on` can be used.
@@ -25,7 +25,7 @@ empty = Duplex Variant.case_ (Control.Lazy.defer \_ → Parser $ unsafeCrashWith
 -- | I'm not able to split this into subfunctions (like `inj` and `extend`) because
 -- | theses would have partial printers.
 injInto ∷
-  ∀ l i o li lo vi vi' vo vo'.
+  ∀ ct l i o li lo vi vi' vo vo'.
   IsSymbol l ⇒
   Row.Cons l o () lo ⇒
   Row.Cons l o vo vo' ⇒
@@ -35,9 +35,9 @@ injInto ∷
   Row.Cons l i vi vi' ⇒
   Row.Union vi li vi' ⇒
   SProxy l →
-  Duplex i o →
-  Duplex (Variant vi) (Variant vo) →
-  Duplex (Variant vi') (Variant vo')
+  Duplex ct i o →
+  Duplex ct (Variant vi) (Variant vo) →
+  Duplex ct (Variant vi') (Variant vo')
 injInto l (Duplex prt prs) (Duplex vPrt vPrs) = Duplex vPrt' vPrs'
   where
   vPrt' = vPrt # Variant.on l prt

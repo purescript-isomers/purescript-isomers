@@ -1,4 +1,8 @@
-module Isomers.Request.Duplex (body, root) where
+module Isomers.Request.Duplex
+  ( body
+  , root
+  )
+  where
 
 import Control.Alt (class Alt, (<|>))
 import Control.Alternative (class Alternative, empty)

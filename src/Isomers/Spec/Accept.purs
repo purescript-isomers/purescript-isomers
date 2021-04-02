@@ -1,6 +1,7 @@
 module Isomers.Spec.Accept where
 
 import Prelude
+
 import Control.Alt ((<|>))
 import Data.Array (uncons) as Array
 import Data.Foldable (foldl)
@@ -19,32 +20,31 @@ import Isomers.HTTP.Request.Headers.Accept.MediaPattern (matchedBy, print) as Ac
 import Isomers.Request (Duplex(..), Duplex', Parser, Printer) as Request
 import Isomers.Request.Duplex.Parser (Parser(..), ParsingError(..), Result(..)) as Request.Duplex.Parser
 import Isomers.Request.Duplex.Parser (runParser) as Request.Parser
+import Isomers.Request.Duplex.Printer (header) as Request.Duplex.Printer
 import Isomers.Response (Duplex) as Response
-import Isomers.Response (Response)
 import Isomers.Spec.Type (Spec(..))
 import Network.HTTP.Types (hAccept)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
 import Record (insert) as Record
 import Type.Prelude (class IsSymbol, class TypeEquals, SProxy(..), reflectSymbol)
 
-newtype Accept v
-  = Accept v
+newtype Accept v = Accept v
 
 -- | Given a hlist of responses create a record with content types as labels.
 data ResponseRecordStep
   = ResponseRecordStep
 
 instance foldingResponseRecordStep ∷
-  ( IsSymbol contentType
-  , Row.Lacks contentType response
-  , Row.Cons contentType (Response.Duplex (Response contentType res i) (Response contentType res o)) response response'
+  ( IsSymbol ct
+  , Row.Lacks ct response
+  , Row.Cons ct (Response.Duplex ct i o) response response'
   ) ⇒
   Folding
     ResponseRecordStep
     { | response }
-    (Response.Duplex (Response contentType res i) (Response contentType res o))
+    (Response.Duplex ct i o)
     { | response' } where
-  folding _ acc r = Record.insert (SProxy ∷ SProxy contentType) r acc
+  folding _ acc r = Record.insert (SProxy ∷ SProxy ct) r acc
 
 data RequestParserFolding body r o
   = RequestParserFolding (Request.Parser body (r → o))
@@ -101,7 +101,7 @@ instance foldingRequestPrinterFolding ∷
     (Variant vReq_ → Request.Printer)
     (SProxy contentType)
     (Variant vReq → Request.Printer) where
-  folding (RequestPrinterFolding prt) vptr ct = Variant.on ct prt vptr
+  folding (RequestPrinterFolding prt) vprt ct = Variant.on ct (append (Request.Duplex.Printer.header hAccept (reflectSymbol ct)) <<< prt) vprt
 
 -- | Extract content type symbol from `Response` type.
 -- | We use it to extract a heterogeneous list of proxies
@@ -111,14 +111,14 @@ data ResponseContentTypesMapping
   = ResponseContentTypesMapping
 
 instance mappingContentTypesMapping ∷
-  ( TypeEquals f (Response.Duplex (Response contentType res i) (Response contentType res o))
-  , IsSymbol contentType
+  ( TypeEquals f (Response.Duplex ct i o)
+  , IsSymbol ct
   ) ⇒
   Mapping
     ResponseContentTypesMapping
     f
-    (SProxy contentType) where
-  mapping _ _ = SProxy ∷ SProxy contentType
+    (SProxy ct) where
+  mapping _ _ = SProxy ∷ SProxy ct
 
 -- | Given an "inner" request duplex and a heterogeneous list of labels.
 -- | We create a request duplex for homogeneous variant which
@@ -137,7 +137,7 @@ request ∷
     (Variant vReq → Request.Printer) ⇒
   Request.Duplex body r req req →
   cts →
-  Request.Duplex' body r (Accept (Variant vReq))
+  Request.Duplex' body r (Variant vReq)
 request (Request.Duplex prt prs) cts = do
   let
     buildParser ∷ MediaPattern → Request.Parser body (r → (Variant vReq))
@@ -164,12 +164,12 @@ request (Request.Duplex prt prs) cts = do
             Nothing → { head: buildParser Accept.AnyMedia, tail: [] }
         Request.Parser.runParser state (foldl (<|>) ps.head ps.tail)
 
-    prt' ∷ Accept (Variant vReq) → Request.Printer
-    prt' (Accept i) = hfoldl (RequestPrinterFolding prt) (Variant.case_ ∷ Variant () → Request.Printer) cts i
-  Request.Duplex prt' (map Accept <$> prs')
+    prt' ∷ Variant vReq → Request.Printer
+    prt' i = hfoldl (RequestPrinterFolding prt) (Variant.case_ ∷ Variant () → Request.Printer) cts i
+  Request.Duplex prt' prs'
 
-response :: forall lst rec. HFoldl ResponseRecordStep {} lst rec => lst -> Accept rec
-response lst = (Accept <<< hfoldl ResponseRecordStep {} $ lst)
+response :: forall lst rec. HFoldl ResponseRecordStep {} lst rec => lst -> rec
+response lst = (hfoldl ResponseRecordStep {} $ lst)
 
 -- | From a pair of request duplexes and hlist of response codecs create a spec which
 -- | labels everything by content types and wraps in `Accept`
@@ -188,7 +188,7 @@ spec ∷
     cts
     (Variant vReq → Request.Printer) ⇒
   (Request.Duplex body r req req /\ resLst) →
-  Spec body r (Accept (Variant vReq)) (Accept res)
+  Spec body r (Variant vReq) res
 spec (req /\ res) = do
   let
     cts ∷ cts

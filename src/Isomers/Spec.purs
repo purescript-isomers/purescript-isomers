@@ -40,26 +40,3 @@ import Type.Eval.Function (type (<<<))
 import Type.Eval.RowList (FromRow, ToRow)
 import Type.Prelude (class IsSymbol, SProxy(SProxy), reflectSymbol)
 import Type.Row (RProxy)
-
---- method ∷
----   ∀ t221 t227 t235 t238 t239.
----   HMap ResponseMapping t227 { | t221 } ⇒
----   HMap RequestMapping t227 { | t239 } ⇒
----   RowToList t239 t238 ⇒
----   Request.Duplex.Generic.Variant.VariantParser t238 t239 t235 ⇒
----   Request.Duplex.Generic.Variant.VariantPrinter t238 t239 t235 ⇒
----   Request.Duplex.Generic.Variant.MethodPrefixRoutes t238 t239 ⇒
----   t227 →
----   Spec (Isomers.HTTP.Method (Variant t235)) (Isomers.HTTP.Method { | t221 })
---- method r = Spec { request, response }
----   where
----   -- | Drop `Spec` from the values
----   requests = hmap' _RequestMapping r
---- 
----   -- | TODO: Move to HTTP.Method
----   _Method ∷ ∀ a. Iso' (HTTP.Method a) a
----   _Method = _Newtype
---- 
----   request = _Method (Request.Duplex.Generic.Variant.methodVariant requests)
---- 
----   response = Isomers.HTTP.Method (hmap' _ResponseMapping r)

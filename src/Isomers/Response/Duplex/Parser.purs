@@ -11,11 +11,14 @@ import Control.Monad.Reader (ask, asks) as Reader
 import Control.Monad.State (StateT(..), evalStateT)
 import Control.Monad.State (get, put) as State
 import Data.Argonaut (Json)
+import Data.Array (uncons) as Array
 import Data.ArrayBuffer.Types (ArrayBuffer)
 import Data.Either (Either(..))
 import Data.Map (lookup) as Map
 import Data.Maybe (Maybe(..))
-import Data.Newtype (class Newtype)
+import Data.Newtype (class Newtype, un)
+import Data.String (Pattern(..), split) as String
+import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Symbol (SProxy(..))
 import Data.Variant (Variant)
 import Data.Variant (default, inj, on) as Variant
@@ -23,8 +26,8 @@ import Effect.Aff (Aff, Fiber, joinFiber)
 import Effect.Aff.Class (liftAff)
 import Effect.Exception (Error) as Effect.Exception
 import Isomers.Contrib.Data.Variant (tag) as Contrib.Data.Variant
-import Isomers.Response.Types (ClientHeaders, ClientResponse, ClientBodyRow) as Response.Types
-import Network.HTTP.Types (HeaderName)
+import Isomers.Response.Duplex.Encodings (ClientHeaders, ClientResponse, ClientBodyRow) as Response.Duplex.Encodings
+import Network.HTTP.Types (HeaderName, hContentType)
 import Network.HTTP.Types (Status) as HTTP.Types
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
@@ -43,7 +46,7 @@ data ParsingError
 -- | so it is easier to avoid type level indexing here I think.
 newtype Parser o
   = Parser
-  (ExceptT ParsingError (StateT (Maybe (Variant Response.Types.ClientBodyRow)) (ReaderT Response.Types.ClientResponse Aff)) o)
+  (ExceptT ParsingError (StateT (Maybe (Variant Response.Duplex.Encodings.ClientBodyRow)) (ReaderT Response.Duplex.Encodings.ClientResponse Aff)) o)
 
 derive instance newtypeParser ∷ Newtype (Parser o) _
 
@@ -59,7 +62,7 @@ derive newtype instance monadParser ∷ Monad (Parser)
 
 derive newtype instance monadParserThrow ∷ MonadThrow ParsingError (Parser)
 
--- newtype StateT s m a = StateT (s -> m (Tuple a s))
+-- newtype StateT s m a = StateT (s → m (Tuple a s))
 instance lazyParser ∷ Control.Lazy (Parser a) where
   defer f = Parser $ ExceptT $ StateT \s → do
     let
@@ -79,7 +82,7 @@ instance altParser ∷ Alt (Parser) where
 
 readBody ∷
   ∀ a br_ l.
-  Row.Cons l (Fiber a) br_ Response.Types.ClientBodyRow ⇒
+  Row.Cons l (Fiber a) br_ Response.Duplex.Encodings.ClientBodyRow ⇒
   IsSymbol l ⇒
   SProxy l → Parser a
 readBody l =
@@ -123,7 +126,7 @@ statusEquals { code: expected } =
         when (expected /= got) do
           throwError $ Expected ("Status code: " <> show expected) (show got)
 
-headers ∷ Parser Response.Types.ClientHeaders
+headers ∷ Parser Response.Duplex.Encodings.ClientHeaders
 headers = Parser $ Reader.asks _.headers
 
 header ∷ HeaderName → Parser (Maybe String)
@@ -136,7 +139,7 @@ reqHeader hn =
         Nothing → throwError (HeaderMissing hn)
         Just v → pure v
 
-run ∷ ∀ a. Parser a → Response.Types.ClientResponse → Aff (Either ParsingError a)
+run ∷ ∀ a. Parser a → Response.Duplex.Encodings.ClientResponse → Aff (Either ParsingError a)
 run (Parser prs) i = go `catchError` (JSError >>> Left >>> pure)
   where
   go = flip runReaderT i <<< flip evalStateT Nothing <<< runExceptT $ prs
@@ -154,4 +157,28 @@ fromJson decode = do
     Left err → throwError $ BodyParsingError err
     Right b → pure b
 
+withContentType ∷ ∀ a. String → Parser a → Parser a
+withContentType expected prs = do
+  ( reqHeader hContentType >>= String.split (String.Pattern ";") >>> Array.uncons >>> case _ of
+      Just { head: got } → do
+        if (expected /= got)
+          then fail got
+          else prs
+      Nothing → fail ""
+  )
+  where
+    fail got = throwError (Expected (printHeaderName hContentType <> ":" <> expected) got)
+
+printHeaderName ∷ CaseInsensitiveString → String
+printHeaderName = un CaseInsensitiveString
+
+withHeaderPassing ∷ ∀ a. HeaderName → (String → Boolean) → String → Parser a → Parser a
+withHeaderPassing hn check err prs =
+  reqHeader hn >>= \got → do
+      if check got
+        then throwError (Expected (printHeaderName hn <> ":" <> err) got)
+        else prs
+
+withHeaderValue ∷ ∀ a. CaseInsensitiveString → String → Parser a → Parser a
+withHeaderValue hn expected prs = withHeaderPassing hn (eq expected) expected prs
 

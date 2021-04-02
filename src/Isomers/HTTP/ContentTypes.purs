@@ -4,34 +4,48 @@ import Data.Functor.Variant (SProxy(..))
 import Data.Variant (Variant, inj)
 import Type.Row (type (+))
 
+type HtmlMime = "text/html"
+
+type Html a cts = ("text/html" ∷ a | cts)
+
+_html = SProxy ∷ SProxy HtmlMime
+
 type Jpeg a cts = ("image/jpeg" ∷ a | cts)
+
+_jpeg = SProxy ∷ SProxy "image/jpeg"
+
+jpeg ∷ ∀ a cts. a → Variant (Jpeg a + cts)
+jpeg =inj _jpeg
 
 type JsonMime = "application/json"
 
 type Json a cts = ("application/json" ∷ a | cts)
 
-type Png a cts = ("image/png" ∷ a | cts)
-
-type Svg a cts = ("image/svg+xml" ∷ a | cts)
-
-_jpeg = SProxy ∷ SProxy "image/jpeg"
-
 _json = SProxy ∷ SProxy JsonMime
-
-_png = SProxy ∷ SProxy "image/png"
-
-_svg = SProxy ∷ SProxy "image/svg+xml"
-
-jpeg ∷ ∀ a cts. a → Variant (Jpeg a + cts)
-jpeg =inj _jpeg
 
 json ∷ ∀ a cts. a → Variant (Json a + cts)
 json =inj _json
 
+type Png a cts = ("image/png" ∷ a | cts)
+
+_png = SProxy ∷ SProxy "image/png"
+
 png ∷ ∀ a cts. a → Variant (Png a + cts)
 png = inj _png
+
+type Svg a cts = ("image/svg+xml" ∷ a | cts)
+
+_svg = SProxy ∷ SProxy "image/svg+xml"
 
 svg ∷ ∀ a cts. a → Variant (Svg a + cts)
 svg = inj _svg
 
+type Text a cts = ("text/plain" ∷ a | cts)
+
+type TextMime = "text/plain"
+
+_text = SProxy ∷ SProxy TextMime
+
+text ∷ ∀ a cts. a → Variant (Text a + cts)
+text = inj _text
 

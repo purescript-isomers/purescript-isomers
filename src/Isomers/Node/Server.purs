@@ -7,7 +7,6 @@ import Data.Either (Either(..))
 import Data.Newtype (class Newtype, un, unwrap)
 import Data.Symbol (class IsSymbol, SProxy)
 import Data.Variant (Variant)
-import Debug.Trace (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Aff (message) as Aff
@@ -21,8 +20,8 @@ import Isomers.Node.Response (writeNodeResponse)
 import Isomers.Node.Types (Root)
 import Isomers.Request (ServerRequest)
 import Isomers.Request (parse) as Request
-import Isomers.Response (Duplex, ServerResponse, print) as Response
-import Isomers.Response (ServerResponse)
+import Isomers.Response (Duplex, print) as Response
+import Isomers.Response.Duplex.Encodings (ServerResponse)
 import Isomers.Server (RouterStep(..), RoutingError(..), ServerResponseWrapper(..))
 import Isomers.Server (router) as Server
 import Isomers.Spec (Spec(..))
@@ -45,9 +44,6 @@ router spec handlers nreq nres = do
     req = fromNodeRequest maxBodySize nreq
   Server.router spec handlers req >>= case _ of
     Right res → do
-      log "REQUEST"
-      traceM nreq
-      traceM req
       liftEffect $ writeNodeResponse res nres
     Left err → liftEffect $ do
       Node.HTTP.setStatusCode nres 404

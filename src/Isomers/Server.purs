@@ -10,8 +10,8 @@ import Effect.Aff (Aff)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
 import Isomers.Request (ServerRequest)
 import Isomers.Request (parse) as Request
-import Isomers.Response (Duplex, ServerResponse, print) as Response
-import Isomers.Response (ServerResponse)
+import Isomers.Response (Duplex, print) as Response
+import Isomers.Response.Duplex.Encodings (ServerResponse)
 import Isomers.Spec (Spec(..))
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
@@ -19,7 +19,7 @@ import Record (get) as Record
 type Handler req res = req → Aff res
 
 -- TODO: Drop wrapper when on purs-0.14.0
-newtype ServerResponseWrapper = ServerResponseWrapper Response.ServerResponse
+newtype ServerResponseWrapper = ServerResponseWrapper ServerResponse
 
 derive instance newtypeServerResponseWrapper ∷ Newtype ServerResponseWrapper _
 
@@ -72,7 +72,7 @@ else instance routerFoldingNewtypeRec ::
 else instance routerFoldingFun ::
   ( IsSymbol sym
   , Row.Cons sym (Handler req res) handlers_ handlers
-  , Row.Cons sym (Response.Duplex res res) resDuplexes_ resDuplexes
+  , Row.Cons sym (Response.Duplex ct res res) resDuplexes_ resDuplexes
   ) =>
   FoldingWithIndex
     (RouterStep handlers resDuplexes)
