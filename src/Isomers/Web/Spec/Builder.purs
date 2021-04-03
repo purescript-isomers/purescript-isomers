@@ -2,7 +2,7 @@ module Isomers.Web.Spec.Builder where
 
 import Data.Tuple.Nested ((/\), type (/\))
 import Heterogeneous.Folding (class Folding, class HFoldl, hfoldl)
-import Heterogeneous.Mapping (class Mapping)
+import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Isomers.Contrib (HJust(..)) as Contrib
 import Isomers.Contrib.Heterogeneous.Filtering (CatMaybes(..))
 import Isomers.Contrib.Heterogeneous.HEval (class HEval, DoApply(..), DoConst(..), DoHFilter(..), DoHIfThenElse(..), DoHMap(..), DoIdentity(..), heval)
@@ -10,6 +10,7 @@ import Isomers.Contrib.Heterogeneous.HEval (type (<<<), (<<<), type (&&&), (&&&)
 import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..), HNothing(..))
 import Isomers.Contrib.Heterogeneous.List (type (:), (:))
 import Isomers.HTTP.ContentTypes (HtmlMime)
+import Isomers.HTTP.Request.Method (Method(..))
 import Isomers.Response (Duplex, RawDuplex') as Response
 import Isomers.Response (Okayish)
 import Isomers.Response.Raw.Duplexes (html) as Response.Raw.Duplexes
@@ -84,6 +85,12 @@ data DoIsHJust
 instance hevalDoIsHJust ∷ IsHJust i b ⇒ HEval DoIsHJust (i → BProxy b) where
   heval _ _ = BProxy ∷ BProxy b
 
+data FromHJust
+  = FromHJust
+
+instance mappingFromHJust ∷ Mapping FromHJust (HJust a) a where
+  mapping _ (HJust a) = a
+
 data DoBuildSpec
   = DoBuildSpec
 
@@ -119,16 +126,44 @@ instance builderPlainEndpoint ∷
           res
     Spec { api, renderers: rnd }
 
+type DoFoldRenderers a
+  = ( DoHIfThenElse DoNull (DoConst HNothing) (DoApply (a → HJust a))
+        H.<<< DoHMap FromHJust
+        H.<<< DoHFilter CatMaybes
+        H.<<< DoHMap GetRenderers
+    )
+
+_DoFoldRenderers ∷ ∀ a. DoFoldRenderers a
+_DoFoldRenderers =
+  ( DoHIfThenElse DoNull (DoConst HNothing) (DoApply (HJust ∷ a → HJust a))
+      H.<<< DoHMap FromHJust
+      H.<<< DoHFilter CatMaybes
+      H.<<< DoHMap _GetRenderers
+  )
+
+instance builderMethod ∷
+  ( HEval
+      ( ( (DoBuildSpec H.<<< DoApply (apis → Method apis) H.<<< DoHMap GetApi)
+            H.&&& DoFoldRenderers a
+        )
+          H.<<< DoHMap AppStep
+      )
+      ({ | rec } → Spec.Spec b acc req res /\ rnd)
+  , Spec.Builder (Method apis) b acc req res
+  ) ⇒
+  Builder (Method { | rec }) (Spec.Spec b acc req res) rnd where
+  spec (Method rec) = do
+    let
+      split =
+        (DoBuildSpec H.<<< DoApply (Method ∷ apis → Method apis) H.<<< DoHMap _GetApi)
+          H.&&& (_DoFoldRenderers ∷ DoFoldRenderers a)
+
+      api /\ rnd = heval (split H.<<< DoHMap AppStep) rec
+    Spec { api, renderers: rnd }
+
 instance builderRec ∷
   ( HEval
-        ( ( DoBuildSpec H.<<< DoHMap GetApi
-              H.&&& ( DoHIfThenElse DoNull (DoConst HNothing) (DoApply (a → HJust a))
-                  H.<<< DoHFilter CatMaybes
-                  H.<<< DoHMap GetRenderers
-              )
-          )
-            H.<<< DoHMap AppStep
-        )
+        ((DoBuildSpec H.<<< DoHMap GetApi H.&&& DoFoldRenderers a) H.<<< DoHMap AppStep)
         ({ | rec } → api /\ rnd)
     ) ⇒
   Builder { | rec } api rnd where
@@ -136,17 +171,9 @@ instance builderRec ∷
     let
       api /\ rnd =
         heval
-          ( ( DoBuildSpec H.<<< DoHMap _GetApi
-                H.&&& ( DoHIfThenElse DoNull (DoConst HNothing) (DoApply (HJust ∷ a → HJust a))
-                      H.<<< DoHFilter CatMaybes
-                      H.<<< DoHMap _GetRenderers
-                  )
-            )
-              H.<<< DoHMap AppStep
-          )
+          ((DoBuildSpec H.<<< DoHMap _GetApi H.&&& (_DoFoldRenderers ∷ DoFoldRenderers a)) H.<<< DoHMap AppStep)
           rec
     Spec { api, renderers: rnd }
 
 instance builderAppStep ∷ Builder a api rnd ⇒ Mapping AppStep a (Spec api rnd) where
   mapping _ a = spec a
-
