@@ -1,143 +1,76 @@
 module Isomers.Web.Server where
 
--- import Prelude
--- 
--- import Data.Either (Either(..))
--- import Data.Lazy (Lazy, defer)
--- import Data.Maybe (Maybe(..))
--- import Data.Tuple.Nested (type (/\), (/\))
--- import Data.Variant (Variant)
--- import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
--- import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
--- import Isomers.Api.Server (Result) as Api.Server
--- import Isomers.Api.Server (Result) as Server
--- import Isomers.Api.Spec (ResponseCodec(..))
--- import Isomers.Web.Client.Router (RouterInterface)
--- import Isomers.Web.Client.Router (print) as Client.Router
--- import Isomers.Web.Renderer (Renderer)
--- import Isomers.Web.Spec (Raw(..)) as Spec
--- import Isomers.HTTP (Exchange(..)) as Isomers.HTTP
--- import Isomers.HTTP.Exchange (fromResponse) as Exchange
--- import Node.HTTP (Response) as Node.HTTP
--- import Prim.Row (class Cons) as Row
--- import Record (get) as Record
--- import Request.Duplex (Request, parse) as Request.Duplex
--- import Type.Equality (class TypeEquals, to)
--- import Type.Prelude (class IsSymbol, SProxy)
--- 
--- -- | On the server side we want to work with this type: `Response (Lazy String /\ Lazy doc)`
--- -- | It gives as a way to respond to API calls but also to direct
--- -- | requests made directly by browser (when 'Accept: "text/html").
--- -- |
--- -- | We need a request because final rendering component
--- -- | takes it as a part of input.
--- render ∷
---   ∀ doc req res router.
---   router →
---   req →
---   ResponseCodec res →
---   Renderer router req res doc →
---   Server.Result res →
---   Server.Result (Lazy String /\ doc)
--- render _ request (ResponseCodec codec) renderer (Left raw) = Left raw
--- render clientRouter request (ResponseCodec codec) renderer (Right response) =
---   let
---     doc = renderer $ clientRouter /\ Exchange.fromResponse request response
--- 
---     dump = defer \_ → codec.encode response
---   in
---     Right $ dump /\ doc
--- 
--- 
--- type Handler m req res
---   = req → m (Server.Result res)
--- 
--- -- | We should move the renderer context (`clienentRouter` outside of the scope
--- -- | of this folding.
--- -- | This should be done by preprocessing initial records of handlers / renderers.
--- data RouterFolding clientRouter handlers resCodecs renderers
---   = RouterFolding clientRouter { | handlers } { | resCodecs } { | renderers }
--- 
--- -- | This fold pattern maches over a request `Variant` to get
--- -- | renderer and handler.
--- instance routerFolding ::
---   ( IsSymbol sym
---   , Row.Cons sym (Handler m req res) handlers_ handlers
---   , Row.Cons sym (ResponseCodec res) resCodecs_ resCodecs
---   , Row.Cons sym (Renderer router req res doc) renderers_ renderers
---   , Monad m
---   ) =>
---   FoldingWithIndex
---     (RouterFolding router handlers resCodecs renderers)
---     (SProxy sym)
---     Unit
---     req
---     (m (Either Node.HTTP.Response (Lazy String /\ doc))) where
---   foldingWithIndex (RouterFolding clientRouter handlers resCodecs renderers) prop _ req =
---     let
---       renderer = Record.get prop renderers
--- 
---       handler = Record.get prop handlers
--- 
---       resCodec = Record.get prop resCodecs
--- 
---     in
---       do
---         res ← handler req
---         -- | On the server side we always have a response
---         -- | which we can render.
---         pure $ render clientRouter req resCodec renderer res
--- 
--- data RoutingError
---   = NotFound
--- 
--- router ∷
---   ∀ clientRouter doc handlers m renderers request resCodecs.
---   Monad m ⇒
---   HFoldlWithIndex (RouterFolding clientRouter handlers resCodecs renderers) Unit (Variant request) (m (Api.Server.Result (Lazy String /\ doc))) ⇒
---   clientRouter →
---   Spec.Raw request resCodecs renderers →
---   { | handlers } →
---   Request.Duplex.Request →
---   m (Either RoutingError (Api.Server.Result (Lazy String /\ doc)))
--- router clientRouter spec@(Spec.Raw { codecs, renderers }) handlers = go
---   where
---   go raw = do
---     case Request.Duplex.parse codecs.request raw of
---       Right req → Right <$> hfoldlWithIndex (RouterFolding clientRouter handlers codecs.response renderers) unit req
---       Left err → pure $ Left NotFound
--- 
--- -- | Currently handler context is just a router printer function.
--- data ArgMapping ctx = ArgMapping ctx --
--- 
--- instance handlerContextMapping ∷
---   (TypeEquals a (ctx → h)) ⇒
---   Mapping (ArgMapping ctx) a h where
---   mapping (ArgMapping ctx) f = (to f) ctx
--- 
--- router' ∷
---   ∀ doc handlers handlers' m renderers request resCodecs.
---   Monad m ⇒
---   HMap (ArgMapping (Variant request → String)) { | handlers } { | handlers' } ⇒
---   HFoldlWithIndex (RouterFolding (RouterInterface request) handlers' resCodecs renderers) Unit (Variant request) (m (Api.Server.Result (Lazy String /\ doc))) ⇒
---   Spec.Raw request resCodecs renderers →
---   { | handlers } →
---   Request.Duplex.Request →
---   m (Either RoutingError (Api.Server.Result (Lazy String /\ doc)))
--- router' spec@(Spec.Raw { codecs }) handlers =
---   let
---     print ∷ Variant request → String
---     print route = Client.Router.print codecs.request (Isomers.HTTP.Exchange route Nothing)
--- 
---     handlers' ∷ { | handlers' }
---     handlers' = hmap (ArgMapping print) handlers
--- 
---     fakeClientRouter ∷ RouterInterface request
---     fakeClientRouter =
---       { navigate: const $ pure unit
---       , redirect: const $ pure unit
---       , print
---       , submit: const $ pure unit
---       }
---   in
---     router fakeClientRouter spec handlers'
+import Prelude
+
+import Effect.Aff (Aff)
+import Heterogeneous.Folding (class Folding) as Heterogeneous
+import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
+import Heterogeneous.Mapping (class HMap, class MappingWithIndex, hmap)
+import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..))
+import Isomers.HTTP.ContentTypes (HtmlMime, _html)
+import Isomers.Response.Raw (RawServer(..))
+import Isomers.Response.Types (HtmlString(..))
+import Isomers.Server (router) as Server
+import Isomers.Web.Spec.Builder (Tagged(..))
+import Isomers.Web.Spec.Type (Spec(..))
+import Prim.Row (class Cons, class Lacks) as Row
+import Record (get, insert, set) as Record
+import Test.Spec (handlers)
+import Type.Equality (class TypeEquals)
+import Type.Equality (to) as Type.Equality
+import Type.Prelude (class IsSymbol, SProxy(..))
+import Unsafe.Coerce (unsafeCoerce)
+
+data RenderHandlerStep = RenderHandlerStep
+
+instance foldingRenderHandlerStep ∷
+  ( Row.Cons ix { | subhandlers } handlers_ handlers
+  , IsSymbol ix
+  , HFoldlWithIndex RenderHandlerStep { | subhandlers } { | rec } { | subhandlers' }
+  , Row.Cons ix { | subhandlers' } handlers_ handlers'
+  ) ⇒
+  FoldingWithIndex RenderHandlerStep (SProxy ix) { | handlers } { | rec } { | handlers' } where
+  foldingWithIndex RenderHandlerStep ix handlers rec = do
+    let
+      subhandlers ∷ { | subhandlers }
+      subhandlers = Record.get ix handlers
+      subhandlers' = hfoldlWithIndex RenderHandlerStep subhandlers rec
+    Record.set ix subhandlers' handlers
+
+-- | We should parametrize this by "doc"
+instance foldingRenderHandlerStepLeaf ∷
+  ( Row.Cons ix { | mimeHandlers } handlers_ handlers
+  , Row.Cons sourceMime (a → m r) mimeHandlers_ mimeHandlers
+  , Row.Lacks HtmlMime mimeHandlers
+  , Row.Cons HtmlMime (a → m r') mimeHandlers mimeHandlers'
+  -- | Why I'm not able to use mimeHandlers' here??
+  , Row.Cons ix { "text/html" ∷ a → m (RawServer HtmlString) | mimeHandlers } handlers_ handlers'
+  , TypeEquals f (r → RawServer HtmlString)
+  , Functor m
+  , IsSymbol ix
+  , IsSymbol sourceMime
+  ) ⇒
+  FoldingWithIndex RenderHandlerStep (SProxy ix) { | handlers } (Tagged sourceMime f) { | handlers' } where
+  foldingWithIndex RenderHandlerStep ix handlers (Tagged render) = do
+    let
+      mimeHandlers ∷ { | mimeHandlers }
+      mimeHandlers = Record.get ix handlers
+
+      sourceHandler ∷ a → m r
+      sourceHandler = Record.get (SProxy ∷ SProxy sourceMime) mimeHandlers
+
+      f' = Type.Equality.to render
+
+      htmlHandler ∷ a → m (RawServer HtmlString)
+      htmlHandler a = f' <$> (sourceHandler a ∷ m r)
+
+      mimeHandlers' ∷ { "text/html" ∷ a → m (RawServer HtmlString) | mimeHandlers }
+      mimeHandlers' = Record.insert _html htmlHandler mimeHandlers
+
+      handlers' ∷ { | handlers' }
+      handlers' = Record.set ix mimeHandlers' handlers
+
+    handlers'
+
+renderToApi spec@(Spec { api, renderers: HJust renderers }) handlers = do
+  hfoldlWithIndex RenderHandlerStep handlers renderers

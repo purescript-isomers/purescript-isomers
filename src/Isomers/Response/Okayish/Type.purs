@@ -89,6 +89,9 @@ toVariant (Okayish v) = v
 toEither ∷ ∀ a res. Okayish res a → Either (Variant res) a
 toEither (Okayish v) = Variant.on _ok Right Left v
 
+fromOk ∷ ∀ a res. a → Okayish res a
+fromOk a = Okayish $ Variant.inj _ok a
+
 fromEither ∷ ∀ a res. Row.Lacks "ok" res ⇒ Row.Cons "ok" a res (Ok a + res) ⇒ Either (Variant res) a → Okayish res a
 fromEither (Right a) = Okayish $ Variant.inj _ok a
 

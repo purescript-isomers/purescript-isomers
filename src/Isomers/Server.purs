@@ -72,7 +72,7 @@ else instance routerFoldingNewtypeRec ::
 else instance routerFoldingFun ::
   ( IsSymbol sym
   , Row.Cons sym (Handler req res) handlers_ handlers
-  , Row.Cons sym (Response.Duplex ct res res) resDuplexes_ resDuplexes
+  , Row.Cons sym (Response.Duplex ct res res') resDuplexes_ resDuplexes
   ) =>
   FoldingWithIndex
     (RouterStep handlers resDuplexes)

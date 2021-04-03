@@ -126,6 +126,10 @@ instance builderPlainEndpoint ∷
           res
     Spec { api, renderers: rnd }
 
+instance builderSpec ∷
+  Builder (Spec api rnd) api rnd where
+  spec s = s
+
 type DoFoldRenderers a
   = ( DoHIfThenElse DoNull (DoConst HNothing) (DoApply (a → HJust a))
         H.<<< DoHMap FromHJust

@@ -30,3 +30,4 @@ type GetRenderers
 
 _GetRenderers ∷ GetRenderers
 _GetRenderers = Mappings.Record.Get _renderers H.<<< Mappings.Newtype.Unwrap
+
