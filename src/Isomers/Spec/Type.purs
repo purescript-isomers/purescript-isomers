@@ -6,7 +6,7 @@ import Data.Newtype (class Newtype)
 import Data.Variant (Variant)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
 import Heterogeneous.Mapping (class HMap, hmap)
-import Isomers.Contrib.Heterogeneous.Mappings (Compose(..)) as Mappings
+import Isomers.Contrib.Heterogeneous.HEval ((<<<), type (<<<)) as H
 import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mapping.Newtype
 import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.Newtype
 import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mapping
@@ -41,16 +41,15 @@ _request = SProxy ∷ SProxy "request"
 _response = SProxy ∷ SProxy "response"
 
 type RequestMapping
-  = Mappings.Compose (Mappings.Record.Get "request") Mappings.Newtype.Unwrap
+  = Mappings.Record.Get "request" H.<<< Mappings.Newtype.Unwrap
 
 _RequestMapping ∷ RequestMapping
-_RequestMapping = Mappings.Record.Get _request `Mappings.Compose` Mappings.Newtype.Unwrap
+_RequestMapping = Mappings.Record.Get _request H.<<< Mappings.Newtype.Unwrap
 
-type ResponseMapping
-  = Mappings.Compose (Mappings.Record.Get "response") Mappings.Newtype.Unwrap
+type ResponseMapping = Mappings.Record.Get "response" H.<<< Mappings.Newtype.Unwrap
 
 _ResponseMapping ∷ ResponseMapping
-_ResponseMapping = Mappings.Record.Get _response `Mappings.Compose` Mappings.Newtype.Unwrap
+_ResponseMapping = Mappings.Record.Get _response H.<<< Mappings.Newtype.Unwrap
 
 -- duplex l dpl (Spec { request, response }) = Spec
 --   { 

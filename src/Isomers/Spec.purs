@@ -19,7 +19,6 @@ import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, fol
 import Heterogeneous.Mapping (class HMap)
 import Isomers.Contrib.Heterogeneous (hmap')
 import Isomers.Contrib.Heterogeneous.Foldings (Flatten(..)) as Heterogeneous.Foldings
-import Isomers.Contrib.Heterogeneous.Mappings (Compose(..)) as Mappings
 import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.Newtype
 import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
 import Isomers.HTTP (Method(..)) as HTTP

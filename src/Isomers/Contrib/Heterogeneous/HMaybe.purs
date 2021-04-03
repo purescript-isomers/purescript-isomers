@@ -2,7 +2,6 @@ module Isomers.Contrib.Heterogeneous.HMaybe where
 
 import Heterogeneous.Folding (class Folding, class HFoldl, folding)
 import Heterogeneous.Mapping (class HMap, class Mapping, mapping)
-import Isomers.Contrib.Heterogeneous.Mappings (ConstValue(..))
 import Type.Eval (Lift)
 import Type.Proxy (Proxy)
 

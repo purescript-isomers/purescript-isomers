@@ -14,7 +14,7 @@ import Data.Variant (Variant)
 import Data.Variant (inj, on) as Variant
 import Effect.Aff (Aff)
 import Isomers.Contrib.Data.Variant (append) as Contrib.Data.Variant
-import Isomers.HTTP.ContentTypes (HtmlMime, JsonMime, _html, _json)
+import Isomers.HTTP.ContentTypes (JsonMime, HtmlMime, _html, _json)
 import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
 import Isomers.Response.Duplex (Duplex(..), Duplex', withStatus)
 import Isomers.Response.Duplex (asJson, header, json, reqHeader, withHeaderValue, withStatus) as Duplex
@@ -25,6 +25,7 @@ import Isomers.Response.Duplex.Parser (run, string) as Parser
 import Isomers.Response.Duplex.Printer (run, string) as Printer
 import Isomers.Response.Duplex.Variant (empty, injInto) as Duplex.Variant
 import Isomers.Response.Okayish.Type (Okayish(..), Ok, _ok, fromVariant, toVariant)
+import Isomers.Response.Types (HtmlString(..))
 import Network.HTTP.Types (found302, hContentType, hLocation, movedPermanently301, notFound404, ok200)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
 import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
@@ -95,15 +96,10 @@ ok d = wrapVariantDuplex $ Duplex.Variant.injInto _ok (withStatus ok200 d) Duple
 json ∷ Duplex' JsonMime (Okayish () Json)
 json = ok Duplex.json
 
--- unsafeString ∷ ∀ ct. Duplex' ct String
-
-newtype Html = Html String
-derive instance newtypeHtml ∷ Newtype Html _
-
-html ∷ Duplex' HtmlMime (Okayish () Html)
+html ∷ Duplex' HtmlMime (Okayish () HtmlString)
 html = ok d
   where
-  _Method ∷ Iso' Html String
+  _Method ∷ Iso' HtmlString String
   _Method = _Newtype
 
   d = _Method (Duplex Printer.string Parser.string)
