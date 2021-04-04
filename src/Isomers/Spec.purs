@@ -4,7 +4,7 @@ module Isomers.Spec
   ) where
 
 import Prelude
-import Isomers.Spec.Builder (root, spec, class Builder) as Builder
+
 import Control.Alt ((<|>))
 import Data.Lens (Iso, Iso')
 import Data.Lens.Iso.Newtype (_Newtype)
@@ -22,7 +22,10 @@ import Isomers.Contrib.Heterogeneous.Foldings (Flatten(..)) as Heterogeneous.Fol
 import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.Newtype
 import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
 import Isomers.HTTP (Method(..)) as HTTP
+import Isomers.Spec.Builder (root, spec, class Builder) as Builder
+import Isomers.Spec.Builder (spec)
 import Isomers.Spec.Builder (spec) as Spec.Builder
+import Isomers.Spec.Type (Spec(..))
 import Isomers.Spec.Type (Spec(..)) as Type
 import Prim.Row (class Cons, class Union) as Row
 import Prim.RowList (class RowToList)
@@ -39,3 +42,9 @@ import Type.Eval.Function (type (<<<))
 import Type.Eval.RowList (FromRow, ToRow)
 import Type.Prelude (class IsSymbol, SProxy(SProxy), reflectSymbol)
 import Type.Row (RProxy)
+
+
+duplex dpl a = do
+  let
+    Spec { request, response } = spec a
+  Spec { request: dpl request, response }

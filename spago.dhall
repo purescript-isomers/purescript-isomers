@@ -20,6 +20,7 @@ You can edit this file as you like.
   , "polyform-batteries-core"
   , "polyform-batteries-json"
   , "psci-support"
+  , "random"
   , "record-extra"
   , "record-prefix"
   , "request-duplex-variant"

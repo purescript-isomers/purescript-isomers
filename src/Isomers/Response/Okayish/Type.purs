@@ -29,7 +29,9 @@ module Isomers.Response.Okayish.Type where
 --   , wrapVariantDuplex
 --   , unwrapToVariantDuplex
 --   ) where
+
 import Prelude
+
 import Control.Alt (class Alt, alt)
 import Data.Argonaut (Json)
 import Data.Either (Either(..))
@@ -44,13 +46,12 @@ import Isomers.HTTP.ContentTypes (HtmlMime, _html, _json)
 import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
 import Isomers.Response.Duplex (Duplex(..), Duplex', withStatus)
 import Isomers.Response.Duplex (asJson, json, reqHeader, withHeaderValue, withStatus) as Duplex
+import Isomers.Response.Duplex.Encodings (ClientBodyRow, ClientHeaders, ClientResponse, ServerResponse) as Exports
+import Isomers.Response.Duplex.Encodings (ClientResponse, ServerResponse)
 import Isomers.Response.Duplex.Parser (ParsingError)
 import Isomers.Response.Duplex.Parser (run) as Parser
 import Isomers.Response.Duplex.Printer (run) as Printer
 import Isomers.Response.Duplex.Variant (empty, injInto) as Duplex.Variant
-import Isomers.Response.Duplex.Encodings (ClientBodyRow, ClientHeaders, ClientResponse, ServerResponse) as Exports
-import Isomers.Response.Duplex.Encodings (ClientResponse, ServerResponse)
--- import Isomers.Response.Homogeneous (Homogeneous(..)) as Exports
 import Network.HTTP.Types (found302, hContentType, hLocation, movedPermanently301, notFound404, ok200)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
 import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
@@ -89,18 +90,23 @@ toVariant (Okayish v) = v
 toEither ∷ ∀ a res. Okayish res a → Either (Variant res) a
 toEither (Okayish v) = Variant.on _ok Right Left v
 
-fromOk ∷ ∀ a res. a → Okayish res a
+fromOk ∷ ∀ a res. Row.Lacks "ok" res ⇒ a → Okayish res a
 fromOk a = Okayish $ Variant.inj _ok a
 
-fromEither ∷ ∀ a res. Row.Lacks "ok" res ⇒ Row.Cons "ok" a res (Ok a + res) ⇒ Either (Variant res) a → Okayish res a
+fromNonOk ∷ ∀ a res. Row.Lacks "ok" res ⇒ Variant res → Okayish res a
+fromNonOk v = Okayish (append' v)
+  where
+    append' ∷ Variant res → Variant (Ok a + res)
+    append' = Contrib.Data.Variant.append _ok
+
+fromEither ∷ ∀ a res. Row.Lacks "ok" res ⇒ Either (Variant res) a → Okayish res a
 fromEither (Right a) = Okayish $ Variant.inj _ok a
 
 fromEither (Left v) = Okayish $ (append' v)
   where
-  append' ∷ Variant res → Variant (Ok a + res)
-  append' = Contrib.Data.Variant.append _ok
+    append' ∷ Variant res → Variant (Ok a + res)
+    append' = Contrib.Data.Variant.append _ok
 
--- | Really useful in the context of "manual instances deriving"
 roundtripEither ∷ ∀ a b res res'. (Either (Variant res) a → Either (Variant res') b) → Okayish res a → Okayish res' b
 roundtripEither f = unsafeFromEither <<< f <<< toEither
 
