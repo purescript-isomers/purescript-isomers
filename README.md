@@ -1,5 +1,7 @@
 # isomers
 
+WIP!
+
 Use the same building blocks to create fully isomorphic apps (SPA with SSR or traditional server side apps) and APIs in PureScript. Everything is derived from value level spec and renderers.
 
 ## Objectives
