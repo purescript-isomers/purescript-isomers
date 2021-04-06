@@ -6,7 +6,6 @@ import Control.Monad.Except (ExceptT(..), runExceptT)
 import Control.Monad.Except.Checked (ExceptV)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
-import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Variant (Variant)
 import Data.Variant (inj) as Variant
@@ -14,12 +13,9 @@ import Effect.Aff (Aff)
 import Global.Unsafe (unsafeStringify)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
 import Isomers.Client.Fetch (fetch)
-import Isomers.HTTP (Exchange(..)) as HTTP
 import Isomers.HTTP.Exchange (Error(..)) as Exchange
-import Isomers.Request (ClientRequest)
-import Isomers.Request (Duplex(..), Duplex', Printer) as Request
+import Isomers.Request (Accum(..), Duplex(..), Printer) as Request
 import Isomers.Request.Duplex.Printer (run) as Request.Duplex.Printer
-import Isomers.Response.Duplex.Encodings (ClientResponse)
 import Isomers.Response (Duplex, parse) as Response
 import Prim.Row (class Cons, class Lacks) as Row
 import Prim.RowList (class RowToList)
@@ -30,8 +26,7 @@ import Type.Row (type (+))
 -- | This folding creates a request builder:
 -- | a record which contains functions which put a
 -- | request value (nested Variant) togheter based
--- | on the labels from the path and wrapping in possible
--- | newtypes.
+-- | on the labels from the path.
 data RequestBuildersStep a request
   = RequestBuildersStep (a → request)
 
@@ -92,9 +87,6 @@ else instance hfoldlWithIndexRequestBuildersStepVariant ∷
   ) ⇒
   HFoldlWithIndex (RequestBuildersStep (Variant v) request) unit (Proxy (Variant v)) { | requestBuilders } where
   hfoldlWithIndex cf init _ = hfoldlWithIndex cf {} (RLProxy ∷ RLProxy vl)
-
-requestBuilders ∷ ∀ requestBuilders t. HFoldlWithIndex (RequestBuildersStep t t) {} (Proxy t) { | requestBuilders } ⇒ Proxy t → { | requestBuilders }
-requestBuilders = hfoldlWithIndex (RequestBuildersStep (identity ∷ t → t)) {}
 
 -- | This folding creates the actual client which is able to perform
 -- | network requests etc.
@@ -170,22 +162,23 @@ else instance clientFoldingResponseDuplexNewtypeWrapper ∷
   foldingWithIndex (ClientStep reqPrt resDpl) prop c reqBld = do
     foldingWithIndex (ClientStep reqPrt (unwrap resDpl)) prop c reqBld
 
-exchange ∷ ClientRequest → HTTP.Exchange ClientRequest ClientResponse
-exchange clientRequest = HTTP.Exchange clientRequest Nothing
+requestBuilders ∷ ∀ requestBuilders t. HFoldlWithIndex (RequestBuildersStep t t) {} (Proxy t) { | requestBuilders } ⇒ Proxy t → { | requestBuilders }
+requestBuilders = hfoldlWithIndex (RequestBuildersStep (identity ∷ t → t)) {}
 
 -- | TODO: In this folding we pass response duplex around but we need only response parser.
 -- | Perform a recursive heterogeneous map which extracts only parsers and use this cleaner
 -- | value for `ClientStep` folding.
 client ∷
-  ∀ body i client requestBuilders responseDuplexes request.
+  ∀ body client requestBuilders responseDuplexes request route rl.
+  RowToList requestBuilders rl ⇒
   HFoldlWithIndex (RequestBuildersStep request request) {} (Proxy request) { | requestBuilders } ⇒
   HFoldlWithIndex (ClientStep request responseDuplexes) {} { | requestBuilders } { | client } ⇒
-  Request.Duplex' body i request →
+  Request.Accum body route request request →
   responseDuplexes →
   { | client }
-client (Request.Duplex reqPrt _) resDpl = do
+client (Request.Accum (Request.Duplex reqPrt _) _) resDpl = do
   let
     rb ∷ { | requestBuilders }
-    rb = hfoldlWithIndex (RequestBuildersStep (identity ∷ request → request)) {} (Proxy ∷ Proxy request)
+    rb = requestBuilders (Proxy ∷ Proxy request)
   hfoldlWithIndex (ClientStep reqPrt resDpl) {} rb ∷ { | client }
 

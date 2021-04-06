@@ -90,15 +90,6 @@ toVariant (Okayish v) = v
 toEither ∷ ∀ a res. Okayish res a → Either (Variant res) a
 toEither (Okayish v) = Variant.on _ok Right Left v
 
-fromOk ∷ ∀ a res. Row.Lacks "ok" res ⇒ a → Okayish res a
-fromOk a = Okayish $ Variant.inj _ok a
-
-fromNonOk ∷ ∀ a res. Row.Lacks "ok" res ⇒ Variant res → Okayish res a
-fromNonOk v = Okayish (append' v)
-  where
-    append' ∷ Variant res → Variant (Ok a + res)
-    append' = Contrib.Data.Variant.append _ok
-
 fromEither ∷ ∀ a res. Row.Lacks "ok" res ⇒ Either (Variant res) a → Okayish res a
 fromEither (Right a) = Okayish $ Variant.inj _ok a
 

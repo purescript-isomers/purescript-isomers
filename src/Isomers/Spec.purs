@@ -22,20 +22,14 @@ import Isomers.Contrib.Heterogeneous.Foldings (Flatten(..)) as Heterogeneous.Fol
 import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.Newtype
 import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
 import Isomers.HTTP (Method(..)) as HTTP
+import Isomers.Spec.Builder (SpecStep(..), spec)
 import Isomers.Spec.Builder (root, spec, class Builder) as Builder
-import Isomers.Spec.Builder (spec)
 import Isomers.Spec.Builder (spec) as Spec.Builder
 import Isomers.Spec.Type (Spec(..))
 import Isomers.Spec.Type (Spec(..)) as Type
 import Prim.Row (class Cons, class Union) as Row
 import Prim.RowList (class RowToList)
 import Prim.Symbol (class Append) as Symbol
-import Request.Duplex (RequestDuplex(..), RequestDuplex')
-import Request.Duplex (prefix) as Request.Duplex
-import Request.Duplex.Generic.Variant (class MethodPrefixRoutes, class VariantParser, class VariantPrinter, methodVariant) as Request.Duplex.Generic.Variant
-import Request.Duplex.Parser (RequestParser(..), RouteError(..), RouteResult(..)) as Request.Duplex.Parser
-import Request.Duplex.Parser (RequestParser)
-import Request.Duplex.Printer (RequestPrinter(..))
 import Type.Eval (class Eval)
 import Type.Eval.Foldable (FoldrWithIndex)
 import Type.Eval.Function (type (<<<))
@@ -46,5 +40,6 @@ import Type.Row (RProxy)
 
 duplex dpl a = do
   let
-    Spec { request, response } = spec a
+    ss = SpecStep
+    Spec { request, response } = spec ss a
   Spec { request: dpl request, response }

@@ -35,6 +35,7 @@ type ClientRequest =
 -- | * We pass the raw result to the parser result.
 -- |
 -- | The wrapping `Effect` would make record build up lazy... in the future :-P
+
 type ServerRequest (body ∷ # Type) =
   { body ∷ Either (Effect { | body }) (Variant body)
   , headers ∷ Lazy (Map HeaderName String)

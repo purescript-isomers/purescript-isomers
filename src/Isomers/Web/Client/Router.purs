@@ -1,57 +1,52 @@
 module Isomers.Web.Client.Router where
 
--- import Prelude
--- 
--- import Control.Monad.Except (throwError)
--- import Control.Monad.Free.Trans (liftFreeT)
--- import Data.Either (Either(..))
--- import Data.Lens (view)
--- import Data.Maybe (Maybe(..))
--- import Data.Tuple.Nested ((/\))
--- import Data.Variant (Variant)
--- import Debug.Trace (traceM)
--- import Effect (Effect)
--- import Effect.Aff.Class (liftAff)
--- import Effect.Class (liftEffect)
--- import Effect.Exception (error)
--- import Effect.Ref (new, read, write) as Ref
--- import Heterogeneous.Folding (class HFoldlWithIndex)
--- import Isomers.Api.Client.Fetch (exchange) as Client.Fetch
--- import Isomers.Web.Client.Render (RenderFolding)
--- import Isomers.Web.Client.Render (render) as Client.Render
--- import Isomers.Web.Spec (Raw(..)) as Spec
--- import Isomers.HTTP (Exchange(..)) as HTTP
--- import Isomers.HTTP (Exchange(..)) as Isomers.HTTP
--- import Isomers.HTTP.Exchange (FetchError)
--- import Isomers.HTTP.Exchange (fromResponse) as Exchange
--- import Isomers.HTTP.Response (Response)
--- import React.Basic (JSX)
--- import Request.Duplex (RequestDuplex')
--- import Request.Duplex (parse, print) as Request.Duplex
--- import Routing.PushState (makeInterface) as PushState
--- import Wire.React.Router (_Transition, continue, makeRouter)
--- import Wire.React.Router.Control (Command(..), Resolved, Router(..), Transition, Transitioning) as Router
--- import Wire.Signal (Signal)
--- import Wire.Signal (create) as Signal
--- 
--- type RouterInterface req
---   = { navigate :: Variant req -> Effect Unit
---     , print ∷ Variant req → String
---     , redirect :: Variant req -> Effect Unit
---     , submit :: Variant req -> Effect Unit
---     }
--- 
--- -- | TODO: This is unsafe now (we can have POST requests which we
--- -- | dump into plain strings).
--- -- | We should probably split POST and GET rows so this can be
--- -- | a safe method.
--- print ∷ ∀ req. RequestDuplex' req → Isomers.HTTP.Exchange req String → String
--- print requestDuplex (Isomers.HTTP.Exchange request res) =
---   let
---     { path } = Request.Duplex.print requestDuplex request
---   in
---     path
--- 
+import Prelude
+
+import Control.Monad.Except (throwError)
+import Control.Monad.Free.Trans (liftFreeT)
+import Data.Either (Either(..))
+import Data.Lens (view)
+import Data.Maybe (Maybe(..))
+import Data.Tuple.Nested ((/\))
+import Data.Variant (Variant)
+import Debug.Trace (traceM)
+import Effect (Effect)
+import Effect.Aff.Class (liftAff)
+import Effect.Class (liftEffect)
+import Effect.Exception (error)
+import Effect.Ref (new, read, write) as Ref
+import Heterogeneous.Folding (class HFoldlWithIndex)
+import Isomers.HTTP (Exchange(..)) as HTTP
+import Isomers.Request (Duplex') as Request
+import Isomers.Request.Duplex (print) as Request.Duplex
+import React.Basic (JSX)
+import Routing.PushState (makeInterface) as PushState
+import Wire.React.Router (_Transition, continue, makeRouter)
+import Wire.React.Router.Control (Command(..), Resolved, Router(..), Transition, Transitioning) as Router
+import Wire.Signal (Signal)
+import Wire.Signal (create) as Signal
+
+-- | TODO:
+-- | Introduce a bit more sophisticated
+-- | representation for a request - it is
+-- | useful to know what method we are using and
+-- | what kind of response do we expect
+-- | (by using `Accept` header value).
+type RouterInterface req
+  = { navigate :: Variant req -> Effect Unit
+    , print ∷ Variant req → String
+    , redirect :: Variant req -> Effect Unit
+    , submit :: Variant req -> Effect Unit
+    }
+
+-- | TODO: this is unsafe because we are missing
+-- | request tagging at the moment.
+unsafePrint ∷ ∀ body req. Request.Duplex' body req → HTTP.Exchange req String → String
+unsafePrint dpl (HTTP.Exchange request res) = do
+  let
+    { path } = Request.Duplex.print dpl request
+  path
+
 -- router ∷
 --   ∀ doc req res rnd.
 --   HFoldlWithIndex (RenderFolding (RouterInterface req) req res rnd) Unit (Variant req) (Maybe (Either FetchError (Response String)) → doc) ⇒

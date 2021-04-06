@@ -2,7 +2,7 @@ module Isomers.Web.Spec.Builder where
 
 import Data.Tuple.Nested ((/\), type (/\))
 import Heterogeneous.Folding (class Folding, class HFoldl, hfoldl)
-import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
+import Heterogeneous.Mapping (class Mapping)
 import Isomers.Contrib (HJust(..)) as Contrib
 import Isomers.Contrib.Heterogeneous.Filtering (CatMaybes(..))
 import Isomers.Contrib.Heterogeneous.HEval (class HEval, DoApply(..), DoConst(..), DoHFilter(..), DoHIfThenElse(..), DoHMap(..), DoIdentity(..), heval)
@@ -16,14 +16,17 @@ import Isomers.Response (Okayish)
 import Isomers.Response.Raw.Duplexes (html) as Response.Raw.Duplexes
 import Isomers.Response.Types (HtmlString)
 import Isomers.Spec (class Builder, Spec, spec) as Spec
+import Isomers.Spec.Builder (Insert(..), SpecStep(..))
 import Isomers.Web.Spec.Type (GetApi, GetRenderers, Spec(..), _GetApi, _GetRenderers)
 import Prim.Boolean (False, True, kind Boolean)
+import Prim.Row (class Cons, class Lacks) as Row
 import Prim.RowList (Nil) as RL
 import Prim.RowList (class RowToList, kind RowList)
-import Type.Prelude (BProxy(..))
+import Type.Prelude (class IsSymbol, class TypeEquals, BProxy(..))
+import Type.Row (RProxy(..))
 
-class Builder a api rnd | a → api rnd where
-  spec ∷ a → Spec api rnd
+class Builder a route api rnd | a route → api rnd where
+  spec ∷ SpecStep route → a → Spec api rnd
 
 data Rendered dpl rnd
   = Rendered dpl rnd
@@ -31,7 +34,7 @@ data Rendered dpl rnd
 newtype Tagged (tag ∷ Symbol) a
   = Tagged a
 
-data AppStep
+data AppStep route
   = AppStep
 
 -- | From list of responses we extract a pair
@@ -91,26 +94,26 @@ data FromHJust
 instance mappingFromHJust ∷ Mapping FromHJust (HJust a) a where
   mapping _ (HJust a) = a
 
-data DoBuildSpec
-  = DoBuildSpec
+data DoBuildSpec route
+  = DoBuildSpec (SpecStep route)
 
-instance hevalDoBuildSpec ∷ (Spec.Builder a body acc req res) ⇒ HEval DoBuildSpec (a → Spec.Spec body acc req res) where
-  heval _ i = Spec.spec i
+instance hevalDoBuildSpec ∷ (Spec.Builder a body route ireq oreq res) ⇒ HEval (DoBuildSpec route) (a → Spec.Spec body route ireq oreq res) where
+  heval (DoBuildSpec step) i = Spec.spec step i
 
 instance builderPlainEndpoint ∷
   ( HFoldl ExtractRenderStep HNothing res rnd
   , HEval DoIsHJust (rnd → BProxy rendered)
-  , Spec.Builder (req /\ a) b acc req' res'
+  , Spec.Builder (req /\ a) b route ireq oreq res'
   , HEval
-      ( DoBuildSpec
+      ( DoBuildSpec route
           H.<<< DoApply (a → req /\ a)
           H.<<< DoHIfThenElse (DoConst (BProxy rendered)) (DoApply (t → Response.RawDuplex' HtmlMime HtmlString : t)) DoIdentity
           H.<<< DoHMap DropRenderStep
       )
-      (res → Spec.Spec b acc req' res')
+      (res → Spec.Spec b route ireq oreq res')
   ) ⇒
-  Builder (req /\ res) (Spec.Spec b acc req' res') rnd where
-  spec (req /\ res) = do
+  Builder (req /\ res) route (Spec.Spec b route ireq oreq res') rnd where
+  spec route (req /\ res) = do
     let
       rnd = hfoldl ExtractRenderStep HNothing res
 
@@ -118,7 +121,7 @@ instance builderPlainEndpoint ∷
 
       api =
         heval
-          ( DoBuildSpec
+          ( DoBuildSpec route
               H.<<< DoApply ((req /\ _) ∷ a → req /\ a)
               H.<<< DoHIfThenElse (DoConst rendered) (DoApply ((Response.Raw.Duplexes.html : _) ∷ t → _ : t)) DoIdentity
               H.<<< DoHMap DropRenderStep
@@ -127,8 +130,8 @@ instance builderPlainEndpoint ∷
     Spec { api, renderers: rnd }
 
 instance builderSpec ∷
-  Builder (Spec api rnd) api rnd where
-  spec s = s
+  Builder (Spec api rnd) route api rnd where
+  spec _ s = s
 
 type DoFoldRenderers a
   = ( DoHIfThenElse DoNull (DoConst HNothing) (DoApply (a → HJust a))
@@ -147,37 +150,60 @@ _DoFoldRenderers =
 
 instance builderMethod ∷
   ( HEval
-      ( ( (DoBuildSpec H.<<< DoApply (apis → Method apis) H.<<< DoHMap GetApi)
+      ( ( (DoBuildSpec route H.<<< DoApply (apis → Method apis) H.<<< DoHMap GetApi)
             H.&&& DoFoldRenderers a
         )
-          H.<<< DoHMap AppStep
+          H.<<< DoHMap (AppStep route)
       )
-      ({ | rec } → Spec.Spec b acc req res /\ rnd)
-  , Spec.Builder (Method apis) b acc req res
+      ({ | rec } → Spec.Spec b route ireq oreq res /\ rnd)
+  , Spec.Builder (Method apis) b route ireq oreq res
   ) ⇒
-  Builder (Method { | rec }) (Spec.Spec b acc req res) rnd where
-  spec (Method rec) = do
+  Builder (Method { | rec }) route (Spec.Spec b route ireq oreq res) rnd where
+  spec step (Method rec) = do
     let
       split =
-        (DoBuildSpec H.<<< DoApply (Method ∷ apis → Method apis) H.<<< DoHMap _GetApi)
+        (DoBuildSpec step H.<<< DoApply (Method ∷ apis → Method apis) H.<<< DoHMap _GetApi)
           H.&&& (_DoFoldRenderers ∷ DoFoldRenderers a)
 
-      api /\ rnd = heval (split H.<<< DoHMap AppStep) rec
+      api /\ rnd = heval (split H.<<< DoHMap (AppStep ∷ AppStep route)) rec
     Spec { api, renderers: rnd }
 
 instance builderRec ∷
   ( HEval
-        ((DoBuildSpec H.<<< DoHMap GetApi H.&&& DoFoldRenderers a) H.<<< DoHMap AppStep)
+        ((DoBuildSpec route H.<<< DoHMap GetApi H.&&& DoFoldRenderers a) H.<<< DoHMap (AppStep route))
         ({ | rec } → api /\ rnd)
     ) ⇒
-  Builder { | rec } api rnd where
-  spec rec = do
+  Builder { | rec } route api rnd where
+  spec step rec = do
     let
       api /\ rnd =
         heval
-          ((DoBuildSpec H.<<< DoHMap _GetApi H.&&& (_DoFoldRenderers ∷ DoFoldRenderers a)) H.<<< DoHMap AppStep)
+          ((DoBuildSpec step H.<<< DoHMap _GetApi H.&&& (_DoFoldRenderers ∷ DoFoldRenderers a)) H.<<< DoHMap (AppStep ∷ AppStep route))
           rec
     Spec { api, renderers: rnd }
 
-instance builderAppStep ∷ Builder a api rnd ⇒ Mapping AppStep a (Spec api rnd) where
-  mapping _ a = spec a
+-- instance insertSpecBuilderSpec ∷
+--   Builder (Insert l a (Spec.Spec b { | route } ireq oreq res)) { | route } (Spec.Spec b { | route } ireq oreq res) rnd where
+--   spec s (Insert dpl sub) = do
+--     let
+--       Spec { api, renderers: rnd } = spec s sub
+--       api' = Spec.spec s (Insert dpl api ∷ Insert l a (Spec.Spec b { | route } ireq oreq res))
+--     Spec { api: api', renderers: rnd }
+instance insertSpecBuilder ∷
+  ( Builder sub { | route' } (Spec.Spec b { | route' } ireq oreq res) rnd
+  , Row.Cons l a route route'
+  , IsSymbol l
+  , Row.Lacks l route
+  , Spec.Builder (Insert l a (Spec.Spec b { | route' } ireq oreq res)) b { | route } ireq oreq res
+  ) ⇒
+  Builder (Insert l a sub) { | route } (Spec.Spec b { | route } ireq oreq res) rnd where
+  spec s (Insert dpl sub) = do
+    let
+      s' = SpecStep ∷ SpecStep { | route' }
+      Spec { api, renderers: rnd } = spec s' sub
+      api' = Spec.spec s (Insert dpl api ∷ Insert l a (Spec.Spec b { | route' } ireq oreq res))
+    Spec { api: api', renderers: rnd }
+
+instance builderAppStep ∷ Builder a route api rnd ⇒ Mapping (AppStep route) a (Spec api rnd) where
+  mapping _ a = spec (SpecStep ∷ SpecStep route) a
+

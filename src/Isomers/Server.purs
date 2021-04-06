@@ -9,7 +9,7 @@ import Data.Variant (Variant)
 import Effect.Aff (Aff)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
 import Isomers.Request (ServerRequest)
-import Isomers.Request (parse) as Request
+import Isomers.Request.Accum (parse) as Request.Accum
 import Isomers.Response (Duplex, print) as Response
 import Isomers.Response.Duplex.Encodings (ServerResponse)
 import Isomers.Spec (Spec(..))
@@ -91,9 +91,9 @@ else instance routerFoldingFun ::
 data RoutingError = NotFound
 
 router ∷
-  ∀ body handlers request resCodecs.
-  HFoldlWithIndex (RouterStep handlers resCodecs) Unit (Variant request) (Aff ServerResponseWrapper) ⇒
-  Spec body {} (Variant request) { | resCodecs } →
+  ∀ body handlers ireq oreq resCodecs.
+  HFoldlWithIndex (RouterStep handlers resCodecs) Unit (Variant oreq) (Aff ServerResponseWrapper) ⇒
+  Spec body {} ireq (Variant oreq) { | resCodecs } →
   { | handlers } →
   ServerRequest body →
   Aff (Either RoutingError ServerResponse)
@@ -101,7 +101,7 @@ router spec@(Spec { request, response }) handlers = do
   let
     handle = hfoldlWithIndex (RouterStep handlers response) unit
 
-  \raw → Request.parse request raw {} >>= case _ of
+  \raw → Request.Accum.parse request raw {} >>= case _ of
     Right req → (Right <<< un ServerResponseWrapper) <$> handle req
     Left err → pure $ Left NotFound
 

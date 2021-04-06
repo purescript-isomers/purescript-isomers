@@ -17,6 +17,7 @@ import Effect.Console (log)
 import Effect.Random (random)
 import Global.Unsafe (unsafeStringify)
 import Heterogeneous.Folding (class HFoldlWithIndex)
+import Heterogeneous.Mapping (hmap)
 import Isomers.Client (RequestBuildersStep(..), ResponseM(..), requestBuilders, runResponseM)
 import Isomers.Client (client) as Client
 import Isomers.Contrib.Heterogeneous.List (HNil(..), (:))
@@ -24,9 +25,11 @@ import Isomers.HTTP (Exchange(..))
 import Isomers.HTTP.ContentTypes (_json)
 import Isomers.HTTP.Request (Method(..))
 import Isomers.Node.Server (serve) as Node.Server
-import Isomers.Request (Duplex(..), Duplex', print) as Request
+import Isomers.Request (Accum(..))
+import Isomers.Request.Accum (insert, print) as Request.Accum
+import Isomers.Request.Duplex (int, segment) as Request.Duplex.Record
+import Isomers.Request.Duplex (int, segment, string) as Request.Duplex
 import Isomers.Request.Duplex.Parser (int) as Parser
-import Isomers.Request.Duplex.Record (Root, empty, intSegment, segment) as Request.Duplex.Record
 import Isomers.Response (Duplex(..), Duplex') as Response
 import Isomers.Response (Okayish)
 import Isomers.Response.Duplex (asJson) as Response.Duplex
@@ -37,24 +40,35 @@ import Isomers.Response.Okayish.Type (fromEither) as Okayish.Type
 import Isomers.Response.Raw (RawServer(..))
 import Isomers.Response.Types (HtmlString(..))
 import Isomers.Server (router) as Server
-import Isomers.Spec (Spec(..)) as Spec
+import Isomers.Spec (Spec(..), spec) as Spec
+import Isomers.Spec.Builder (SpecStep(..))
+import Isomers.Spec.Builder (insertBuilder, spec) as Spec.Builder
+import Isomers.Spec.Record (spec) as Spec.Record
+import Isomers.Spec.Record (spec) as Spec.Record.Builder
+import Isomers.Spec.Type (insert) as Spec.Type
 import Isomers.Web.Server (renderToApi)
 import Isomers.Web.Spec (root)
-import Isomers.Web.Spec.Builder (Rendered(..))
+import Isomers.Web.Spec.Builder (Rendered(..), spec)
 import Isomers.Web.Spec.Builder (spec) as Web.Builder
 import Isomers.Web.Spec.Builder (spec) as Web.Spec.Builder
 import Isomers.Web.Spec.Type (Spec(..))
+import Isomers.Web.Spec.Type (Spec(..)) as Web.Spec.Type
 import Network.HTTP.Types (internalServerError500, ok200)
 import Node.Stream (onClose)
 import Polyform.Batteries.Json.Duals ((:=))
 import Polyform.Batteries.Json.Duals (Pure, arrayOf, int, object, string) as Json.Duals
 import Polyform.Dual (Dual(..))
 import Polyform.Dual.Record (build) as Dual.Record
+import Polyform.Reporter (R)
 import Polyform.Validator.Dual (runSerializer, runValidator)
 import Polyform.Validator.Dual.Pure (runSerializer, runValidator) as Dual.Pure
-import Test.Spec (specRequestBuilder)
-import Test.X (render) as X
 import Type.Prelude (Proxy(..), SProxy(..))
+
+specRequestBuilder ∷
+  ∀ acc body input ireq oreq requestBuilders route response.
+  HFoldlWithIndex (RequestBuildersStep ireq ireq) {} (Proxy ireq) { | requestBuilders } ⇒
+  Spec.Spec body route ireq oreq response → { | requestBuilders }
+specRequestBuilder (Spec.Spec _) = requestBuilders (Proxy ∷ Proxy ireq)
 
 responseDuplex = responseDual d
   where
@@ -71,11 +85,6 @@ responseDuplex = responseDual d
         := Json.Duals.string
 
 responseDual d = Response.Okayish.Duplexes.asJson (Dual.Pure.runSerializer d) (lmap unsafeStringify <<< un V <<< Dual.Pure.runValidator d)
-
-requestDuplex ::
-  ∀ reqBody res.
-  Request.Duplex.Record.Root reqBody ( productId ∷ Int )
-requestDuplex = Request.Duplex.Record.intSegment (SProxy ∷ SProxy "productId")
 
 newtype HTML
   = HTML String
@@ -100,17 +109,44 @@ htmlResponse _ = RawServer
   , body: HtmlString $ "<h1>" <> "Ongoing request" <> "</h1>"
   }
 
-web =
-  root
-    { shop: requestDuplex /\ (responseDuplex : HNil)
-    , admin: requestDuplex /\ (Rendered responseDuplex htmlResponse : HNil)
-    , sub:
+render = htmlResponse
+
+-- requestDuplex = Request.Accum.Record.empty -- Request.Accum.insert (SProxy ∷ SProxy "productId") (Request.Duplex.int Request.Duplex.segment)
+requestDuplex =
+  Request.Accum.insert (SProxy ∷ SProxy "productId") (Request.Duplex.int Request.Duplex.segment)
+
+
+req2 =
+  Request.Accum.insert (SProxy ∷ SProxy "test") (Request.Duplex.string Request.Duplex.segment)
+
+---------------------------------------------
+
+z :: forall t1 t4. Accum t4 t1 t1 t1
+z = Accum (pure identity) identity
+
+shop = Spec.spec SpecStep
+  { x: (z /\ (responseDuplex : HNil))
+  , y: z /\ (responseDuplex : HNil)
+  }
+
+web = do
+  let
+    e = (SpecStep ∷ SpecStep {})
+
+  root $ Web.Spec.Builder.spec e $
+    Spec.Builder.insertBuilder (SProxy ∷ SProxy "productId") (Request.Duplex.int Request.Duplex.segment)
+      { shop: z /\ (responseDuplex : HNil)
+      , admin: z /\ (responseDuplex : HNil)
+      , sub:
         { shop: Method
-          { "GET": requestDuplex /\ (responseDuplex : HNil)
-          , "POST": requestDuplex /\ (responseDuplex : HNil)
+          { "GET": z /\ ((Rendered responseDuplex render) : HNil)
+          , "POST": z /\ (responseDuplex : HNil)
           }
         }
-    }
+      }
+
+-- ------------------------------------------------
+
 
 handlers =
   { shop: { "application/json":
@@ -128,7 +164,7 @@ handlers =
     }
   }
 
-print (Spec.Spec { request: reqDpl }) = Request.print reqDpl
+print (Spec.Spec { request: reqDpl }) = Request.Accum.print reqDpl
 
 req = do
   let

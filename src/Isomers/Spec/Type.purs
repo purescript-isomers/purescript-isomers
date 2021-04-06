@@ -1,40 +1,26 @@
 module Isomers.Spec.Type where
 
-import Prelude
 
 import Data.Newtype (class Newtype)
-import Data.Variant (Variant)
-import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
-import Heterogeneous.Mapping (class HMap, hmap)
 import Isomers.Contrib.Heterogeneous.HEval ((<<<), type (<<<)) as H
-import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mapping.Newtype
 import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.Newtype
-import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mapping
-import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mapping.Record
 import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
-import Isomers.Contrib.Type.Eval.Foldable (Foldl')
-import Isomers.Request (Duplex(..)) as Request
-import Isomers.Request.Duplex.Generic (PrefixRoutes, variant) as Request.Duplex.Generic
-import Isomers.Request.Duplex.Generic (class HFoldlVariantStep, VariantStep(..))
-import Isomers.Request.Duplex.Variant (empty, injInto) as Request.Duplex.Variant
-import Prim.Row (class Cons, class Lacks, class Union) as Row
-import Prim.RowList (class RowToList)
-import Record (insert) as Record
-import Type.Eval (class Eval, kind TypeExpr)
-import Type.Eval.Function (type (<<<))
-import Type.Eval.RowList (FromRow)
-import Type.Prelude (class IsSymbol, class TypeEquals, SProxy(..))
-import Type.Row (RProxy)
+import Isomers.Request (Accum, Duplex') as Request
+import Isomers.Request.Accum (insert) as Accum
+import Isomers.Request.Accum (unifyRoute) as Request.Accum
+import Prim.Row (class Cons, class Lacks) as Row
+import Type.Equality (class TypeEquals)
+import Type.Prelude (class IsSymbol, SProxy(..))
 
-newtype Spec reqBody input request response
+-- | We keep ireq polymorphic during the composition and this
+-- | does the magic so composition align
+newtype Spec body route ireq oreq res
   = Spec
-  { request ∷ Request.Duplex reqBody input request request
-  , response ∷ response
+  { request ∷ Request.Accum body route ireq oreq
+  , response ∷ res
   }
 
-type Root reqBody = Spec reqBody {}
-
-derive instance newtypeSpec ∷ Newtype (Spec reqBody i req res) _
+derive instance newtypeSpec ∷ Newtype (Spec req route ireq oreq res) _
 
 _request = SProxy ∷ SProxy "request"
 
@@ -51,28 +37,19 @@ type ResponseMapping = Mappings.Record.Get "response" H.<<< Mappings.Newtype.Unw
 _ResponseMapping ∷ ResponseMapping
 _ResponseMapping = Mappings.Record.Get _response H.<<< Mappings.Newtype.Unwrap
 
--- duplex l dpl (Spec { request, response }) = Spec
---   { 
+insert ∷
+  ∀ a body l ireq oreq route route' res.
+  IsSymbol l ⇒
+  Row.Lacks l route ⇒
+  Row.Cons l a route route' ⇒
+  SProxy l →
+  Request.Duplex' body a →
+  Spec body { | route' } ireq oreq res →
+  Spec body { | route } ireq oreq res
+insert l dpl (Spec { request, response }) = Spec
+  { request: Accum.insert l dpl request
+  , response
+  }
 
--- -- --   HMap RequestMapping t227 { | t239 } ⇒
-
--- emptyVariantSpec ∷ ∀ reqBody. Spec reqBody (Variant ()) {}
--- emptyVariantSpec = Spec { request: Request.Duplex.Variant.empty, response: {} }
-
--- -- endpoint ∷ ∀ t38 t40. RequestDuplex' t38 → t40 → Spec (Request.Data t38) t40
--- -- endpoint request response = Spec { request: request', response }
--- --   where
--- --   -- _Newtype ∷ ∀ t a s b. Newtype t a ⇒ Newtype s b ⇒ Iso t s a b
--- --   request' = _Data request
--- 
--- 
--- 
--- -- class Build a spec | a → spec where
--- --   build ∷ a → spec
--- -- 
--- -- instance buildSpec ∷ Build (Spec req res) (Spec req res) where
--- --   build s = s
--- -- 
--- -- instance buildSpecRecord ∷
--- -- 
--- --   Build { | rec } (Spec req res)
+unifyRoute ∷ ∀ body ireq oreq res route route'. TypeEquals route route' ⇒ Spec body route ireq oreq res → Spec body route' ireq oreq res
+unifyRoute (Spec { request, response }) = Spec { request: Request.Accum.unifyRoute request, response }

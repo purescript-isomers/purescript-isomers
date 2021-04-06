@@ -7,9 +7,9 @@ import Type.Row (type (+))
 
 type Body = (Body.Buff + Body.Str + ())
 
-type Spec i req res = Spec.Spec Body i req res
+type Spec route ireq oreq res = Spec.Spec Body route ireq oreq res
 
-type Root payload res = Spec {} payload res
+type Root ireq oreq res = Spec {} ireq oreq res
 
 type ServerRequest = Request.ServerRequest Body
 

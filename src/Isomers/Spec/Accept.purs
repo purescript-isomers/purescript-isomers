@@ -17,7 +17,7 @@ import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern(..), parse) as Accept
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern)
 import Isomers.HTTP.Request.Headers.Accept.MediaPattern (matchedBy, print) as Accept.MediaPattern
-import Isomers.Request (Duplex(..), Duplex', Parser, Printer) as Request
+import Isomers.Request (Accum(..), Duplex(..), Parser, Printer) as Request
 import Isomers.Request.Duplex.Parser (Parser(..), ParsingError(..), Result(..)) as Request.Duplex.Parser
 import Isomers.Request.Duplex.Parser (runParser) as Request.Parser
 import Isomers.Request.Duplex.Printer (header) as Request.Duplex.Printer
@@ -44,7 +44,7 @@ instance foldingResponseRecordStep ∷
     { | response }
     (Response.Duplex ct i o)
     { | response' } where
-  folding _ acc r = Record.insert (SProxy ∷ SProxy ct) r acc
+  folding _ route r = Record.insert (SProxy ∷ SProxy ct) r route
 
 data RequestParserFolding body r o
   = RequestParserFolding (Request.Parser body (r → o))
@@ -103,6 +103,20 @@ instance foldingRequestPrinterFolding ∷
     (Variant vReq → Request.Printer) where
   folding (RequestPrinterFolding prt) vprt ct = Variant.on ct (append (Request.Duplex.Printer.header hAccept (reflectSymbol ct)) <<< prt) vprt
 
+data RequestRouteStep ireq route
+  = RequestRouteStep (ireq → route)
+
+instance foldingRequestRouteStep ∷
+  ( IsSymbol contentType
+  , Row.Cons contentType ireq vReq_ vReq
+  ) ⇒
+  Folding
+    (RequestRouteStep ireq route)
+    (Variant vReq_ → route)
+    (SProxy contentType)
+    (Variant vReq → route) where
+  folding (RequestRouteStep route) vprt ct = Variant.on ct route vprt
+
 -- | Extract content type symbol from `Response` type.
 -- | We use it to extract a heterogeneous list of proxies
 -- | from a list of response codecs.
@@ -120,37 +134,36 @@ instance mappingContentTypesMapping ∷
     (SProxy ct) where
   mapping _ _ = SProxy ∷ SProxy ct
 
--- | Given an "inner" request duplex and a heterogeneous list of labels.
--- | We create a request duplex for homogeneous variant which
+-- | Given an "inner" request duplex and a heterogeneous list of labels
+-- | we create a request duplex for homogeneous variant which
 -- | has content types as labels.
-request ∷
-  ∀ body req cts r vReq.
-  HFoldl
-    (RequestParserFolding body r req)
-    (MediaPattern → Request.Parser body (r → Variant ()))
+requestAccum ∷
+  ∀ body ireq route oreq cts ivReq ovReq.
+  HFoldl (RequestRouteStep ireq route) (Variant () → route) cts (Variant ivReq → route) ⇒
+  HFoldl (RequestParserFolding body route oreq) (MediaPattern → Request.Parser body (route → Variant ()))
     cts
-    (MediaPattern → Request.Parser body (r → Variant vReq)) ⇒
+    (MediaPattern → Request.Parser body (route → Variant ovReq)) ⇒
   HFoldl
-    (RequestPrinterFolding req)
+    (RequestPrinterFolding ireq)
     (Variant () → Request.Printer)
     cts
-    (Variant vReq → Request.Printer) ⇒
-  Request.Duplex body r req req →
+    (Variant ivReq → Request.Printer) ⇒
+  Request.Accum body route ireq oreq →
   cts →
-  Request.Duplex' body r (Variant vReq)
-request (Request.Duplex prt prs) cts = do
+  Request.Accum body route (Variant ivReq) (Variant ovReq)
+requestAccum (Request.Accum (Request.Duplex prt prs) dst) cts = do
   let
-    buildParser ∷ MediaPattern → Request.Parser body (r → (Variant vReq))
+    buildParser ∷ MediaPattern → Request.Parser body (route → (Variant ovReq))
     buildParser = do
       let
-        noMatch ∷ Request.Parser body (r → Variant ())
+        noMatch ∷ Request.Parser body (route → Variant ())
         noMatch =
           Request.Duplex.Parser.Chomp \_ →
             pure
               $ Request.Duplex.Parser.Fail (Request.Duplex.Parser.Expected "Provide a better error" " for non matching content type against Accept header value")
       hfoldl
-        (RequestParserFolding prs ∷ RequestParserFolding body r req)
-        (const noMatch ∷ MediaPattern → Request.Parser body (r → Variant ()))
+        (RequestParserFolding prs ∷ RequestParserFolding body route oreq)
+        (const noMatch ∷ MediaPattern → Request.Parser body (route → Variant ()))
         cts
 
     prs' = Request.Duplex.Parser.Chomp chomp
@@ -164,36 +177,40 @@ request (Request.Duplex prt prs) cts = do
             Nothing → { head: buildParser Accept.AnyMedia, tail: [] }
         Request.Parser.runParser state (foldl (<|>) ps.head ps.tail)
 
-    prt' ∷ Variant vReq → Request.Printer
+    prt' ∷ Variant ivReq → Request.Printer
     prt' i = hfoldl (RequestPrinterFolding prt) (Variant.case_ ∷ Variant () → Request.Printer) cts i
-  Request.Duplex prt' prs'
 
-response :: forall lst rec. HFoldl ResponseRecordStep {} lst rec => lst -> rec
-response lst = (hfoldl ResponseRecordStep {} $ lst)
+    dst' ∷ Variant ivReq → route
+    dst' i = hfoldl (RequestRouteStep (dst ∷ ireq → route)) (Variant.case_ ∷ Variant () → route) cts i
+  Request.Accum (Request.Duplex prt' prs') dst'
+
+responsePrinters :: forall lst rec. HFoldl ResponseRecordStep {} lst rec => lst -> rec
+responsePrinters lst = (hfoldl ResponseRecordStep {} $ lst)
 
 -- | From a pair of request duplexes and hlist of response codecs create a spec which
 -- | labels everything by content types and wraps in `Accept`
 spec ∷
-  ∀ body r res resLst req cts vReq.
+  ∀ body res resLst route ireq oreq cts ivReq ovReq.
   HMap ResponseContentTypesMapping resLst cts ⇒
+  HFoldl (RequestRouteStep ireq route) (Variant () → route) cts (Variant ivReq → route) ⇒
   HFoldl ResponseRecordStep {} resLst res ⇒
   HFoldl
-    (RequestParserFolding body r req)
-    (MediaPattern → Request.Parser body (r → Variant ()))
+    (RequestParserFolding body route oreq)
+    (MediaPattern → Request.Parser body (route → Variant ()))
     cts
-    (MediaPattern → Request.Parser body (r → Variant vReq)) ⇒
+    (MediaPattern → Request.Parser body (route → Variant ovReq)) ⇒
   HFoldl
-    (RequestPrinterFolding req)
+    (RequestPrinterFolding ireq)
     (Variant () → Request.Printer)
     cts
-    (Variant vReq → Request.Printer) ⇒
-  (Request.Duplex body r req req /\ resLst) →
-  Spec body r (Variant vReq) res
+    (Variant ivReq → Request.Printer) ⇒
+  (Request.Accum body route ireq oreq /\ resLst) →
+  Spec body route (Variant ivReq) (Variant ovReq) res
 spec (req /\ res) = do
   let
     cts ∷ cts
     cts = hmap ResponseContentTypesMapping res
   Spec
-    { request: request req cts
-    , response: response res
+    { request: requestAccum req cts
+    , response: responsePrinters res
     }

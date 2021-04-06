@@ -18,7 +18,6 @@ import Isomers.Web.Spec.Builder (Tagged(..))
 import Isomers.Web.Spec.Type (Spec(..))
 import Prim.Row (class Cons, class Lacks) as Row
 import Record (get, insert, set) as Record
-import Test.Spec (handlers)
 import Type.Equality (class TypeEquals)
 import Type.Equality (to) as Type.Equality
 import Type.Prelude (class IsSymbol, SProxy(..))
