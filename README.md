@@ -8,3 +8,6 @@ Use the same building blocks to create fully isomorphic apps (SPA with SSR or tr
 
 Once again - the whole spec is just a value. Values are much easier to compose.
 
+## Credits
+
+A large chunk of code was taken from `routing-duplex` library by @natefaubion (I wasn't able to extend its recursive AST).
