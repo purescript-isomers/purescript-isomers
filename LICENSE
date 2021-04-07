@@ -29,7 +29,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-`Isomers.Parser.Duplex` core pieces is nearly a copy of `routing-duplex` library
+`Isomers.Request.Duplex` core pieces are nearly a copy of `routing-duplex` library
 which is licensed as follows:
 
 The MIT License (MIT)
