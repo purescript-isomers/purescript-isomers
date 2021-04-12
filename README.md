@@ -6,7 +6,7 @@ Use the same building blocks to create fully isomorphic apps (SPA with SSR or tr
 
 ## Objectives
 
-Once again - the whole spec is just a value. Values are much easier to compose.
+Once again - the whole spec is just a value. Values are much easier to transform and compose.
 
 ## Credits
 
