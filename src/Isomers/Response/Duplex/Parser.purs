@@ -22,11 +22,13 @@ import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Symbol (SProxy(..))
 import Data.Variant (Variant)
 import Data.Variant (default, inj, on) as Variant
+import Debug.Trace (traceM)
 import Effect.Aff (Aff, Fiber, joinFiber)
 import Effect.Aff.Class (liftAff)
 import Effect.Exception (Error) as Effect.Exception
 import Isomers.Contrib.Data.Variant (tag) as Contrib.Data.Variant
-import Isomers.Response.Duplex.Encodings (ClientHeaders, ClientResponse, ClientBodyRow) as Response.Duplex.Encodings
+import Isomers.Response.Encodings (ClientHeaders, ClientResponse, ClientBodyRow) as Encodings
+import Isomers.Response.Encodings (ClientResponse(..))
 import Network.HTTP.Types (HeaderName, hContentType)
 import Network.HTTP.Types (Status) as HTTP.Types
 import Prim.Row (class Cons) as Row
@@ -46,7 +48,7 @@ data ParsingError
 -- | so it is easier to avoid type level indexing here I think.
 newtype Parser o
   = Parser
-  (ExceptT ParsingError (StateT (Maybe (Variant Response.Duplex.Encodings.ClientBodyRow)) (ReaderT Response.Duplex.Encodings.ClientResponse Aff)) o)
+  (ExceptT ParsingError (StateT (Maybe (Variant Encodings.ClientBodyRow)) (ReaderT Encodings.ClientResponse Aff)) o)
 
 derive instance newtypeParser ∷ Newtype (Parser o) _
 
@@ -82,7 +84,7 @@ instance altParser ∷ Alt (Parser) where
 
 readBody ∷
   ∀ a br_ l.
-  Row.Cons l (Fiber a) br_ Response.Duplex.Encodings.ClientBodyRow ⇒
+  Row.Cons l (Fiber a) br_ Encodings.ClientBodyRow ⇒
   IsSymbol l ⇒
   SProxy l → Parser a
 readBody l =
@@ -100,7 +102,7 @@ readBody l =
                   Variant.on l pure (Variant.default err) fb
                 Nothing →
                   Reader.ask
-                    >>= \{ body: b } → do
+                    >>= \(ClientResponse { body: b }) → do
                         let
                           fb = Record.get l b
                         State.put (Just (Variant.inj l fb))
@@ -117,7 +119,7 @@ string ∷ Parser String
 string = readBody (SProxy ∷ SProxy "string")
 
 status ∷ Parser HTTP.Types.Status
-status = Parser $ Reader.asks _.status
+status = Parser $ Reader.asks (_.status <<< un ClientResponse)
 
 statusEquals ∷ HTTP.Types.Status → Parser Unit
 statusEquals { code: expected } =
@@ -126,8 +128,8 @@ statusEquals { code: expected } =
         when (expected /= got) do
           throwError $ Expected ("Status code: " <> show expected) (show got)
 
-headers ∷ Parser Response.Duplex.Encodings.ClientHeaders
-headers = Parser $ Reader.asks _.headers
+headers ∷ Parser Encodings.ClientHeaders
+headers = Parser $ Reader.asks (_.headers <<< un ClientResponse)
 
 header ∷ HeaderName → Parser (Maybe String)
 header hn = headers <#> Map.lookup hn
@@ -139,7 +141,7 @@ reqHeader hn =
         Nothing → throwError (HeaderMissing hn)
         Just v → pure v
 
-run ∷ ∀ a. Parser a → Response.Duplex.Encodings.ClientResponse → Aff (Either ParsingError a)
+run ∷ ∀ a. Parser a → Encodings.ClientResponse → Aff (Either ParsingError a)
 run (Parser prs) i = go `catchError` (JSError >>> Left >>> pure)
   where
   go = flip runReaderT i <<< flip evalStateT Nothing <<< runExceptT $ prs

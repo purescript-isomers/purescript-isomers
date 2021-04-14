@@ -2,7 +2,7 @@ module Isomers.Client.Fetch where
 
 import Prelude
 
-import Control.Monad.Except (catchError)
+import Control.Monad.Except (catchError, throwError)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Map (fromFoldable) as Map
@@ -10,6 +10,7 @@ import Data.Maybe (fromMaybe)
 import Data.Newtype (un)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Traversable (traverse)
+import Debug.Trace (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, Fiber, launchSuspendedAff)
 import Effect.Class (liftEffect)
@@ -18,8 +19,9 @@ import Isomers.Contrib.Web.Fetch (json) as Contrib.Web.Fetch.Response
 import Isomers.Contrib.Web.Fetch.Request (fromJson) as Contrib.Web.Fetch.Request
 import Isomers.Contrib.Web.Promise (toAffE) as Contrib.Web.Pomise
 import Isomers.Contrib.Web.Promise (toAffE) as Contrib.Web.Promise
-import Isomers.Request.Types (ClientBody(..), ClientRequest)
-import Isomers.Response.Duplex.Encodings (ClientResponse)
+import Isomers.Request.Encodings (ClientBody(..), ClientRequest) as Request.Encodings
+import Isomers.Response.Encodings (ClientResponse(..))
+import Isomers.Response.Encodings (ClientResponse) as Response.Encodings
 import Web.Fetch (fetch) as Web.Fetch
 import Web.Fetch.Headers (fromFoldable) as Fetch.Headers
 import Web.Fetch.Headers (toArray) as Web.Fetch.Headers
@@ -32,19 +34,30 @@ import Web.Promise (Promise) as Web
 
 foreign import unsafePatch ∷ String
 
-toFetchRequest ∷ ClientRequest → Effect Fetch.Request
-toFetchRequest c = Fetch.new c.path opts
+data Scheme = HTTP | HTTPS
+
+type HostInfo = { hostName ∷ String, port ∷ Int, scheme ∷ Scheme }
+
+toFetchRequest ∷ HostInfo → Request.Encodings.ClientRequest → Effect Fetch.Request
+toFetchRequest hostInfo c = do
+  Fetch.new url opts
   where
     body = fromMaybe Fetch.RequestBody.empty $ c.body <#> case _ of
-      ArrayBufferBody buff → Fetch.RequestBody.fromArrayBuffer buff
-      JsonBody j → Contrib.Web.Fetch.Request.fromJson j
-      StringBody cr → Fetch.RequestBody.fromString cr
+      Request.Encodings.ArrayBufferBody buff → Fetch.RequestBody.fromArrayBuffer buff
+      Request.Encodings.JsonBody j → Contrib.Web.Fetch.Request.fromJson j
+      Request.Encodings.StringBody cr → Fetch.RequestBody.fromString cr
+
+    scheme = case hostInfo.scheme of
+      HTTP → "http"
+      HTTPS → "https"
+
+    url = scheme <> "://" <> hostInfo.hostName <> ":" <> show hostInfo.port <> c.path
 
     headers = Fetch.Headers.fromFoldable <<< map (lmap (un CaseInsensitiveString)) $ c.headers
     opts = Fetch.Request.defaultOptions { body = body, headers = headers, method = c.method }
 
 
-fromFetchResponse ∷ Web.Fetch.Response → Effect ClientResponse
+fromFetchResponse ∷ Web.Fetch.Response → Effect Response.Encodings.ClientResponse
 fromFetchResponse res = do
   let
     headers = Map.fromFoldable <<< map (lmap CaseInsensitiveString) <<< Web.Fetch.Headers.toArray <<< Web.Fetch.Response.headers $ res
@@ -66,18 +79,24 @@ fromFetchResponse res = do
       <$> (toFiber $ Web.Fetch.Response.arrayBuffer res)
       <*> (toFiber $ Contrib.Web.Fetch.Response.json res)
       <*> (toFiber $ Web.Fetch.Response.text res)
-  pure
+
+  pure $ ClientResponse
     { body
     , headers
     , status
     , url
     }
 
-fetch ∷ ClientRequest → Aff (Either String ClientResponse)
-fetch req = do
-  req' ← liftEffect $ toFetchRequest req
+fetch ∷ HostInfo → Request.Encodings.ClientRequest → Aff (Either String Response.Encodings.ClientResponse)
+fetch hostInfo req = do
+  req' ← liftEffect $ toFetchRequest hostInfo req
   let
     res = Contrib.Web.Pomise.toAffE $ Web.Fetch.fetch req'
-  ((Right <<< fromFetchResponse) <$> res) `catchError` (pure <<< Left <<< unsafeStringify) >>= traverse liftEffect
+  (res >>= fromFetchResponse >>> map Right >>> liftEffect) `catchError` \err → do
+    traceM $ unsafeStringify err
+    traceM "EXCEPTION?"
+    pure $ Left $ unsafeStringify err
+
+    -- ) >>= traverse liftEffect
 
 

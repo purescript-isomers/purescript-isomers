@@ -6,6 +6,13 @@ let upstream =
 
 in  upstream
   with
+    homogeneous = mkPackage
+      [ "assert", "console", "effect", "foreign-object", "psci-support"
+      , "record-extra", "typelevel-eval", "variant"
+      ]
+      "https://github.com/paluh/purescript-homogeneous.git"
+      "master"
+  with
     http-types =
       { dependencies = [ "tuples", "unicode", "generics-rep" ]
       , repo = "https://github.com/Woody88/purescript-http-types.git"
@@ -82,7 +89,16 @@ in  upstream
       "https://github.com/robertdp/purescript-wire-react"
       "v0.0.1"
   with
-    wire-react-router = ../purescript-wire-react-router/spago.dhall as Location
+    wire-react-router = mkPackage -- ../purescript-wire-react-router/spago.dhall as Location
+      [ "aff"
+      , "freet"
+      , "indexed-monad"
+      , "profunctor-lenses"
+      , "react-basic-hooks"
+      , "routing"
+      ]
+      "https://github.com/robertdp/purescript-web-router.git"
+      "v0.2.1"
   with
     web-streams =
       { dependencies =

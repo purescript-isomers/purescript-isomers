@@ -1,45 +1,25 @@
-module Isomers.Spec
-  ( module Builder
-  , module Type
-  ) where
+module Isomers.Spec (client, module Exports, requestBuilders) where
 
-import Prelude
+import Heterogeneous.Folding (class HFoldlWithIndex)
+import Isomers.Client (ClientStep, RequestBuildersStep, client, requestBuilders) as Client
+import Isomers.Client.Fetch (HostInfo)
+import Isomers.Spec.Builder (spec, accumSpec, Insert(..), class Builder, BuilderStep(..)) as Exports
+import Isomers.Spec.Types (Spec(..))
+import Isomers.Spec.Types (rootAccumSpec, AccumSpec(..), Spec(..)) as Exports
+import Type.Prelude (Proxy(..))
 
-import Control.Alt ((<|>))
-import Data.Lens (Iso, Iso')
-import Data.Lens.Iso.Newtype (_Newtype)
-import Data.Maybe (Maybe, fromMaybe)
-import Data.Newtype (class Newtype)
-import Data.Variant (Variant, on)
-import Data.Variant (class Contractable, contract, expand, inj) as Variant
-import Data.Variant.Prefix (NilExpr, PrefixStep, UnprefixStep)
-import Data.Variant.Prefix (PrefixCases, UnprefixCases) as Data.Variant.Prefix
-import Data.Variant.Prefix (add, remove) as Variant.Prefix
-import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
-import Heterogeneous.Mapping (class HMap)
-import Isomers.Contrib.Heterogeneous (hmap')
-import Isomers.Contrib.Heterogeneous.Foldings (Flatten(..)) as Heterogeneous.Foldings
-import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.Newtype
-import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
-import Isomers.HTTP (Method(..)) as HTTP
-import Isomers.Spec.Builder (SpecStep(..), spec)
-import Isomers.Spec.Builder (root, spec, class Builder) as Builder
-import Isomers.Spec.Builder (spec) as Spec.Builder
-import Isomers.Spec.Type (Spec(..))
-import Isomers.Spec.Type (Spec(..)) as Type
-import Prim.Row (class Cons, class Union) as Row
-import Prim.RowList (class RowToList)
-import Prim.Symbol (class Append) as Symbol
-import Type.Eval (class Eval)
-import Type.Eval.Foldable (FoldrWithIndex)
-import Type.Eval.Function (type (<<<))
-import Type.Eval.RowList (FromRow, ToRow)
-import Type.Prelude (class IsSymbol, SProxy(SProxy), reflectSymbol)
-import Type.Row (RProxy)
+requestBuilders ∷
+  ∀ body ireq oreq requestBuilders response.
+  HFoldlWithIndex (Client.RequestBuildersStep ireq ireq) {} (Proxy ireq) { | requestBuilders } ⇒
+  Spec body ireq oreq response →
+  { | requestBuilders }
+requestBuilders (Spec _) = Client.requestBuilders (Proxy ∷ Proxy ireq)
 
-
-duplex dpl a = do
-  let
-    ss = SpecStep
-    Spec { request, response } = spec ss a
-  Spec { request: dpl request, response }
+client ∷
+  ∀ body client requestBuilders responseDuplexes ireq oreq.
+  HFoldlWithIndex (Client.RequestBuildersStep ireq ireq) {} (Proxy ireq) requestBuilders ⇒
+  HFoldlWithIndex (Client.ClientStep ireq responseDuplexes) {} requestBuilders client ⇒
+  HostInfo →
+  Spec body ireq oreq responseDuplexes →
+  client
+client hostInfo (Spec r) = Client.client hostInfo r.request r.response

@@ -12,10 +12,11 @@ import Effect.Aff (launchSuspendedAff) as Aff
 import Foreign.Object (Object)
 import Foreign.Object (toUnfoldable) as Object
 import Isomers.Node.Request.Body (buff, str) as Body
-import Isomers.Node.Types (ServerRequest)
+import Isomers.Node.Types (SimpleBody)
+import Isomers.Request.Encodings (ServerRequest) as Request.Encodings
 import Node.HTTP (Request, httpVersion, requestHeaders, requestMethod, requestURL) as Node.HTTP
 
-fromNodeRequest ∷ Int → Node.HTTP.Request → ServerRequest
+fromNodeRequest ∷ Int → Node.HTTP.Request → Request.Encodings.ServerRequest SimpleBody
 fromNodeRequest maxBodySize request = do
   let
     body =

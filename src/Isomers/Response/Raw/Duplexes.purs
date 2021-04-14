@@ -6,7 +6,7 @@ import Data.Foldable (foldMap)
 import Data.Tuple (uncurry)
 import Isomers.HTTP.ContentTypes (HtmlMime, TextMime)
 import Isomers.Response.Duplex (Duplex(..))
-import Isomers.Response.Duplex.Encodings (_string)
+import Isomers.Response.Encodings (_string)
 import Isomers.Response.Duplex.Parser (headers, readBody, status) as Parser
 import Isomers.Response.Duplex.Printer (reqHeader, status, string) as Printer
 import Isomers.Response.Raw.Types (RawClient(..), RawServer(..))

@@ -46,8 +46,7 @@ import Isomers.HTTP.ContentTypes (HtmlMime, _html, _json)
 import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
 import Isomers.Response.Duplex (Duplex(..), Duplex', withStatus)
 import Isomers.Response.Duplex (asJson, json, reqHeader, withHeaderValue, withStatus) as Duplex
-import Isomers.Response.Duplex.Encodings (ClientBodyRow, ClientHeaders, ClientResponse, ServerResponse) as Exports
-import Isomers.Response.Duplex.Encodings (ClientResponse, ServerResponse)
+import Isomers.Response.Encodings (ClientResponse, ServerResponse) as Encodings
 import Isomers.Response.Duplex.Parser (ParsingError)
 import Isomers.Response.Duplex.Parser (run) as Parser
 import Isomers.Response.Duplex.Printer (run) as Printer

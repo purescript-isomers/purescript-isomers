@@ -11,7 +11,7 @@ import Data.Tuple (Tuple(..), uncurry)
 import Data.Tuple.Nested (type (/\))
 import Global.Unsafe (unsafeEncodeURIComponent)
 import Isomers.Request.Duplex.Path (Parts) as Path
-import Isomers.Request.Types (ClientBody, ClientRequest)
+import Isomers.Request.Encodings (ClientBody, ClientRequest)
 import Network.HTTP.Types (HeaderName)
 
 type State =

@@ -5,6 +5,7 @@ import Prelude
 import Control.Monad.Except (catchError)
 import Data.Either (Either(..))
 import Data.Variant (Variant)
+import Debug.Trace (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Aff (message) as Aff
@@ -13,16 +14,17 @@ import Effect.Console (error) as Console
 import Heterogeneous.Folding (class HFoldlWithIndex)
 import Isomers.Node.Request (fromNodeRequest)
 import Isomers.Node.Response (writeNodeResponse)
-import Isomers.Node.Types (Root)
+import Isomers.Node.Types (NodeSimpleRequest)
 import Isomers.Server (RouterStep, ServerResponseWrapper)
 import Isomers.Server (router) as Server
+import Isomers.Spec (Spec)
 import Node.HTTP (ListenOptions, Request, Response, close, createServer, listen, responseAsStream, setStatusCode, setStatusMessage) as Node.HTTP
 import Node.Stream (end) as Node.Stream
 
 router ∷
   ∀ handlers ireq oreq resCodecs.
-  HFoldlWithIndex (RouterStep handlers resCodecs) Unit (Variant oreq) (Aff ServerResponseWrapper) ⇒
-  Root ireq (Variant oreq) { | resCodecs } →
+  HFoldlWithIndex (RouterStep handlers resCodecs) Unit oreq (Aff ServerResponseWrapper) ⇒
+  Spec NodeSimpleRequest ireq oreq { | resCodecs } →
   { | handlers } →
   Node.HTTP.Request →
   Node.HTTP.Response →
@@ -31,6 +33,7 @@ router spec handlers nreq nres = do
   let
     maxBodySize = 1000000
     req = fromNodeRequest maxBodySize nreq
+  -- traceM nreq
   Server.router spec handlers req >>= case _ of
     Right res → do
       liftEffect $ writeNodeResponse res nres
@@ -50,7 +53,7 @@ type ServerM = Effect (Effect Unit → Effect Unit)
 serve ::
   ∀ handlers ireq oreq resCodecs.
   HFoldlWithIndex (RouterStep handlers resCodecs) Unit (Variant oreq) (Aff ServerResponseWrapper) ⇒
-  Root ireq (Variant oreq) { | resCodecs } →
+  Spec NodeSimpleRequest ireq (Variant oreq) { | resCodecs } →
   { | handlers } →
   Node.HTTP.ListenOptions →
   Effect Unit →

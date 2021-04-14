@@ -18,12 +18,11 @@ import Isomers.HTTP.ContentTypes (JsonMime, HtmlMime, _html, _json)
 import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
 import Isomers.Response.Duplex (Duplex(..), Duplex', withStatus)
 import Isomers.Response.Duplex (asJson, header, json, reqHeader, withHeaderValue, withStatus) as Duplex
-import Isomers.Response.Duplex.Encodings (ClientBodyRow, ClientHeaders, ClientResponse, ServerResponse) as Exports
-import Isomers.Response.Duplex.Encodings (ClientResponse, ServerResponse)
 import Isomers.Response.Duplex.Parser (ParsingError)
 import Isomers.Response.Duplex.Parser (run, string) as Parser
 import Isomers.Response.Duplex.Printer (run, string) as Printer
 import Isomers.Response.Duplex.Variant (empty, injInto) as Duplex.Variant
+import Isomers.Response.Encodings (ClientResponse, ServerResponse) as Encodings
 import Isomers.Response.Okayish.Type (Okayish(..), Ok, _ok, fromVariant, toVariant)
 import Isomers.Response.Types (HtmlString(..))
 import Network.HTTP.Types (found302, hContentType, hLocation, movedPermanently301, notFound404, ok200)

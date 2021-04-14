@@ -3,7 +3,7 @@ module Isomers.Response.Raw.Types where
 import Prelude
 
 import Control.Comonad (class Comonad, class Extend)
-import Isomers.Response.Duplex.Encodings (ClientHeaders, ServerHeaders)
+import Isomers.Response.Encodings (ClientHeaders, ServerHeaders) as Encodings
 import Network.HTTP.Types (Status) as HTTP.Types
 
 -- | This kind of encoding is useful when we do rendering of the
@@ -17,7 +17,7 @@ import Network.HTTP.Types (Status) as HTTP.Types
 -- |
 newtype RawServer body = RawServer
   { body ∷  body
-  , headers ∷ ServerHeaders
+  , headers ∷ Encodings.ServerHeaders
   , status ∷ HTTP.Types.Status
   }
 
@@ -33,7 +33,7 @@ instance comonadRawServer ∷ Comonad RawServer where
 
 newtype RawClient body = RawClient
   { body ∷  body
-  , headers ∷ ClientHeaders
+  , headers ∷ Encodings.ClientHeaders
   , status ∷ HTTP.Types.Status
   }
 

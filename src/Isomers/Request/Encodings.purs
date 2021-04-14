@@ -1,4 +1,4 @@
-module Isomers.Request.Types where
+module Isomers.Request.Encodings where
 
 import Data.Argonaut (Json)
 import Data.ArrayBuffer.Types (ArrayBuffer)
@@ -21,10 +21,12 @@ type ClientRequest =
   { body ∷ Maybe ClientBody
   , headers ∷ Array (HeaderName /\ String)
   , method ∷ HTTP.Method.Method
-  , path :: String
+  , path ∷ String
   }
 
 -- | TODO:
+-- | * Drop this premature optimizing `Effect` wrapper from the body record
+-- |
 -- | I'm not sure how "generic" the current body representation
 -- | really is. If you find something simpler please let me know:
 -- |
@@ -34,13 +36,21 @@ type ClientRequest =
 -- | * We build a `Variant` from the fiber and the label.
 -- | * We pass the raw result to the parser result.
 -- |
+-- | * We have `Maybe` around the body `Variant` so we can enforce also
+-- |  an empty body requirement and create / parse "GET requests" on
+-- | the client. Even when we agree that we can share `String` body accross
+-- | the backends we want to rather preserve this `Maybe` as it gives as
+-- | a way to express clearly "empty" requirement and build server requests
+-- | on the client (in the router)... we can probably do this too by using
+-- | `pure ""`... so it is not definitive how it would end up.
+-- |
 -- | The wrapping `Effect` would make record build up lazy... in the future :-P
 
 type ServerRequest (body ∷ # Type) =
-  { body ∷ Either (Effect { | body }) (Variant body)
+  { body ∷ Either (Effect { | body }) (Maybe (Variant body))
   , headers ∷ Lazy (Map HeaderName String)
   , httpVersion ∷ String
-  , method :: String
-  , path :: String
+  , method ∷ String
+  , path ∷ String
   }
 

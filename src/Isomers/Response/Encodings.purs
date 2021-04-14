@@ -1,4 +1,4 @@
-module Isomers.Response.Duplex.Encodings where
+module Isomers.Response.Encodings where
 
 import Prelude
 
@@ -6,6 +6,7 @@ import Data.Argonaut (Json)
 import Data.ArrayBuffer.Types (ArrayBuffer)
 import Data.Map (Map)
 import Data.Maybe (Maybe)
+import Data.Newtype (class Newtype)
 import Effect.Aff (Aff, Fiber)
 import Network.HTTP.Types (Header, Status, HeaderName)
 import Node.Buffer (Buffer) as Node.HTTP
@@ -39,7 +40,9 @@ data NodeBody
 -- | In the case of node we can use `setHeader` or `setHeaders`.
 -- | I'm going to use one of these according to the number of values
 -- | in the array.
-type ServerHeaders = Array Header
+type ServerHeaders
+  = Array Header
+
 type ServerResponse
   = ( Base
         (Maybe NodeBody)
@@ -64,9 +67,11 @@ type ClientBodyRow
 type ClientHeaders
   = Map HeaderName String
 
-type ClientResponse
-  = Base
+newtype ClientResponse = ClientResponse
+  ( Base
       { | ClientBodyRow }
       ( headers ∷ ClientHeaders
       , url ∷ String
       )
+  )
+derive instance newtypeClientResponse ∷ Newtype ClientResponse _

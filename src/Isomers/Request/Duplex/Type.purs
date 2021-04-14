@@ -12,7 +12,7 @@ import Isomers.Request.Duplex.Parser (Parser, ParsingError)
 import Isomers.Request.Duplex.Parser (as, body, int, method, prefix, run, take) as Parser
 import Isomers.Request.Duplex.Printer (Printer)
 import Isomers.Request.Duplex.Printer (method, prefix, put, run) as Printer
-import Isomers.Request.Types (ClientRequest, ServerRequest)
+import Isomers.Request.Encodings (ClientRequest, ServerRequest)
 import Prim.Row (class Cons) as Row
 import Type.Prelude (class IsSymbol, SProxy)
 
@@ -61,7 +61,7 @@ prefix ∷ ∀ body i o. String → Duplex body i o → Duplex body i o
 prefix s (Duplex enc dec) = Duplex (Printer.prefix s <<< enc) (Parser.prefix s dec)
 
 string :: ∀ body. Duplex' body String -> Duplex' body String
-string = as show pure
+string = as identity pure
 
 segment :: ∀ body. Duplex' body String
 segment = Duplex Printer.put Parser.take

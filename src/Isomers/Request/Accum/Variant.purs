@@ -29,7 +29,7 @@ injInto l (Accum (Duplex prt prs) dst) (Accum (Duplex vPrt vPrs) vDst) = Accum (
   where
   vPrt' = vPrt # Variant.on l prt
 
-  vPrs' = map Variant.expand <$> vPrs <|> map (Variant.inj l) <$> prs
+  vPrs' = map Variant.expand <$> vPrs <|> compose (Variant.inj l) <$> prs
 
   vDst' = vDst
     # Variant.on l dst

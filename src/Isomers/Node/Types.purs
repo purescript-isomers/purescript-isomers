@@ -1,15 +1,12 @@
 module Isomers.Node.Types where
 
 import Isomers.Node.Request.Body (Str, Buff) as Body
-import Isomers.Request (ServerRequest) as Request
-import Isomers.Spec (Spec) as Spec
 import Type.Row (type (+))
 
-type Body = (Body.Buff + Body.Str + ())
+type BodyBase body = (Body.Buff + Body.Str + body)
 
-type Spec route ireq oreq res = Spec.Spec Body route ireq oreq res
+type SimpleBody = BodyBase ()
 
-type Root ireq oreq res = Spec {} ireq oreq res
+-- type NodeRequest body = Request.Types.ServerRequest (BodyBase body)
 
-type ServerRequest = Request.ServerRequest Body
-
+type NodeSimpleRequest = BodyBase ()

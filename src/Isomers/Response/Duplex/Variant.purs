@@ -4,16 +4,22 @@ import Prelude
 
 import Control.Alt ((<|>))
 import Control.Lazy (defer) as Control.Lazy
+import Control.Monad.Except (throwError)
+import Control.Monad.Reader (ask)
 import Data.Variant (Variant)
 import Data.Variant (case_, expand, inj, on) as Variant
+import Global.Unsafe (unsafeStringify)
 import Isomers.Response.Duplex.Parser (Parser(..))
+import Isomers.Response.Duplex.Parser (ParsingError(..)) as Parser
 import Isomers.Response.Duplex.Type (Duplex(..))
-import Partial.Unsafe (unsafeCrashWith)
 import Prim.Row (class Cons, class Union) as Row
 import Type.Prelude (class IsSymbol, SProxy)
 
 empty ∷ ∀ ct. Duplex ct (Variant ()) (Variant ())
-empty = Duplex Variant.case_ (Control.Lazy.defer \_ → Parser $ unsafeCrashWith "Isomers.Response.Duplex.Variant.empty")
+empty = Duplex Variant.case_ $ Control.Lazy.defer \_ → Parser $ do
+  state ← ask
+  throwError (Parser.Expected "Isomers.Response.Duplex.Variant.empty" (unsafeStringify state))
+
 
 -- | You can use this `inj` in a similar "style" as `Variant.on` can be used.
 -- |
@@ -41,5 +47,5 @@ injInto ∷
 injInto l (Duplex prt prs) (Duplex vPrt vPrs) = Duplex vPrt' vPrs'
   where
   vPrt' = vPrt # Variant.on l prt
-  vPrs' = (Variant.expand <$> vPrs) <|> (Variant.inj l <$> prs)
+  vPrs' = Variant.inj l <$> prs <|> Variant.expand <$> vPrs
 

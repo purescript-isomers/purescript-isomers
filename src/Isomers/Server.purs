@@ -8,18 +8,20 @@ import Data.Symbol (class IsSymbol, SProxy)
 import Data.Variant (Variant)
 import Effect.Aff (Aff)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
-import Isomers.Request (ServerRequest)
-import Isomers.Request.Accum (parse) as Request.Accum
+import Isomers.Request.Encodings (ServerRequest) as Request.Encodings
+import Isomers.Request.Duplex (parse) as Request.Duplex
 import Isomers.Response (Duplex, print) as Response
-import Isomers.Response.Duplex.Encodings (ServerResponse)
+import Isomers.Response.Encodings (ServerResponse) as Response.Encodings
 import Isomers.Spec (Spec(..))
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
 
 type Handler req res = req → Aff res
 
--- TODO: Drop wrapper when on purs-0.14.0
-newtype ServerResponseWrapper = ServerResponseWrapper ServerResponse
+-- | TODO: Drop wrapper when on purs-0.14.0
+-- | because it is just an for quite a large
+-- | `ServerResponse` raw `Record`.
+newtype ServerResponseWrapper = ServerResponseWrapper Response.Encodings.ServerResponse
 
 derive instance newtypeServerResponseWrapper ∷ Newtype ServerResponseWrapper _
 
@@ -92,16 +94,16 @@ data RoutingError = NotFound
 
 router ∷
   ∀ body handlers ireq oreq resCodecs.
-  HFoldlWithIndex (RouterStep handlers resCodecs) Unit (Variant oreq) (Aff ServerResponseWrapper) ⇒
-  Spec body {} ireq (Variant oreq) { | resCodecs } →
+  HFoldlWithIndex (RouterStep handlers resCodecs) Unit oreq (Aff ServerResponseWrapper) ⇒
+  Spec body ireq oreq { | resCodecs } →
   { | handlers } →
-  ServerRequest body →
-  Aff (Either RoutingError ServerResponse)
+  Request.Encodings.ServerRequest body →
+  Aff (Either RoutingError Response.Encodings.ServerResponse)
 router spec@(Spec { request, response }) handlers = do
   let
     handle = hfoldlWithIndex (RouterStep handlers response) unit
 
-  \raw → Request.Accum.parse request raw {} >>= case _ of
+  \raw → Request.Duplex.parse request raw >>= case _ of
     Right req → (Right <<< un ServerResponseWrapper) <$> handle req
     Left err → pure $ Left NotFound
 

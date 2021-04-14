@@ -5,7 +5,7 @@ import Prelude
 import Data.Either (Either)
 import Data.Profunctor (class Profunctor)
 import Effect.Aff (Aff)
-import Isomers.Response.Duplex.Encodings (ClientResponse, ServerResponse) as Response.Duplex.Encodings
+import Isomers.Response.Encodings (ClientResponse, ServerResponse) as Encodings
 import Isomers.Response.Duplex.Parser (Parser, ParsingError)
 import Isomers.Response.Duplex.Parser (run) as Parser
 import Isomers.Response.Duplex.Printer (Printer)
@@ -50,9 +50,9 @@ instance profunctor ∷ Profunctor (Duplex ct) where
 
 type Duplex' ct o = Duplex ct o o
 
-decode ∷ ∀ ct i o. Duplex ct i o → Response.Duplex.Encodings.ClientResponse → Aff (Either ParsingError o)
+decode ∷ ∀ ct i o. Duplex ct i o → Encodings.ClientResponse → Aff (Either ParsingError o)
 decode (Duplex enc dec) w = Parser.run dec w
 
-encode ∷ ∀ ct i o. Duplex ct i o → i → Response.Duplex.Encodings.ServerResponse
+encode ∷ ∀ ct i o. Duplex ct i o → i → Encodings.ServerResponse
 encode (Duplex enc _) = Printer.run <<< enc
 

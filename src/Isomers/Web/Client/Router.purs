@@ -1,129 +1,198 @@
+-- | I'm not very proud of the current implementation
+-- |
 module Isomers.Web.Client.Router where
 
 import Prelude
-
-import Control.Monad.Except (throwError)
+import Control.Bind.Indexed (ibind)
 import Control.Monad.Free.Trans (liftFreeT)
-import Data.Either (Either(..))
-import Data.Lens (view)
+import Data.Either (Either(..), hush)
+import Data.Identity (Identity(..))
+import Data.Lazy (defer) as Lazy
+import Data.Map (empty) as Map
 import Data.Maybe (Maybe(..))
-import Data.Tuple.Nested ((/\))
 import Data.Variant (Variant)
-import Debug.Trace (traceM)
 import Effect (Effect)
+import Effect.Aff (Aff)
 import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
-import Effect.Exception (error)
 import Effect.Ref (new, read, write) as Ref
 import Heterogeneous.Folding (class HFoldlWithIndex)
-import Isomers.HTTP (Exchange(..)) as HTTP
-import Isomers.Request (Duplex') as Request
-import Isomers.Request.Duplex (print) as Request.Duplex
+import Isomers.Client (RequestBuildersStep)
+import Isomers.Client (requestBuilders) as Client
+import Isomers.Client.Fetch (HostInfo)
+import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..))
+import Isomers.Request (Duplex) as Request
+import Isomers.Request.Duplex (parse, print) as Request.Duplex
+import Isomers.Spec (Spec(..))
+import Isomers.Web.Client.Render (class FoldRender, ContractRequest, ExpandRequest, contractRequest, expandRequest, foldRender)
+import Isomers.Web.Types (WebSpec(..))
 import React.Basic (JSX)
 import Routing.PushState (makeInterface) as PushState
-import Wire.React.Router (_Transition, continue, makeRouter)
-import Wire.React.Router.Control (Command(..), Resolved, Router(..), Transition, Transitioning) as Router
+import Type.Prelude (Proxy(..))
+import Wire.React.Router (Transition, continue, makeRouter)
+import Wire.React.Router.Control (Command(..), Router(..), Transition(..), Transitioning, Resolved) as Router
 import Wire.Signal (Signal)
 import Wire.Signal (create) as Signal
 
--- | TODO:
--- | Introduce a bit more sophisticated
--- | representation for a request - it is
--- | useful to know what method we are using and
--- | what kind of response do we expect
--- | (by using `Accept` header value).
+-- | TODO: this is somewhat unsafe because we don't preserve any HTTP semantics
+-- | on the requsts level at the moment. We would like to probably
+-- | have something like this here:
+-- |
+-- | HTTPRequest (method ∷ Method ("GET ::: SList), headers ∷ HNil) req ⇒
+-- |
+-- | so we can be sure that a give request can be safely dumped into just URL
+unsafePrint ∷ ∀ body ireq oreq. Request.Duplex body ireq oreq → ireq → String
+unsafePrint requestDuplex request = _.path $ Request.Duplex.print requestDuplex request
+
+parse ∷
+  ∀ body ireq oreq rnd rndReq.
+  HFoldlWithIndex (ContractRequest oreq) (Variant oreq → Maybe (Variant ())) rnd (Variant oreq → Maybe (Variant rndReq)) ⇒
+  Request.Duplex body (Variant ireq) (Variant oreq) → rnd → String → Aff (Maybe (Variant rndReq))
+parse requestDuplex renderers = do
+  let
+    parsePath path =
+      Request.Duplex.parse requestDuplex
+        $ ( { path
+            , body: Right Nothing
+            , headers: Lazy.defer \_ → Map.empty
+            , httpVersion: "HTTP/1.1"
+            , method: "GET"
+            }
+          )
+  map (contractRequest (Proxy ∷ Proxy (Variant oreq)) renderers <=< hush) <<< parsePath
+
+data AffRoute req res
+  = Parsing String
+  | Fetching req
+  | Fetched req res
+
+webRequest ∷
+  ∀ body rnd ireq oreq rndReq rndReqBuilders res.
+  HFoldlWithIndex (ContractRequest oreq) (Variant oreq → Maybe (Variant ())) rnd (Variant oreq → Maybe (Variant rndReq)) ⇒
+  HFoldlWithIndex (RequestBuildersStep (Variant rndReq) (Variant rndReq)) {} (Proxy (Variant rndReq)) rndReqBuilders ⇒
+  WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res →
+  rndReqBuilders
+webRequest webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, response }), render: HJust render }) = Client.requestBuilders (Proxy ∷ Proxy (Variant rndReq))
+
+type Defaults doc
+  = { doc ∷ doc }
+
 type RouterInterface req
-  = { navigate :: Variant req -> Effect Unit
-    , print ∷ Variant req → String
-    , redirect :: Variant req -> Effect Unit
-    , submit :: Variant req -> Effect Unit
+  = { navigate ∷ req → Effect Unit
+    , redirect ∷ req → Effect Unit
+    , component ∷ JSX
     }
 
--- | TODO: this is unsafe because we are missing
--- | request tagging at the moment.
-unsafePrint ∷ ∀ body req. Request.Duplex' body req → HTTP.Exchange req String → String
-unsafePrint dpl (HTTP.Exchange request res) = do
-  let
-    { path } = Request.Duplex.print dpl request
-  path
+type NavigationInterface req reqBuilders
+  = { navigate ∷ req → Effect Unit
+    , request ∷ reqBuilders
+    , redirect ∷ req → Effect Unit
+    }
 
--- router ∷
---   ∀ doc req res rnd.
---   HFoldlWithIndex (RenderFolding (RouterInterface req) req res rnd) Unit (Variant req) (Maybe (Either FetchError (Response String)) → doc) ⇒
---   Spec.Raw req res rnd →
---   Maybe (Either FetchError (Response String)) →
---   Effect { component ∷ JSX, signal ∷ Signal doc, interface ∷ RouterInterface req }
--- router spec@(Spec.Raw { codecs }) initialResponse = do
---   initiaRef ← Ref.new initialResponse
--- 
---   let
---     parse ∷ ∀ a. String → Either _ (Isomers.HTTP.Exchange (Variant req) a)
---     parse path =
---       Request.Duplex.parse codecs.request { method: "GET", headers: mempty, path, body: "" }
---         <#> \request →
---             Isomers.HTTP.Exchange request Nothing
--- 
--- 
---   pushStateInterface ← PushState.makeInterface
---   currState ← pushStateInterface.locationState
---   case parse currState.path of
---     Left err → throwError (error $ "Error parsing initial path: " <> show currState.path)
---     Right (Isomers.HTTP.Exchange req _) → do
---       let
---         initial = Isomers.HTTP.Exchange req Nothing
--- 
---       { signal, modify } ← Signal.create initial
---       let
---         render = Client.Render.render spec
--- 
---         onRoute ∷ Isomers.HTTP.Exchange (Variant req) String → Router.Router (Isomers.HTTP.Exchange (Variant req) String) Router.Transitioning Router.Resolved Unit
---         onRoute (Isomers.HTTP.Exchange request Nothing) =
---           Router.Router do
---             p ← liftEffect $ do
---               p ← Ref.read initiaRef
---               Ref.write Nothing initiaRef
---               pure p
--- 
---             case p of
---               Just res → liftFreeT $ Router.Override $ HTTP.Exchange request (Just res)
---               otherwise → do
---                 ex ← liftAff $ Client.Fetch.exchange codecs.request request
---                 liftFreeT $ Router.Override ex
--- 
---         onRoute (Isomers.HTTP.Exchange request (Just resp)) = continue
--- 
---         onTransition ∷ Router.Transition (Isomers.HTTP.Exchange (Variant req) String) → Effect Unit
---         onTransition transition = modify (const $ view _Transition transition)
---       interface@{ component, navigate, redirect, submit } ←
---         makeRouter
---           pushStateInterface
---           { parse
---           , print: print codecs.request
---           , onRoute
---           , onTransition
---           }
---       let
---         redirect' ∷ Variant req → Effect Unit
---         redirect' route = redirect (Isomers.HTTP.Exchange route Nothing)
--- 
---         navigate' ∷ Variant req → Effect Unit
---         navigate' route = navigate (Isomers.HTTP.Exchange route Nothing)
--- 
---         submit' ∷ Variant req → Effect Unit
---         submit' route = submit (Isomers.HTTP.Exchange route Nothing)
--- 
---         print' ∷ Variant req → String
---         print' route = print codecs.request (Isomers.HTTP.Exchange route Nothing)
--- 
---         interface' = { navigate: navigate', print: print', redirect: redirect', submit: submit' }
--- 
---         signal' = signal <#> \exchange →
---           let
---             jsx = render (interface' /\ exchange)
---             x = do
---               traceM "Debugging jsx:"
---               traceM jsx
---               Nothing
---           in
---             jsx
---       pure { component, signal: signal', interface: interface' }
+webRouter ::
+  forall ireq oreq body rnd rndReq rndReqBuilders doc res.
+  FoldRender (WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res) (NavigationInterface (Variant rndReq) rndReqBuilders) (Variant rndReq) (Aff doc) =>
+  HFoldlWithIndex (ContractRequest oreq) (Variant oreq → Maybe (Variant ())) rnd (Variant oreq → Maybe (Variant rndReq)) ⇒
+  HFoldlWithIndex (ExpandRequest ireq) (Variant () → Variant ireq) rnd (Variant rndReq → Variant ireq) ⇒
+  HFoldlWithIndex (RequestBuildersStep (Variant rndReq) (Variant rndReq)) {} (Proxy (Variant rndReq)) rndReqBuilders ⇒
+  Defaults doc ->
+  WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res ->
+  HostInfo →
+  Aff
+    ( Either
+        String
+        { component ∷ JSX
+        , navigate ∷ Variant rndReq → Effect Unit
+        , redirect ∷ Variant rndReq → Effect Unit
+        , signal ∷ Signal doc
+        }
+    )
+webRouter defaults webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, response }), render: HJust renderers }) hostInfo = do
+  let
+    render ∷ Variant rndReq → NavigationInterface (Variant rndReq) rndReqBuilders → Aff doc
+    render = foldRender (Proxy ∷ Proxy (NavigationInterface (Variant rndReq) rndReqBuilders)) webSpec hostInfo
+
+    parsePure ∷ String → Identity (AffRoute (Variant rndReq) doc)
+    parsePure url = Identity (Parsing url)
+
+    parseRoute url = parse reqDpl renderers url
+
+    print ∷ AffRoute (Variant rndReq) doc → String
+    print (Fetched req _) = unsafePrint reqDpl (expandRequest (Proxy ∷ Proxy (Variant ireq)) renderers req)
+
+    print (Fetching req) = unsafePrint reqDpl (expandRequest (Proxy ∷ Proxy (Variant ireq)) renderers req)
+
+    print (Parsing url) = url
+  pushStateInterface ← liftEffect PushState.makeInterface
+  liftEffect pushStateInterface.locationState >>= _.path >>> parseRoute
+    >>= case _ of
+        Nothing → pure $ Left "Invalid initial route"
+        Just initialRoute →
+          liftEffect do
+            -- | I'm not able to render out of the box because...
+            -- | I need a router interface for rendering to work :-)
+            { signal, modify: modifySignal } ← Signal.create $ defaults.doc
+            let
+              onRoute ∷
+                RouterInterface (AffRoute (Variant rndReq) doc) →
+                AffRoute (Variant rndReq) doc →
+                Router.Router (AffRoute (Variant rndReq) doc) Router.Transitioning Router.Resolved Unit
+              onRoute self route = do
+                let
+                  self' =
+                    { navigate: self.navigate <<< Fetching
+                    , redirect: self.redirect <<< Fetching
+                    , request: webRequest webSpec
+                    }
+                case route of
+                  Parsing url →
+                    Router.Router do
+                      liftAff (parseRoute url)
+                        >>= case _ of
+                            Just req → do
+                              doc ← liftAff $ render req self'
+                              liftFreeT $ Router.Override $ Fetched req doc
+                            Nothing → pure unit
+                  Fetching req →
+                    Router.Router do
+                      doc ← liftAff $ render req self'
+                      liftFreeT $ Router.Override $ Fetched req doc
+                  Fetched _ _ → continue
+
+              onTransition ∷ Transition (AffRoute (Variant rndReq) doc) → Effect Unit
+              onTransition = case _ of
+                Router.Transitioning _ _ → pure unit
+                Router.Resolved _ (Parsing _) → pure unit
+                Router.Resolved _ (Fetching req) → pure unit
+                Router.Resolved _ (Fetched req doc) → do
+                  modifySignal (const $ doc)
+            (interface ∷ (RouterInterface (AffRoute (Variant rndReq) doc))) ←
+              makeRouter'
+                pushStateInterface
+                { onRoute
+                , onTransition
+                , parse: parsePure
+                , print
+                }
+            pure
+              $ Right
+                  { component: interface.component
+                  , navigate: interface.navigate <<< Fetching
+                  , redirect: interface.redirect <<< Fetching
+                  , signal
+                  }
+  where
+  -- | `makeRouter` version which passes `self` reference to the `onRoute` function
+  makeRouter' interface opts = do
+    ref ← Ref.new { component: mempty, navigate: const $ pure unit, redirect: const $ pure unit }
+    let
+      onRoute = \route → do
+        router ← Router.Router $ liftEffect $ Ref.read ref
+        opts.onRoute router route
+        where
+        bind = ibind
+
+      opts' = opts { onRoute = onRoute }
+    router ← makeRouter interface opts'
+    Ref.write router ref
+    pure router

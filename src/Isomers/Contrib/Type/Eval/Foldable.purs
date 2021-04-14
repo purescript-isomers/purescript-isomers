@@ -22,6 +22,11 @@ type SomeWithIndex (f ∷ Type → Type → TypeExpr) =
 
 -- | Local Foldr' which fallsback to the original one
 -- | but allows us to add more instances.
+-- |
+-- | TODO: Drop `'` prime from the name because it is
+-- | misleading - we don't have a strict foldr here
+-- | but we have strict Foldl below which is marked
+-- | by "usual" prime.
 foreign import data Foldr' ∷ (Type → TypeExpr → TypeExpr) → TypeExpr → Type → TypeExpr
 
 

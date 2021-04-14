@@ -29,14 +29,14 @@ import Effect.Aff (Aff, Fiber, joinFiber)
 import Effect.Class (liftEffect)
 import Isomers.Contrib.Data.Variant (tag) as Contrib.Data.Variant
 import Isomers.Request.Duplex.Path (Parts, parse) as Path
-import Isomers.Request.Types (ServerRequest)
+import Isomers.Request.Encodings (ServerRequest)
 import Network.HTTP.Types (HeaderName)
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
 import Type.Prelude (class IsSymbol, SProxy, reflectSymbol)
 
 type State (body ∷ # Type) =
-  { body ∷ Either (Effect { | body }) (Variant body)
+  { body ∷ Either (Effect { | body }) (Maybe (Variant body))
   , headers ∷ Lazy (Map HeaderName String)
   , httpVersion ∷ String
   , method :: String
@@ -184,13 +184,20 @@ body l = Chomp \state -> case state.body of
     b ← joinFiber fb
     let
       vb = Variant.inj l fb
-      state' = state { body = Right vb }
+      state' = state { body = Right (Just vb) }
     pure $ Success state' b
-  Right b → Variant.on
+  Right (Just b) → Variant.on
     l
     (map (Success state) <<< joinFiber)
     (Variant.default (pure $ Fail $ Expected (reflectSymbol l) (Contrib.Data.Variant.tag b)))
     b
+  Right Nothing → pure $ Fail $ Expected (reflectSymbol l) ("Empty body")
+
+-- | TODO: We should be able to constraint the value of the body
+-- | to empty when we provide some common layer for body parsing
+-- | which can be considered portable like `String` ;-)
+-- | Then we can provide this helper.
+-- emptyBody = ...
 
 take :: ∀ m. Parser m String
 take =

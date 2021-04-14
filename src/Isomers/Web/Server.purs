@@ -4,6 +4,8 @@ import Prelude
 
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
+import Data.Tuple (Tuple(..))
+import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff (Aff)
 import Heterogeneous.Folding (class Folding) as Heterogeneous
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
@@ -14,8 +16,9 @@ import Isomers.HTTP.ContentTypes (HtmlMime, _html)
 import Isomers.Response.Raw (RawServer(..))
 import Isomers.Response.Types (HtmlString(..))
 import Isomers.Server (router) as Server
-import Isomers.Web.Spec.Builder (Tagged(..))
-import Isomers.Web.Spec.Type (Spec(..))
+import Isomers.Web.Builder (Tagged(..))
+import Isomers.Web.Renderer (Renderer(..))
+import Isomers.Web.Types (WebSpec(..))
 import Prim.Row (class Cons, class Lacks) as Row
 import Record (get, insert, set) as Record
 import Type.Equality (class TypeEquals)
@@ -23,49 +26,48 @@ import Type.Equality (to) as Type.Equality
 import Type.Prelude (class IsSymbol, SProxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
-data RenderHandlerStep = RenderHandlerStep
+newtype RenderHandlerStep router = RenderHandlerStep router
 
 instance foldingRenderHandlerStep ∷
   ( Row.Cons ix { | subhandlers } handlers_ handlers
   , IsSymbol ix
-  , HFoldlWithIndex RenderHandlerStep { | subhandlers } { | rec } { | subhandlers' }
+  , HFoldlWithIndex (RenderHandlerStep router) { | subhandlers } { | rec } { | subhandlers' }
   , Row.Cons ix { | subhandlers' } handlers_ handlers'
   ) ⇒
-  FoldingWithIndex RenderHandlerStep (SProxy ix) { | handlers } { | rec } { | handlers' } where
-  foldingWithIndex RenderHandlerStep ix handlers rec = do
+  FoldingWithIndex (RenderHandlerStep router) (SProxy ix) { | handlers } { | rec } { | handlers' } where
+  foldingWithIndex step ix handlers rec = do
     let
       subhandlers ∷ { | subhandlers }
       subhandlers = Record.get ix handlers
-      subhandlers' = hfoldlWithIndex RenderHandlerStep subhandlers rec
+      subhandlers' = hfoldlWithIndex step subhandlers rec
     Record.set ix subhandlers' handlers
 
 -- | We should parametrize this by "doc"
 instance foldingRenderHandlerStepLeaf ∷
   ( Row.Cons ix { | mimeHandlers } handlers_ handlers
-  , Row.Cons sourceMime (req → m res) mimeHandlers_ mimeHandlers
+  , Row.Cons sourceMime (req → Aff res) mimeHandlers_ mimeHandlers
   , Row.Lacks HtmlMime mimeHandlers
-  , Row.Cons HtmlMime (req → m (RawServer doc)) mimeHandlers mimeHandlers'
-  -- | Why I'm not able to use mimeHandlers' here and below??
-  , Row.Cons ix { "text/html" ∷ req → m (RawServer doc) | mimeHandlers } handlers_ handlers'
-  , TypeEquals f (Exchange req res → RawServer doc)
-  , Functor m
+  , Row.Cons HtmlMime (req → Aff (RawServer doc)) mimeHandlers mimeHandlers'
+  -- | Why I'm not able to use mimeHandlers' type var here and below. Why??
+  , Row.Cons ix { "text/html" ∷ req → Aff (RawServer doc) | mimeHandlers } handlers_ handlers'
+  , TypeEquals f (Renderer router req res (RawServer doc))
   , IsSymbol ix
   , IsSymbol sourceMime
   ) ⇒
-  FoldingWithIndex RenderHandlerStep (SProxy ix) { | handlers } (Tagged sourceMime f) { | handlers' } where
-  foldingWithIndex RenderHandlerStep ix handlers (Tagged render) = do
+  FoldingWithIndex (RenderHandlerStep router) (SProxy ix) { | handlers } (Tagged sourceMime f) { | handlers' } where
+  foldingWithIndex (RenderHandlerStep router) ix handlers (Tagged render) = do
     let
       mimeHandlers ∷ { | mimeHandlers }
       mimeHandlers = Record.get ix handlers
 
-      sourceHandler ∷ req → m res
+      sourceHandler ∷ req → Aff res
       sourceHandler = Record.get (SProxy ∷ SProxy sourceMime) mimeHandlers
 
-      f' ∷ Exchange req res → RawServer doc
-      f' = Type.Equality.to render
+      f' ∷ router /\ Exchange req res → RawServer doc
+      f' = let Renderer f = Type.Equality.to render in f
 
-      htmlHandler ∷ req → m (RawServer doc)
-      htmlHandler req = f' <<< Exchange req <<< Just <<< Right <$> (sourceHandler req ∷ m res)
+      htmlHandler ∷ req → Aff (RawServer doc)
+      htmlHandler req = f' <<< Tuple router <<< Exchange req <<< Just <<< Right <$> (sourceHandler req ∷ Aff res)
 
       -- | Here there is also a problem
       -- | mimeHandlers' ∷ { | mimeHandlers' }
@@ -76,5 +78,5 @@ instance foldingRenderHandlerStepLeaf ∷
 
     handlers'
 
-renderToApi spec@(Spec { api, renderers: HJust renderers }) handlers = do
-  hfoldlWithIndex RenderHandlerStep handlers renderers
+renderToApi (WebSpec { render: HJust render, spec }) handlers router = do
+  hfoldlWithIndex (RenderHandlerStep router) handlers render
