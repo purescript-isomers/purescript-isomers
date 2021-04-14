@@ -3,6 +3,7 @@ module Isomers.Spec.Builder where
 import Prelude
 
 import Data.Bifunctor (lmap)
+import Data.Homogeneous (class SListRow)
 import Data.Tuple.Nested ((/\), type (/\))
 import Data.Variant (Variant)
 import Heterogeneous.Folding (class HFoldl)
@@ -16,7 +17,8 @@ import Isomers.Request (Accum, Duplex', Parser, Printer(..)) as Request
 import Isomers.Request.Accum (insert, unifyRoute) as Request.Accum
 import Isomers.Request.Accum.Generic (class HFoldlAccumVariant)
 import Isomers.Response (Duplex) as Response
-import Isomers.Spec.Accept (RequestMediaPatternParser(..), RequestPrinter(..), ExtractRoute(..), ResponseContentType(..), ResponseContentTypeRecord(..)) as Accept
+import Isomers.Spec.Accept (ContentTypes)
+import Isomers.Spec.Accept (RequestMediaPatternParser(..), ResponseContentType(..), ResponseContentTypeRecord(..)) as Accept
 import Isomers.Spec.Accept (accumSpec) as Spec.Accept
 import Isomers.Spec.Method (MethodStep)
 import Isomers.Spec.Method (accumSpec) as Spec.Method
@@ -45,9 +47,9 @@ class Builder a body route ireq oreq res | a → body ireq oreq res where
 -- | Build an accept spec from request duplex and a hlist of response duplexes.
 instance builderHListToAcceptSpec ∷
   ( HFoldl Accept.ResponseContentTypeRecord {} (h : t) res
+  , Eval (ContentTypes cts) (SLProxy sl)
+  , SListRow sl ireq ivReq
   , HMap Accept.ResponseContentType (h : t) cts
-  , HFoldl (Accept.ExtractRoute ireq route) (Variant () → route) cts (Variant ivReq → route)
-  , HFoldl (Accept.RequestPrinter ireq) (Variant () → Request.Printer) cts (Variant ivReq → Request.Printer)
   , HFoldl
       (Accept.RequestMediaPatternParser body route oreq)
       (MediaPattern → Request.Parser body (route → Variant ()))

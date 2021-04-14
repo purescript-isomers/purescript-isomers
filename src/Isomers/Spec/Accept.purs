@@ -3,30 +3,35 @@ module Isomers.Spec.Accept where
 import Prelude
 
 import Control.Alt ((<|>))
+import Control.Comonad (extract) as Comonad
 import Data.Array (uncons) as Array
 import Data.Foldable (foldl)
+import Data.Homogeneous (class SListRow)
+import Data.Homogeneous.Variant (Homogeneous, fromSList) as Homogeneous.Variant
 import Data.Lazy (force) as Lazy
 import Data.Map (lookup) as Map
 import Data.Maybe (Maybe(..))
 import Data.MediaType (MediaType(..))
 import Data.Tuple.Nested ((/\), type (/\))
 import Data.Variant (Variant)
-import Data.Variant (case_, expand, inj, on) as Variant
+import Data.Variant (expand, inj) as Variant
 import Global.Unsafe (unsafeStringify)
 import Heterogeneous.Folding (class Folding, class HFoldl, hfoldl)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
+import Isomers.Contrib.Type.Eval.Foldable (Foldr')
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern(..), parse) as Accept
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern)
 import Isomers.HTTP.Request.Headers.Accept.MediaPattern (matchedBy, print) as Accept.MediaPattern
 import Isomers.Request (Accum(..), Duplex(..), Parser, Printer) as Request
 import Isomers.Request.Duplex.Parser (Parser(..), ParsingError(..), Result(..)) as Request.Duplex.Parser
 import Isomers.Request.Duplex.Parser (runParser) as Request.Parser
-import Isomers.Request.Duplex.Printer (header) as Request.Duplex.Printer
 import Isomers.Response (Duplex) as Response
 import Isomers.Spec.Types (AccumSpec(..))
 import Network.HTTP.Types (hAccept)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
 import Record (insert) as Record
+import Record.Extra (type (:::), SLProxy, SNil)
+import Type.Eval (class Eval, Lift, kind TypeExpr)
 import Type.Prelude (class IsSymbol, class TypeEquals, SProxy(..), reflectSymbol)
 
 -- | Fold from `Response.Duplex`es a `Record`
@@ -117,9 +122,9 @@ parserBuilder mediaType@(MediaType mtStr) prs = do
 -- | XXX: I'm not sure why "`class` alias" is not fully working
 -- | and I have to put here `RowSList` too.
 requestAccum ∷
-  ∀ body ireq route oreq cts ivReq ovReq.
-  HFoldl (ExtractRoute ireq route) (Variant () → route) cts (Variant ivReq → route) ⇒
-  HFoldl (RequestPrinter ireq) (Variant () → Request.Printer) cts (Variant ivReq → Request.Printer) ⇒
+  ∀ body ireq route oreq cts ivReq ovReq sl.
+  Eval (ContentTypes cts) (SLProxy sl) ⇒
+  SListRow sl ireq ivReq ⇒
   HFoldl
     (RequestMediaPatternParser body route oreq)
     (MediaPattern → Request.Parser body (route → Variant ()))
@@ -158,23 +163,39 @@ requestAccum (Request.Accum (Request.Duplex prt prs) dst) cts = do
         Request.Parser.runParser state (foldl (<|>) ps.head ps.tail)
 
     prt' ∷ Variant ivReq → Request.Printer
-    prt' i = hfoldl (RequestPrinter prt) (Variant.case_ ∷ Variant () → Request.Printer) cts i
+    prt' i = do
+      let
+        h ∷ Homogeneous.Variant.Homogeneous sl ireq
+        h = Homogeneous.Variant.fromSList i
+      prt <<< Comonad.extract $ h
 
     dst' ∷ Variant ivReq → route
-    dst' i = hfoldl (ExtractRoute (dst ∷ ireq → route)) (Variant.case_ ∷ Variant () → route) cts i
+    dst' i = do
+      let
+        h ∷ Homogeneous.Variant.Homogeneous sl ireq
+        h = Homogeneous.Variant.fromSList i
+      dst <<< Comonad.extract $ h
   Request.Accum (Request.Duplex prt' prs') dst'
 
 responsePrinters :: forall lst rec. HFoldl ResponseContentTypeRecord {} lst rec => lst -> rec
 responsePrinters lst = (hfoldl ResponseContentTypeRecord {} $ lst)
 
+foreign import data DoSCons ∷ Type → TypeExpr → TypeExpr
+
+instance evalDoSCons ∷
+  ( Eval t (SLProxy t')) ⇒
+  Eval (DoSCons (SProxy h) t) (SLProxy (h ::: t'))
+
+type ContentTypes cts = (Foldr' DoSCons (Lift (SLProxy SNil))) cts
+
 -- | From a pair of request / response duplexes and a hlist of response codecs create a spec which
 -- | labels everything by content types.
 accumSpec ∷
-  ∀ body res resLst route ireq oreq cts ivReq ovReq.
+  ∀ body res resLst route ireq oreq cts sl ivReq ovReq.
   HFoldl ResponseContentTypeRecord {} resLst res ⇒
   HMap ResponseContentType resLst cts ⇒
-  HFoldl (ExtractRoute ireq route) (Variant () → route) cts (Variant ivReq → route) ⇒
-  HFoldl (RequestPrinter ireq) (Variant () → Request.Printer) cts (Variant ivReq → Request.Printer) ⇒
+  Eval (ContentTypes cts) (SLProxy sl) ⇒
+  SListRow sl ireq ivReq ⇒
   HFoldl
     (RequestMediaPatternParser body route oreq)
     (MediaPattern → Request.Parser body (route → Variant ()))
@@ -190,41 +211,4 @@ accumSpec (req /\ res) = do
     { request: requestAccum req cts
     , response: responsePrinters res
     }
-
--- | This folding builds a request printer for a homogeneous
--- | `Variant` from a single printing function.
--- | I should just use _homogeneous_ here.
-newtype RequestPrinter i
-  = RequestPrinter (i → Request.Printer)
-
-instance foldingRequestPrinter ∷
-  ( IsSymbol contentType
-  , Row.Cons contentType req vReq_ vReq
-  ) ⇒
-  Folding
-    (RequestPrinter req)
-    (Variant vReq_ → Request.Printer)
-    (SProxy contentType)
-    (Variant vReq → Request.Printer) where
-  folding (RequestPrinter prt) vprt ct =
-    Variant.on ct (append (Request.Duplex.Printer.header hAccept (reflectSymbol ct)) <<< prt) vprt
-
--- | `Request.Accum` contains an deconstruting helper function
--- | which provide a way to compose partial printers.
--- | We fold over this access homogeneous `Variant` (I wasn't able to use
--- | `purescript-homogeneous` because of some inference problems)
--- | to build this extraction function.
-data ExtractRoute ireq route
-  = ExtractRoute (ireq → route)
-
-instance foldingExtractRoute ∷
-  ( IsSymbol contentType
-  , Row.Cons contentType ireq vReq_ vReq
-  ) ⇒
-  Folding
-    (ExtractRoute ireq route)
-    (Variant vReq_ → route)
-    (SProxy contentType)
-    (Variant vReq → route) where
-  folding (ExtractRoute route) vprt ct = Variant.on ct route vprt
 

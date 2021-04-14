@@ -2,55 +2,23 @@ module Isomers.Client where
 
 import Prelude
 
-import Control.Bind.Indexed (ibind)
-import Control.Comonad (extract) as Comonad
-import Control.Monad.Except (throwError)
-import Control.Monad.Free.Trans (liftFreeT)
 import Data.Bifunctor (lmap)
-import Data.Either (Either(..), hush)
-import Data.Identity (Identity(..))
-import Data.Lazy (defer) as Lazy
-import Data.Lens (view)
-import Data.Map (empty) as Map
-import Data.Maybe (Maybe(..))
+import Data.Either (Either(..))
 import Data.Newtype (class Newtype, unwrap, wrap)
-import Data.Tuple.Nested ((/\))
 import Data.Variant (Variant)
-import Data.Variant (case_, inj) as Variant
-import Debug.Trace (traceM)
-import Effect (Effect)
+import Data.Variant (inj) as Variant
 import Effect.Aff (Aff)
-import Effect.Aff.Class (liftAff)
-import Effect.Class (liftEffect)
-import Effect.Exception (error)
-import Effect.Ref (new, read, write) as Ref
 import Global.Unsafe (unsafeStringify)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
-import Heterogeneous.Mapping (class HMapWithIndex, hmapWithIndex, mappingWithIndex)
-import Isomers.Client.Fetch (HostInfo, Scheme(..), fetch)
-import Isomers.HTTP (Exchange(..)) as HTTP
+import Isomers.Client.Fetch (HostInfo, fetch)
 import Isomers.HTTP.Exchange (Error(..)) as HTTP.Exchange
-import Isomers.Request (Duplex(..), Duplex', Printer(..)) as Request
-import Isomers.Request.Duplex (parse, print) as Request.Duplex
+import Isomers.Request (Duplex(..), Printer) as Request
 import Isomers.Request.Duplex.Printer (run) as Request.Duplex.Printer
-import Isomers.Request.Encodings (ServerRequest)
-import Isomers.Request.Encodings (ServerRequest) as Request.Encodings
-import Isomers.Response (Duplex(..), parse) as Response
-import Isomers.Response.Encodings (ClientResponse(..)) as Response.Encodings
-import Isomers.Response.Raw (RawClient(..), RawServer(..)) as Response
+import Isomers.Response (Duplex, parse) as Response
 import Prim.Row (class Cons, class Lacks) as Row
 import Prim.RowList (class RowToList)
-import React.Basic (JSX)
-import React.Basic.Hooks (component)
 import Record (get, insert) as Record
-import Routing.PushState (makeInterface)
-import Routing.PushState (makeInterface) as PushState
-import Type.Prelude (class IsSymbol, Proxy(..), RLProxy(..), SProxy(..))
-import Unsafe.Coerce (unsafeCoerce)
-import Wire.React.Router (Transition, _Transition, continue, makeRouter)
-import Wire.React.Router.Control (Command(..), Resolved, Router(..), Transition(..), Transitioning) as Router
-import Wire.Signal (Signal)
-import Wire.Signal (create) as Signal
+import Type.Prelude (class IsSymbol, Proxy(..), RLProxy(..), SProxy)
 
 -- | This folding creates a request builder:
 -- | a record which contains functions which put a

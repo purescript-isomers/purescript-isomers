@@ -89,7 +89,7 @@ in  upstream
       "https://github.com/robertdp/purescript-wire-react"
       "v0.0.1"
   with
-    wire-react-router = mkPackage -- ../purescript-wire-react-router/spago.dhall as Location
+    wire-react-router = mkPackage
       [ "aff"
       , "freet"
       , "indexed-monad"
