@@ -1,4 +1,4 @@
-# isomers
+# purescript-isomers
 
 WIP!
 
