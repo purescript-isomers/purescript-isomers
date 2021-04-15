@@ -46,10 +46,10 @@ import Isomers.Response.Okayish.Type (fromEither) as Okayish.Type
 import Isomers.Response.Raw (RawServer(..))
 import Isomers.Response.Types (HtmlString(..))
 import Isomers.Server (router) as Server
-import Isomers.Spec (BuilderStep(..), accumSpec, client, requestBuilders, rootAccumSpec) as Spec
+import Isomers.Spec (BuilderStep(..), accumSpec, client, flatten, flatten', requestBuilders, rootAccumSpec) as Spec
 import Isomers.Spec (Spec(..))
 import Isomers.Spec.Builder (insert) as Web.Builder
-import Isomers.Web (requestBuilders) as Web
+import Isomers.Web (flatten', requestBuilders) as Web
 import Isomers.Web (toSpec)
 import Isomers.Web.Builder (Rendered(..))
 import Isomers.Web.Builder (webSpec)
@@ -266,6 +266,8 @@ hostInfo = { hostName: "127.0.0.1", port: 9000, scheme: HTTP }
 webRouter = Web.Client.Router.webRouter { doc } web hostInfo
 
 printRoute (WebSpec { spec: Spec { request: reqDpl } }) = Request.Duplex.print reqDpl
+
+flatSpec = Web.flatten' web
 
 main :: Effect Unit
 main = do

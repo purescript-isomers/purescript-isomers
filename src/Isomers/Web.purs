@@ -8,6 +8,7 @@ module Isomers.Web
 import Heterogeneous.Folding (class HFoldlWithIndex)
 import Isomers.Client (RequestBuildersStep, requestBuilders) as Client
 import Isomers.Spec (Spec(..))
+import Isomers.Web.Flatten (flatten, flatten') as Exports
 import Isomers.Web.Builder (Rendered(..)) as Exports
 import Isomers.Web.Types (WebSpec(..))
 import Type.Prelude (Proxy(..))
