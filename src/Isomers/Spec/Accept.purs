@@ -1,13 +1,12 @@
 module Isomers.Spec.Accept where
 
 import Prelude
-
 import Control.Alt ((<|>))
 import Control.Comonad (extract) as Comonad
 import Data.Array (uncons) as Array
 import Data.Foldable (foldl)
-import Data.Homogeneous (class SListRow)
-import Data.Homogeneous.Variant (Homogeneous, fromSList) as Homogeneous.Variant
+import Data.Homogeneous (class ToHomogeneousRow)
+import Data.Homogeneous.Variant (Homogeneous, homogeneous') as Homogeneous.Variant
 import Data.Lazy (force) as Lazy
 import Data.Map (lookup) as Map
 import Data.Maybe (Maybe(..))
@@ -19,6 +18,7 @@ import Global.Unsafe (unsafeStringify)
 import Heterogeneous.Folding (class Folding, class HFoldl, hfoldl)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Isomers.Contrib.Type.Eval.Foldable (Foldr')
+import Isomers.Contrib.Type.Eval.Foldings (HomogeneousRow)
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern(..), parse) as Accept
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern)
 import Isomers.HTTP.Request.Headers.Accept.MediaPattern (matchedBy, print) as Accept.MediaPattern
@@ -32,7 +32,7 @@ import Prim.Row (class Cons, class Lacks, class Union) as Row
 import Record (insert) as Record
 import Record.Extra (type (:::), SLProxy, SNil)
 import Type.Eval (class Eval, Lift, kind TypeExpr)
-import Type.Prelude (class IsSymbol, class TypeEquals, SProxy(..), reflectSymbol)
+import Type.Prelude (class IsSymbol, class TypeEquals, RProxy, SProxy(..), reflectSymbol)
 
 -- | Fold from `Response.Duplex`es a `Record`
 -- | with according content types as labels.
@@ -109,7 +109,6 @@ parserBuilder mediaType@(MediaType mtStr) prs = do
         pure
           $ Request.Duplex.Parser.Fail (Request.Duplex.Parser.Expected mtStr $ Accept.MediaPattern.print pattern)
 
-
 -- | Content types defined by user are not properly sorted.
 -- | But we don't have to worry about this in I think as
 -- | we doesn't expose our inner `Variant.Homogeneous` outside
@@ -122,9 +121,9 @@ parserBuilder mediaType@(MediaType mtStr) prs = do
 -- | XXX: I'm not sure why "`class` alias" is not fully working
 -- | and I have to put here `RowSList` too.
 requestAccum ∷
-  ∀ body ireq route oreq cts ivReq ovReq sl.
-  Eval (ContentTypes cts) (SLProxy sl) ⇒
-  SListRow sl ireq ivReq ⇒
+  ∀ body ireq route oreq cts ivReq ovReq ls.
+  Eval (HomogeneousRow Void cts) (RProxy ls) ⇒
+  ToHomogeneousRow ls ireq ivReq ⇒
   HFoldl
     (RequestMediaPatternParser body route oreq)
     (MediaPattern → Request.Parser body (route → Variant ()))
@@ -165,15 +164,15 @@ requestAccum (Request.Accum (Request.Duplex prt prs) dst) cts = do
     prt' ∷ Variant ivReq → Request.Printer
     prt' i = do
       let
-        h ∷ Homogeneous.Variant.Homogeneous sl ireq
-        h = Homogeneous.Variant.fromSList i
+        h ∷ Homogeneous.Variant.Homogeneous ls ireq
+        h = Homogeneous.Variant.homogeneous' i
       prt <<< Comonad.extract $ h
 
     dst' ∷ Variant ivReq → route
     dst' i = do
       let
-        h ∷ Homogeneous.Variant.Homogeneous sl ireq
-        h = Homogeneous.Variant.fromSList i
+        h ∷ Homogeneous.Variant.Homogeneous ls ireq
+        h = Homogeneous.Variant.homogeneous' i
       dst <<< Comonad.extract $ h
   Request.Accum (Request.Duplex prt' prs') dst'
 
@@ -183,10 +182,11 @@ responsePrinters lst = (hfoldl ResponseContentTypeRecord {} $ lst)
 foreign import data DoSCons ∷ Type → TypeExpr → TypeExpr
 
 instance evalDoSCons ∷
-  ( Eval t (SLProxy t')) ⇒
+  (Eval t (SLProxy t')) ⇒
   Eval (DoSCons (SProxy h) t) (SLProxy (h ::: t'))
 
-type ContentTypes cts = (Foldr' DoSCons (Lift (SLProxy SNil))) cts
+type ContentTypes cts
+  = (Foldr' DoSCons (Lift (SLProxy SNil))) cts
 
 -- | From a pair of request / response duplexes and a hlist of response codecs create a spec which
 -- | labels everything by content types.
@@ -194,8 +194,8 @@ accumSpec ∷
   ∀ body res resLst route ireq oreq cts sl ivReq ovReq.
   HFoldl ResponseContentTypeRecord {} resLst res ⇒
   HMap ResponseContentType resLst cts ⇒
-  Eval (ContentTypes cts) (SLProxy sl) ⇒
-  SListRow sl ireq ivReq ⇒
+  Eval (HomogeneousRow Void cts) (RProxy sl) ⇒
+  ToHomogeneousRow sl ireq ivReq ⇒
   HFoldl
     (RequestMediaPatternParser body route oreq)
     (MediaPattern → Request.Parser body (route → Variant ()))
@@ -211,4 +211,3 @@ accumSpec (req /\ res) = do
     { request: requestAccum req cts
     , response: responsePrinters res
     }
-

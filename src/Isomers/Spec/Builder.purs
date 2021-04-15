@@ -3,14 +3,13 @@ module Isomers.Spec.Builder where
 import Prelude
 
 import Data.Bifunctor (lmap)
-import Data.Homogeneous (class SListRow)
+import Data.Homogeneous (class ToHomogeneousRow)
 import Data.Tuple.Nested ((/\), type (/\))
 import Data.Variant (Variant)
 import Heterogeneous.Folding (class HFoldl)
 import Heterogeneous.Mapping (class HMap, class HMapWithIndex, class Mapping, hmap)
 import Isomers.Contrib.Heterogeneous.List (type (:))
-import Isomers.Contrib.Type.Eval.Foldable (Foldr')
-import Isomers.Contrib.Type.Eval.Foldings (SListCons)
+import Isomers.Contrib.Type.Eval.Foldings (SListCons, HomogeneousRow)
 import Isomers.HTTP (Method(..))
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern)
 import Isomers.Request (Accum, Duplex', Parser, Printer(..)) as Request
@@ -47,9 +46,9 @@ class Builder a body route ireq oreq res | a → body ireq oreq res where
 -- | Build an accept spec from request duplex and a hlist of response duplexes.
 instance builderHListToAcceptSpec ∷
   ( HFoldl Accept.ResponseContentTypeRecord {} (h : t) res
-  , Eval (ContentTypes cts) (SLProxy sl)
-  , SListRow sl ireq ivReq
   , HMap Accept.ResponseContentType (h : t) cts
+  , Eval (HomogeneousRow Void cts) (RProxy sl)
+  , ToHomogeneousRow sl ireq ivReq
   , HFoldl
       (Accept.RequestMediaPatternParser body route oreq)
       (MediaPattern → Request.Parser body (route → Variant ()))

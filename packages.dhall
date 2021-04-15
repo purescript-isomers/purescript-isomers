@@ -11,7 +11,7 @@ in  upstream
       , "record-extra", "typelevel-eval", "variant"
       ]
       "https://github.com/paluh/purescript-homogeneous.git"
-      "master"
+      "v0.2.0"
   with
     http-types =
       { dependencies = [ "tuples", "unicode", "generics-rep" ]
