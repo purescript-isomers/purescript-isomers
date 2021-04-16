@@ -67,7 +67,8 @@ So the simple client can be sketched as:
 
 ```purescript
 client ::
-  forall i o req req_ res res_.
+  forall i m o req req_ res res_.
+  Monad m =>
   Row.Cons endpoint i req_ req =>
   Row.Cons endpoint (ResponseCodec o) res_ res =>
   RealWorldApi req res ->
