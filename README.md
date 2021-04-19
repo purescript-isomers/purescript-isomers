@@ -12,7 +12,7 @@ Once again - the whole spec is just a value. Values are much easier to transform
 
 The main idea behind this framework is quite simple. Let's prototype it quickly here.
 
-As a base layer this lib provides a pair of composable codec types. We can think about them as encoding and decoding functions for simplicity here. Let say that we use just `Tuple` to keep them together:
+As a base layer this lib provides a pair of composable codec types. For now we can think about them as encoding and decoding functions. Let say that we use just `Tuple` to keep them together:
 
 ```purescript
 type RequestCodec a =  (a -> HTTPRequest) /\ (HTTPRequest -> Maybe a)
@@ -20,7 +20,7 @@ type RequestCodec a =  (a -> HTTPRequest) /\ (HTTPRequest -> Maybe a)
 type ResponseCodec a = (a -> HTTPResponse) /\ (HTTPResponse -> Maybe a)
 ```
 
-These codecs (I'm using `Duplex` term in the codebase following Nate's convention) allow us to send and receive data through HTTP channel. In the lib the representation is a bit [more complicated than that][1].
+These codecs (I'm using `Duplex` term in the codebase following Nate's convention) allow us to send and receive data through HTTP channel. In the lib the representation and parsing/printing is a bit more complicated than that because we have different encodings on the client than on the server of HTTP messages (they are even parametrized) and we work in an effectful monad. Let say that this is not really important now.
 
 ### Single endpoint
 
@@ -97,7 +97,4 @@ I'm trying to cover this and many more things in this attempt: "heterogeneous DS
 
 The core pieces of `Isomers.Request.Duplex` were copied from `routing-duplex` library by @natefaubion. I wasn't able to extend its recursive AST and this change was [too invasive](https://github.com/natefaubion/purescript-routing-duplex/issues/19) to be included in the original lib.
 
---
 
-[1] We have different encodings on the client than on the server of `HTTPRequest` and `HTTPResponse`. Additionally parsers work in an effectful monad - currently hardcoded `Aff` but should be parametrized in the future.
-We also care about portability / extensibility  of our encodings on the server side so we don't loose the power of the HTTP itself and underlining PS backend at hand. We want to preserve possibly to handle binary data transfers and their decoders [think `multipart` + `formidable` on `node.js` as an example], we want to allow streaming, we don't want to restricts our backend to be only `JS` etc.).
