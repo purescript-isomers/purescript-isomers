@@ -4,6 +4,12 @@ import Data.Functor.Variant (SProxy(..))
 import Data.Variant (Variant, inj)
 import Type.Row (type (+))
 
+type JavascriptMime = "application/javascript"
+
+type JavaScript a cts = ("application/javascript" ∷ a | cts)
+
+_javascript = SProxy ∷ SProxy JavascriptMime
+
 type HtmlMime = "text/html"
 
 type Html a cts = ("text/html" ∷ a | cts)

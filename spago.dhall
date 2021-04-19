@@ -25,8 +25,6 @@ You can edit this file as you like.
   , "random"
   , "record-extra"
   , "record-prefix"
-  , "routing"
-  , "routing-duplex"
   , "run"
   , "stringutils"
   , "tuples"

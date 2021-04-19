@@ -26,15 +26,17 @@ import Type.Equality (to) as Type.Equality
 import Type.Prelude (class IsSymbol, SProxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
-newtype RenderHandlerStep router = RenderHandlerStep router
+-- | We are passing frontent router so components
+-- | could trigger navigation etc.
+data RenderHandlerStep doc router = RenderHandlerStep (doc → HtmlString) router
 
 instance foldingRenderHandlerStep ∷
   ( Row.Cons ix { | subhandlers } handlers_ handlers
   , IsSymbol ix
-  , HFoldlWithIndex (RenderHandlerStep router) { | subhandlers } { | rec } { | subhandlers' }
+  , HFoldlWithIndex (RenderHandlerStep doc router) { | subhandlers } { | rec } { | subhandlers' }
   , Row.Cons ix { | subhandlers' } handlers_ handlers'
   ) ⇒
-  FoldingWithIndex (RenderHandlerStep router) (SProxy ix) { | handlers } { | rec } { | handlers' } where
+  FoldingWithIndex (RenderHandlerStep doc router) (SProxy ix) { | handlers } { | rec } { | handlers' } where
   foldingWithIndex step ix handlers rec = do
     let
       subhandlers ∷ { | subhandlers }
@@ -49,13 +51,13 @@ instance foldingRenderHandlerStepLeaf ∷
   , Row.Lacks HtmlMime mimeHandlers
   , Row.Cons HtmlMime (req → Aff (RawServer doc)) mimeHandlers mimeHandlers'
   -- | Why I'm not able to use mimeHandlers' type var here and below. Why??
-  , Row.Cons ix { "text/html" ∷ req → Aff (RawServer doc) | mimeHandlers } handlers_ handlers'
+  , Row.Cons ix { "text/html" ∷ req → Aff (RawServer HtmlString) | mimeHandlers } handlers_ handlers'
   , TypeEquals f (Renderer router req res (RawServer doc))
   , IsSymbol ix
   , IsSymbol sourceMime
   ) ⇒
-  FoldingWithIndex (RenderHandlerStep router) (SProxy ix) { | handlers } (Tagged sourceMime f) { | handlers' } where
-  foldingWithIndex (RenderHandlerStep router) ix handlers (Tagged render) = do
+  FoldingWithIndex (RenderHandlerStep doc router) (SProxy ix) { | handlers } (Tagged sourceMime f) { | handlers' } where
+  foldingWithIndex (RenderHandlerStep renderToHtml router) ix handlers (Tagged render) = do
     let
       mimeHandlers ∷ { | mimeHandlers }
       mimeHandlers = Record.get ix handlers
@@ -63,10 +65,10 @@ instance foldingRenderHandlerStepLeaf ∷
       sourceHandler ∷ req → Aff res
       sourceHandler = Record.get (SProxy ∷ SProxy sourceMime) mimeHandlers
 
-      f' ∷ router /\ Exchange req res → RawServer doc
-      f' = let Renderer f = Type.Equality.to render in f
+      f' ∷ router /\ Exchange req res → RawServer HtmlString
+      f' = let Renderer f = Type.Equality.to render in map renderToHtml <<< f
 
-      htmlHandler ∷ req → Aff (RawServer doc)
+      htmlHandler ∷ req → Aff (RawServer HtmlString)
       htmlHandler req = f' <<< Tuple router <<< Exchange req <<< Just <<< Right <$> (sourceHandler req ∷ Aff res)
 
       -- | Here there is also a problem
@@ -78,5 +80,5 @@ instance foldingRenderHandlerStepLeaf ∷
 
     handlers'
 
-renderToApi (WebSpec { render: HJust render, spec }) handlers router = do
-  hfoldlWithIndex (RenderHandlerStep router) handlers render
+renderToApi (WebSpec { render: HJust render, spec }) handlers router renderToHtml = do
+  hfoldlWithIndex (RenderHandlerStep router renderToHtml) handlers render

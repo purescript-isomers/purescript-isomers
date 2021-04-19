@@ -22,7 +22,6 @@ import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Symbol (SProxy(..))
 import Data.Variant (Variant)
 import Data.Variant (default, inj, on) as Variant
-import Debug.Trace (traceM)
 import Effect.Aff (Aff, Fiber, joinFiber)
 import Effect.Aff.Class (liftAff)
 import Effect.Exception (Error) as Effect.Exception
@@ -34,6 +33,7 @@ import Network.HTTP.Types (Status) as HTTP.Types
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
 import Type.Prelude (class IsSymbol, reflectSymbol)
+import Web.File.Blob (Blob) as Web.File
 
 -- | TODO: Error handling
 -- | * Use `V` here.
@@ -114,6 +114,9 @@ arrayBuffer = readBody (SProxy ∷ SProxy "arrayBuffer")
 
 json ∷ Parser Json
 json = readBody (SProxy ∷ SProxy "json")
+
+blob ∷ Parser Web.File.Blob
+blob = readBody (SProxy ∷ SProxy "blob")
 
 string ∷ Parser String
 string = readBody (SProxy ∷ SProxy "string")

@@ -16,6 +16,8 @@ import Isomers.Spec (Spec(..))
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
 
+-- | TODO: allow any monad here. It should not be a problem but probably we need some
+-- | unifing pass over a handlers record.
 type Handler req res = req → Aff res
 
 -- | TODO: Drop wrapper when on purs-0.14.0

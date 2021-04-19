@@ -14,6 +14,7 @@ import Network.HTTP.Types (HeaderName, Status)
 import Network.HTTP.Types (ok200) as Status
 import Node.Buffer (fromString) as Node.Buffer
 import Node.Encoding (Encoding(..))
+import Node.Stream (Readable) as Node.Stream
 
 newtype Printer = Printer (Encodings.ServerResponse → Encodings.ServerResponse)
 
@@ -41,6 +42,9 @@ body b = Printer _ { body = Just b }
 
 json ∷ Json → Printer
 json = Argonaut.stringify >>> string
+
+stream ∷ (∀ r. Node.Stream.Readable r) → Printer
+stream s = body (Encodings.NodeStream s)
 
 string ∷ String → Printer
 string str = body $ Encodings.NodeBuffer $ unsafePerformEffect $ Node.Buffer.fromString str UTF8

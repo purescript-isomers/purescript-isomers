@@ -46,11 +46,11 @@ import Isomers.HTTP.ContentTypes (HtmlMime, _html, _json)
 import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
 import Isomers.Response.Duplex (Duplex(..), Duplex', withStatus)
 import Isomers.Response.Duplex (asJson, json, reqHeader, withHeaderValue, withStatus) as Duplex
-import Isomers.Response.Encodings (ClientResponse, ServerResponse) as Encodings
 import Isomers.Response.Duplex.Parser (ParsingError)
 import Isomers.Response.Duplex.Parser (run) as Parser
 import Isomers.Response.Duplex.Printer (run) as Printer
 import Isomers.Response.Duplex.Variant (empty, injInto) as Duplex.Variant
+import Isomers.Response.Encodings (ClientResponse, ServerResponse) as Encodings
 import Network.HTTP.Types (found302, hContentType, hLocation, movedPermanently301, notFound404, ok200)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
 import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
@@ -94,8 +94,8 @@ fromEither (Right a) = Okayish $ Variant.inj _ok a
 
 fromEither (Left v) = Okayish $ (append' v)
   where
-    append' ∷ Variant res → Variant (Ok a + res)
-    append' = Contrib.Data.Variant.append _ok
+  append' ∷ Variant res → Variant (Ok a + res)
+  append' = Contrib.Data.Variant.append _ok
 
 roundtripEither ∷ ∀ a b res res'. (Either (Variant res) a → Either (Variant res') b) → Okayish res a → Okayish res' b
 roundtripEither f = unsafeFromEither <<< f <<< toEither
@@ -143,4 +143,12 @@ lmapOkayish ∷
 lmapOkayish f (Okayish v) = Okayish v'
   where
   v' = Variant.on _ok (Variant.inj _ok) (Contrib.Data.Variant.append _ok <<< f) v
+
+_notFound = SProxy ∷ SProxy "notFound"
+
+type NotFound a res
+  = ( notFound ∷ a | res )
+
+notFound ∷ ∀ a b res. Row.Lacks "ok" res ⇒ a → Okayish (NotFound a + res) b
+notFound a = fromEither $ Left (Variant.inj _notFound a)
 

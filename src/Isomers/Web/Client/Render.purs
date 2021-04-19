@@ -1,16 +1,21 @@
 module Isomers.Web.Client.Render where
 
+import Prelude
+
 import Data.Either (Either)
 import Data.Maybe (Maybe(..))
+import Data.Symbol (reflectSymbol)
 import Data.Tuple.Nested ((/\))
 import Data.Variant (case_, default, expand, inj, match, on) as Variant
 import Data.Variant (class VariantMatchCases, Variant)
+import Debug.Trace (traceM)
 import Effect.Aff (Aff)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
 import Heterogeneous.Mapping (class HMapWithIndex, class MappingWithIndex, hmapWithIndex)
 import Isomers.Client (ClientStep, RequestBuildersStep) as Client
 import Isomers.Client.Fetch (HostInfo)
 import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..))
+import Isomers.HTTP.ContentTypes (HtmlMime, _html)
 import Isomers.HTTP.Exchange (Error) as HTTP.Exchange
 import Isomers.HTTP.Exchange (Exchange(..)) as HTTP
 import Isomers.Spec (Spec(..))
@@ -22,7 +27,7 @@ import Prelude (bind, const, map, pure, (#), ($), (<<<))
 import Prim.Row (class Cons, class Union) as Row
 import Prim.RowList (class RowToList)
 import Record (get) as Record
-import Type.Equality (to) as Type.Equality
+import Type.Equality (from, to) as Type.Equality
 import Type.Prelude (class IsSymbol, class TypeEquals, Proxy, SProxy(..))
 
 -- | * We map the renderers `Record` (which is in some sens a subtree of
@@ -58,7 +63,7 @@ instance mappingRenderLeaf ::
   , Row.Cons ct (creq → Aff (Either HTTP.Exchange.Error cres)) mimeClient_ mimeClient
   , TypeEquals creq rreq
   , TypeEquals cres rres
-  , TypeEquals clientRouter rcr
+  , TypeEquals rcr clientRouter
   ) =>
   MappingWithIndex
     (RenderStep clientRouter { | client })
@@ -70,7 +75,7 @@ instance mappingRenderLeaf ::
       ct = SProxy ∷ SProxy ct
       fetch = Record.get ct (Record.get prop client)
     res ← fetch creq
-    pure $ renderer (Type.Equality.to clientRouter /\ HTTP.Exchange (Type.Equality.to $ creq) (Just $ map Type.Equality.to res))
+    pure $ renderer (Type.Equality.from clientRouter /\ HTTP.Exchange (Type.Equality.to $ creq) (Just $ map Type.Equality.to res))
 
 instance mappingRenderNode ::
   ( IsSymbol sym
@@ -115,13 +120,16 @@ instance instanceFoldRender ∷
       Variant.match fetchAndRender
 
 
+-- | We contracting here route `Variant` but also
+-- | a render request `Variant` into data source
+-- | request.
 data ContractRequest (specReq ∷ # Type) = ContractRequest
 
 instance foldingContractRequest ∷
   ( IsSymbol sym
   , IsSymbol ct
   , Row.Cons sym (Variant mimeVReq) vReq_ vReq
-  , Row.Cons ct req mimeVReq_ mimeVReq
+  , Row.Cons ct req ("text/html" ∷ req | mimeVReq_) mimeVReq
   , Row.Cons sym req rndReq rndReq'
   , Row.Union rndReq rndReq_ rndReq'
   , Row.Union vReq_ vReq__ vReq
@@ -134,7 +142,10 @@ instance foldingContractRequest ∷
       expandVReq = Variant.expand ∷ Variant vReq_ → Variant vReq
 
     Variant.on prop
-      ((Variant.default Nothing) # Variant.on ct (Just <<< Variant.inj prop))
+      ((Variant.default Nothing)
+        # Variant.on _html (Just <<< Variant.inj prop)
+        # Variant.on ct (Just <<< Variant.inj prop)
+      )
       (map expandRndReq <<< contractAcc <<< expandVReq)
 
 instance foldingContractRequestRec ∷

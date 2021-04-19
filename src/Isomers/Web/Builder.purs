@@ -3,7 +3,6 @@ module Isomers.Web.Builder where
 import Prelude
 
 import Data.Tuple.Nested ((/\), type (/\))
-import Data.Variant (Variant)
 import Heterogeneous.Folding (class Folding, class HFoldl, hfoldl)
 import Heterogeneous.Mapping (class Mapping)
 import Isomers.Contrib (HJust(..)) as Contrib
@@ -12,16 +11,15 @@ import Isomers.Contrib.Heterogeneous.HEval (class HEval, DoApply(..), DoConst(..
 import Isomers.Contrib.Heterogeneous.HEval (type (<<<), (<<<), type (&&&), (&&&)) as H
 import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..), HNothing(..))
 import Isomers.Contrib.Heterogeneous.List (type (:), (:))
-import Isomers.HTTP (Exchange(..)) as HTTP
+import Isomers.HTTP (Exchange) as HTTP
 import Isomers.HTTP.ContentTypes (HtmlMime)
 import Isomers.HTTP.Request.Method (Method(..))
-import Isomers.Request (Accum(..), Duplex(..)) as Request
+import Isomers.Request (Accum) as Request
 import Isomers.Response (Duplex, RawDuplex') as Response
-import Isomers.Response (Okayish)
 import Isomers.Response.Raw.Duplexes (html) as Response.Raw.Duplexes
 import Isomers.Response.Types (HtmlString)
-import Isomers.Spec (AccumSpec(..), BuilderStep(..), accumSpec)
-import Isomers.Spec (class Builder, AccumSpec, BuilderStep(..), Insert(..), accumSpec) as Spec
+import Isomers.Spec (BuilderStep, accumSpec)
+import Isomers.Spec (class Builder, AccumSpec, BuilderStep(..), Insert(..), Scalar(..), accumSpec) as Spec
 import Isomers.Web.Builder.HEval (DoIsHJust(..), DoNull(..), FromHJust(..))
 import Isomers.Web.Renderer (Renderer(..))
 import Isomers.Web.Types (AccumWebSpec(..), GetRender, GetSpec, WebSpec, _GetRender, _GetSpec, rootAccumWebSpec)
@@ -100,7 +98,7 @@ instance hevalDoBuildAccumSpec ∷
 -- | to construct the type of the `Renderer` because
 -- | we pass a non mime `req_` to it finally: `HTTP.Exchange req_ ... → ...`.
 -- | The unification of `ireq_` and `oreq_` is done when
--- | we find a renderer somewhere on in the stack.
+-- | we find a renderer somewhere on the stack.
 instance builderEndpoinsAccessList ∷
   ( HFoldl (ResponseRenderer ireq_ oreq_) HNothing l rnd
   , TypeEquals (h : t) l
@@ -212,6 +210,21 @@ instance insertSpecBuilder ∷
       AccumWebSpec { render, spec } = accumWebSpec step' sub
 
       spec' = Spec.accumSpec (toBuilderStep step) (Spec.Insert dpl spec ∷ Spec.Insert l a (Spec.AccumSpec b { | route' } ireq oreq res))
+    AccumWebSpec { render, spec: spec' }
+
+instance scalarSpecBuilder ∷
+  ( Builder sub b rnd a ireq oreq res
+  , TypeEquals {} route
+  , Spec.Builder (Spec.Scalar a (Spec.AccumSpec b a ireq oreq res)) b route ireq oreq res
+  ) ⇒
+  Builder (Spec.Scalar a sub) b rnd route ireq oreq res where
+  accumWebSpec step (Spec.Scalar dpl sub) = do
+    let
+      step' = WebBuilderStep ∷ WebBuilderStep a
+
+      AccumWebSpec { render, spec } = accumWebSpec step' sub
+
+      spec' = Spec.accumSpec (toBuilderStep step) (Spec.Scalar dpl spec ∷ Spec.Scalar a (Spec.AccumSpec b a ireq oreq res))
     AccumWebSpec { render, spec: spec' }
 
 instance builderBuilderStep ∷ Builder a b rnd route ireq oreq res ⇒ Mapping (WebBuilderStep route) a (AccumWebSpec b rnd route ireq oreq res) where

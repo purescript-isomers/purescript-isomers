@@ -1,7 +1,9 @@
 module Isomers.Response.Duplex
-  ( module Type
+  ( module Exports
   , asJson
   , header
+  , javascript
+  , html
   , json
   , reqHeader
   , status
@@ -15,13 +17,16 @@ import Prelude
 import Control.Monad.Error.Class (throwError)
 import Data.Argonaut (Json)
 import Data.Either (Either)
+import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Maybe (Maybe)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
-import Isomers.HTTP.ContentTypes (JsonMime)
-import Isomers.Response.Duplex.Parser (ParsingError(..), fromJson, header, json, reqHeader, status, statusEquals, withContentType) as Parser
-import Isomers.Response.Duplex.Printer (header, json, reqHeader, status) as Printer
+import Isomers.HTTP.ContentTypes (JavascriptMime, JsonMime, HtmlMime)
+import Isomers.Response.Duplex.Parser (ParsingError(..), fromJson, header, json, reqHeader, status, statusEquals, string, withContentType) as Parser
+import Isomers.Response.Duplex.Printer (header, json, reqHeader, status, string) as Printer
+import Isomers.Response.Duplex.Printer (Printer(..)) as Exports
 import Isomers.Response.Duplex.Type (Duplex(..), Duplex')
-import Isomers.Response.Duplex.Type (Duplex(..), Duplex') as Type
+import Isomers.Response.Duplex.Type (Duplex(..), Duplex') as Exports
+import Isomers.Response.Types (HtmlString, JavascriptString)
 import Network.HTTP.Types (HeaderName, hContentType)
 import Network.HTTP.Types (Status) as HTTP.Types
 import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
@@ -63,3 +68,8 @@ json = withContentType (Duplex Printer.json Parser.json)
 asJson ∷ ∀ i o. (i → Json) → (Json → Either String o) → Duplex JsonMime i o
 asJson f g = withContentType $ Duplex (Printer.json <<< f) (Parser.fromJson g)
 
+javascript ∷ Duplex' JavascriptMime JavascriptString
+javascript = withContentType (_Newtype $ Duplex Printer.string Parser.string)
+
+html ∷ Duplex' HtmlMime HtmlString
+html = withContentType (_Newtype $ Duplex Printer.string Parser.string)

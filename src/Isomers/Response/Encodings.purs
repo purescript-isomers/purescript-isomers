@@ -7,11 +7,13 @@ import Data.ArrayBuffer.Types (ArrayBuffer)
 import Data.Map (Map)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
+import Effect (Effect)
 import Effect.Aff (Aff, Fiber)
 import Network.HTTP.Types (Header, Status, HeaderName)
 import Node.Buffer (Buffer) as Node.HTTP
 import Node.Stream (Writable, Readable) as Node.Stream
 import Type.Prelude (SProxy(..))
+import Web.File.Blob (Blob) as Web.File
 
 type Base body extra
   = { body ∷ body
@@ -26,9 +28,8 @@ type Base body extra
 data NodeBody
   = NodeBuffer Node.HTTP.Buffer
   | NodeStream (∀ r. Node.Stream.Readable r)
-  -- | We can handle String in the upper layer
-  -- | String
-  | NodeWriter (∀ r. Node.Stream.Writable r → Aff Unit)
+  -- | We assume that writer is closing the buffer on its own...
+  | NodeWriter (∀ r. Node.Stream.Writable r → Effect Unit)
 
 -- | TODO: Parametrize by `body` so other backends can work with this
 -- | lib easily.
@@ -53,8 +54,7 @@ _string = SProxy ∷ SProxy "string"
 
 type ClientBodyRow
   = ( arrayBuffer ∷ Fiber ArrayBuffer -- Effect (Promise ArrayBuffer)
-    -- , blob ∷ Fiber Web.File.Blob -- Effect (Promise Blob)
-    -- , blob ∷ Fiber Blob
+    , blob ∷ Fiber Web.File.Blob -- Effect (Promise Blob)
     -- | Something like this should be possible when we have WritableStream ;-)
     -- , reader ∷ Web.Streams.WritableStream → Aff Unit
     -- | TODO: This was `Eff` originally. I've changed it to `Aff`

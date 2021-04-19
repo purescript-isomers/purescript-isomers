@@ -1,7 +1,6 @@
 module Isomers.Node.Server where
 
 import Prelude
-
 import Control.Monad.Except (catchError)
 import Data.Either (Either(..))
 import Data.Variant (Variant)
@@ -21,6 +20,9 @@ import Isomers.Spec (Spec)
 import Node.HTTP (ListenOptions, Request, Response, close, createServer, listen, responseAsStream, setStatusCode, setStatusMessage) as Node.HTTP
 import Node.Stream (end) as Node.Stream
 
+-- | TODO: this is just an ugly prototype.
+-- | We need to move `maxBodySize` to a parameter
+-- | and think about error handling etc.
 router ∷
   ∀ handlers ireq oreq resCodecs.
   HFoldlWithIndex (RouterStep handlers resCodecs) Unit oreq (Aff ServerResponseWrapper) ⇒
@@ -32,20 +34,25 @@ router ∷
 router spec handlers nreq nres = do
   let
     maxBodySize = 1000000
+
     req = fromNodeRequest maxBodySize nreq
   -- traceM nreq
-  Server.router spec handlers req >>= case _ of
-    Right res → do
-      liftEffect $ writeNodeResponse res nres
-    Left err → liftEffect $ do
-      Node.HTTP.setStatusCode nres 404
-      Node.HTTP.setStatusMessage nres "Not Found"
-      let
-        stream = Node.HTTP.responseAsStream nres
-      -- void $ Stream.write stream body $ pure unit
-      void $ Node.Stream.end stream $ pure unit
+  Server.router spec handlers req
+    >>= case _ of
+        Right res → do
+          liftEffect $ writeNodeResponse res nres
+        Left err →
+          liftEffect
+            $ do
+                Node.HTTP.setStatusCode nres 404
+                Node.HTTP.setStatusMessage nres "Not Found"
+                let
+                  stream = Node.HTTP.responseAsStream nres
+                -- void $ Stream.write stream body $ pure unit
+                void $ Node.Stream.end stream $ pure unit
 
-type ServerM = Effect (Effect Unit → Effect Unit)
+type ServerM
+  = Effect (Effect Unit → Effect Unit)
 
 -- | Given a `ListenOptions` object, a function mapping `Request` to
 -- | `ResponseM`, and a `ServerM` containing effects to run on boot, creates and
@@ -61,13 +68,17 @@ serve ::
 serve spec handlers options onStarted = do
   let
     r = router spec handlers
-    handleRequest nreq nres = launchAff_ do
-      r nreq nres `catchError` \err → do
-        liftEffect $ do
-          Console.error $ Aff.message err
-          Node.HTTP.setStatusCode nres 500
-          Node.HTTP.setStatusMessage nres "Internal Server Error"
 
+    handleRequest nreq nres =
+      launchAff_ do
+        r nreq nres
+          `catchError`
+            \err → do
+              liftEffect
+                $ do
+                    Console.error $ Aff.message err
+                    Node.HTTP.setStatusCode nres 500
+                    Node.HTTP.setStatusMessage nres "Internal Server Error"
   server ← Node.HTTP.createServer handleRequest
   Node.HTTP.listen server options onStarted
   pure $ Node.HTTP.close server

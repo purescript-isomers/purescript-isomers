@@ -1,6 +1,7 @@
 module Isomers.Spec.Accept where
 
 import Prelude
+
 import Control.Alt ((<|>))
 import Control.Comonad (extract) as Comonad
 import Data.Array (uncons) as Array
@@ -17,6 +18,7 @@ import Data.Variant (expand, inj) as Variant
 import Global.Unsafe (unsafeStringify)
 import Heterogeneous.Folding (class Folding, class HFoldl, hfoldl)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
+import Isomers.Contrib.Data.Variant (tag) as Contrib.Data.Variant
 import Isomers.Contrib.Type.Eval.Foldable (Foldr')
 import Isomers.Contrib.Type.Eval.Foldings (HomogeneousRow)
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern(..), parse) as Accept
@@ -25,6 +27,7 @@ import Isomers.HTTP.Request.Headers.Accept.MediaPattern (matchedBy, print) as Ac
 import Isomers.Request (Accum(..), Duplex(..), Parser, Printer) as Request
 import Isomers.Request.Duplex.Parser (Parser(..), ParsingError(..), Result(..)) as Request.Duplex.Parser
 import Isomers.Request.Duplex.Parser (runParser) as Request.Parser
+import Isomers.Request.Duplex.Printer (header) as Request.Duplex.Printer
 import Isomers.Response (Duplex) as Response
 import Isomers.Spec.Types (AccumSpec(..))
 import Network.HTTP.Types (hAccept)
@@ -166,7 +169,8 @@ requestAccum (Request.Accum (Request.Duplex prt prs) dst) cts = do
       let
         h ∷ Homogeneous.Variant.Homogeneous ls ireq
         h = Homogeneous.Variant.homogeneous' i
-      prt <<< Comonad.extract $ h
+      Request.Duplex.Printer.header hAccept (Contrib.Data.Variant.tag i)
+        <> (prt <<< Comonad.extract $ h)
 
     dst' ∷ Variant ivReq → route
     dst' i = do

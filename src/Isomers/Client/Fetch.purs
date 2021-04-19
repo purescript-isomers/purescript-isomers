@@ -2,14 +2,13 @@ module Isomers.Client.Fetch where
 
 import Prelude
 
-import Control.Monad.Except (catchError, throwError)
+import Control.Monad.Except (catchError)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Map (fromFoldable) as Map
 import Data.Maybe (fromMaybe)
 import Data.Newtype (un)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
-import Data.Traversable (traverse)
 import Debug.Trace (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, Fiber, launchSuspendedAff)
@@ -29,7 +28,7 @@ import Web.Fetch.Request (Request, new) as Fetch
 import Web.Fetch.Request (defaultOptions) as Fetch.Request
 import Web.Fetch.RequestBody (empty, fromArrayBuffer, fromString) as Fetch.RequestBody
 import Web.Fetch.Response (Response) as Web.Fetch
-import Web.Fetch.Response (arrayBuffer, headers, status, statusText, text, url) as Web.Fetch.Response
+import Web.Fetch.Response (arrayBuffer, blob, headers, status, statusText, text, url) as Web.Fetch.Response
 import Web.Promise (Promise) as Web
 
 foreign import unsafePatch ∷ String
@@ -73,10 +72,12 @@ fromFetchResponse res = do
     toFiber = launchSuspendedAff <<< Contrib.Web.Promise.toAffE
   body ←
     { arrayBuffer: _
+    , blob: _
     , json: _
     , string: _
     }
       <$> (toFiber $ Web.Fetch.Response.arrayBuffer res)
+      <*> (toFiber $ Web.Fetch.Response.blob res)
       <*> (toFiber $ Contrib.Web.Fetch.Response.json res)
       <*> (toFiber $ Web.Fetch.Response.text res)
 

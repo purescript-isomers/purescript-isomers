@@ -3,19 +3,23 @@
 module Isomers.Web.Client.Router where
 
 import Prelude
+
 import Control.Bind.Indexed (ibind)
 import Control.Monad.Free.Trans (liftFreeT)
 import Data.Either (Either(..), hush)
 import Data.Identity (Identity(..))
 import Data.Lazy (defer) as Lazy
-import Data.Map (empty) as Map
+import Data.Map (empty, fromFoldable) as Map
 import Data.Maybe (Maybe(..))
+import Data.Tuple.Nested ((/\))
 import Data.Variant (Variant)
+import Debug.Trace (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
 import Effect.Ref (new, read, write) as Ref
+import Foreign.Object (fromHomogeneous) as Object
 import Heterogeneous.Folding (class HFoldlWithIndex)
 import Isomers.Client (RequestBuildersStep)
 import Isomers.Client (requestBuilders) as Client
@@ -26,7 +30,9 @@ import Isomers.Request.Duplex (parse, print) as Request.Duplex
 import Isomers.Spec (Spec(..))
 import Isomers.Web.Client.Render (class FoldRender, ContractRequest, ExpandRequest, contractRequest, expandRequest, foldRender)
 import Isomers.Web.Types (WebSpec(..))
+import Network.HTTP.Types (hAccept)
 import React.Basic (JSX)
+import React.Basic.Hooks (component)
 import Routing.PushState (makeInterface) as PushState
 import Type.Prelude (Proxy(..))
 import Wire.React.Router (Transition, continue, makeRouter)
@@ -48,18 +54,18 @@ parse ∷
   ∀ body ireq oreq rnd rndReq.
   HFoldlWithIndex (ContractRequest oreq) (Variant oreq → Maybe (Variant ())) rnd (Variant oreq → Maybe (Variant rndReq)) ⇒
   Request.Duplex body (Variant ireq) (Variant oreq) → rnd → String → Aff (Maybe (Variant rndReq))
-parse requestDuplex renderers = do
+parse requestDuplex renderers path = do
   let
-    parsePath path =
+    -- | TODO: There is a bug probably because we are contracting "application/json"... why?
+    parsePath p =
       Request.Duplex.parse requestDuplex
-        $ ( { path
-            , body: Right Nothing
-            , headers: Lazy.defer \_ → Map.empty
-            , httpVersion: "HTTP/1.1"
-            , method: "GET"
-            }
-          )
-  map (contractRequest (Proxy ∷ Proxy (Variant oreq)) renderers <=< hush) <<< parsePath
+        { path
+        , body: Right Nothing
+        , headers: Lazy.defer \_ → Map.fromFoldable [ hAccept /\ "text/html" ]
+        , httpVersion: "HTTP/1.1"
+        , method: "GET"
+        }
+  map (contractRequest (Proxy ∷ Proxy (Variant oreq)) renderers <=< hush) <<< parsePath $ path
 
 data AffRoute req res
   = Parsing String
@@ -90,7 +96,7 @@ type NavigationInterface req reqBuilders
     }
 
 webRouter ::
-  forall ireq oreq body rnd rndReq rndReqBuilders doc res.
+  ∀ ireq oreq body rnd rndReq rndReqBuilders doc res.
   FoldRender (WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res) (NavigationInterface (Variant rndReq) rndReqBuilders) (Variant rndReq) (Aff doc) =>
   HFoldlWithIndex (ContractRequest oreq) (Variant oreq → Maybe (Variant ())) rnd (Variant oreq → Maybe (Variant rndReq)) ⇒
   HFoldlWithIndex (ExpandRequest ireq) (Variant () → Variant ireq) rnd (Variant rndReq → Variant ireq) ⇒
@@ -124,9 +130,9 @@ webRouter defaults webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, respon
 
     print (Parsing url) = url
   pushStateInterface ← liftEffect PushState.makeInterface
-  liftEffect pushStateInterface.locationState >>= _.path >>> parseRoute
+  liftEffect pushStateInterface.locationState >>= _.path >>> \initialRoute → parseRoute initialRoute
     >>= case _ of
-        Nothing → pure $ Left "Invalid initial route"
+        Nothing → pure $ Left $ "Invalid initial route: \"" <> initialRoute <> "\""
         Just initialRoute →
           liftEffect do
             -- | I'm not able to render out of the box because...
@@ -196,3 +202,20 @@ webRouter defaults webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, respon
     router ← makeRouter interface opts'
     Ref.write router ref
     pure router
+
+-- | We pass here `WebSpec` only to somehow generate `Variant rndReq` type.
+fakeWebRouter ∷
+  ∀ ireq oreq body rnd rndReq rndReqBuilders doc res.
+  HFoldlWithIndex (ContractRequest oreq) (Variant oreq → Maybe (Variant ())) rnd (Variant oreq → Maybe (Variant rndReq)) ⇒
+  HFoldlWithIndex (RequestBuildersStep (Variant rndReq) (Variant rndReq)) {} (Proxy (Variant rndReq)) rndReqBuilders ⇒
+  doc →
+  WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res ->
+  { navigate ∷ Variant rndReq → Effect Unit
+  , redirect ∷ Variant rndReq → Effect Unit
+  , request ∷ rndReqBuilders
+  }
+fakeWebRouter doc web =
+  { navigate: const $ pure unit
+  , redirect: const $ pure unit
+  , request: webRequest web
+  }

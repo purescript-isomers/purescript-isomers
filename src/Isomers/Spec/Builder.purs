@@ -1,7 +1,6 @@
 module Isomers.Spec.Builder where
 
 import Prelude
-
 import Data.Bifunctor (lmap)
 import Data.Homogeneous (class ToHomogeneousRow)
 import Data.Tuple.Nested ((/\), type (/\))
@@ -13,7 +12,7 @@ import Isomers.Contrib.Type.Eval.Foldings (SListCons, HomogeneousRow)
 import Isomers.HTTP (Method(..))
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern)
 import Isomers.Request (Accum, Duplex', Parser, Printer(..)) as Request
-import Isomers.Request.Accum (insert, unifyRoute) as Request.Accum
+import Isomers.Request.Accum (insert, scalar, unifyRoute) as Request.Accum
 import Isomers.Request.Accum.Generic (class HFoldlAccumVariant)
 import Isomers.Response (Duplex) as Response
 import Isomers.Spec.Accept (ContentTypes)
@@ -33,7 +32,8 @@ import Type.Prelude (class IsSymbol, RProxy, SProxy(..))
 
 -- | Used for recursive mapping over a record fields.
 -- | `route` variable is carried around because it helps inference.
-data BuilderStep route = BuilderStep
+data BuilderStep route
+  = BuilderStep
 
 instance mappingBuilder ∷
   Builder a body route ireq oreq res ⇒
@@ -42,6 +42,13 @@ instance mappingBuilder ∷
 
 class Builder a body route ireq oreq res | a → body ireq oreq res where
   accumSpec ∷ BuilderStep route → a → AccumSpec body route ireq oreq res
+
+unifyRoute ∷ ∀ route route' t12 t13 t14 t15 t16. TypeEquals route route' ⇒ AccumSpec t16 route t14 t13 t12 → AccumSpec t16 route' t14 t13 t12
+unifyRoute (AccumSpec { request, response }) =
+  AccumSpec
+    { request: Request.Accum.unifyRoute request
+    , response
+    }
 
 -- | Build an accept spec from request duplex and a hlist of response duplexes.
 instance builderHListToAcceptSpec ∷
@@ -58,17 +65,17 @@ instance builderHListToAcceptSpec ∷
   ) ⇒
   Builder (Request.Accum body route_ ireq oreq /\ (h : t)) body route (Variant ivReq) (Variant ovReq) res where
   accumSpec _ = Spec.Accept.accumSpec <<< lmap Request.Accum.unifyRoute
-
 -- | An endpoint which doesn't care about accept header.
 else instance builderPlainEndpoint ∷
   ( TypeEquals req (Request.Accum body route ireq oreq)
   , TypeEquals res (Response.Duplex ct ires ores)
   ) ⇒
   Builder (req /\ res) body route ireq oreq (Response.Duplex ct ires ores) where
-  accumSpec _ (request /\ response) = AccumSpec
-    { request: Type.Equality.to request
-    , response: Type.Equality.to response
-    }
+  accumSpec _ (request /\ response) =
+    AccumSpec
+      { request: Type.Equality.to request
+      , response: Type.Equality.to response
+      }
 
 instance builderMethodRec ∷
   ( HMap (BuilderStep route) { | rec } { | specs }
@@ -105,7 +112,8 @@ instance recBuilderRecord ∷
     r' = hmap s r
 
 -- | TODO: We probably want to restrict this to segments only
-data Insert (l ∷ Symbol) a sub = Insert (∀ body. Request.Duplex' body a) sub
+data Insert (l ∷ Symbol) a sub
+  = Insert (∀ body. Request.Duplex' body a) sub
 
 instance insertSpecBuilderSpec ∷
   ( Row.Cons l a route route'
@@ -121,10 +129,11 @@ else instance insertSpecBuilder ∷
   , Row.Lacks l route
   ) ⇒
   Builder (Insert l a sub) body { | route } ireq oreq res where
-  accumSpec s (Insert dpl sub) = insertIntoAccumSpec
-    (SProxy ∷ SProxy l)
-    dpl
-    (accumSpec (BuilderStep ∷ BuilderStep { | route' }) sub)
+  accumSpec s (Insert dpl sub) =
+    insertIntoAccumSpec
+      (SProxy ∷ SProxy l)
+      dpl
+      (accumSpec (BuilderStep ∷ BuilderStep { | route' }) sub)
 
 insertIntoAccumSpec ∷
   ∀ a body l ireq oreq route route' res.
@@ -135,14 +144,41 @@ insertIntoAccumSpec ∷
   Request.Duplex' body a →
   AccumSpec body { | route' } ireq oreq res →
   AccumSpec body { | route } ireq oreq res
-insertIntoAccumSpec l dpl (AccumSpec { request, response }) = AccumSpec
-  { request: Request.Accum.insert l dpl request
-  , response
-  }
+insertIntoAccumSpec l dpl (AccumSpec { request, response }) =
+  AccumSpec
+    { request: Request.Accum.insert l dpl request
+    , response
+    }
 
 insert ∷ ∀ a l sub. SProxy l → (∀ body. Request.Duplex' body a) → sub → Insert l a sub
 insert l dpl sub = Insert dpl sub
 
-spec :: forall t102 t103 t104 t105 t106. Builder t106 t105 (Record ()) t104 t103 t102 => t106 -> Spec t105 t104 t103 t102
-spec = rootAccumSpec <<< accumSpec (BuilderStep ∷ BuilderStep {})
+data Scalar a sub
+  = Scalar (∀ body. Request.Duplex' body a) sub
 
+-- | We are not able to "match" on `{}` directly in the place of `route`.
+-- | I hope that the use of `TypeEquals` is correct in this context.
+instance scalarBuilderSpec ∷
+  (TypeEquals {} route) =>
+  Builder (Scalar a (AccumSpec body a ireq oreq res)) body route ireq oreq res where
+  accumSpec s (Scalar dpl sub) = unifyRoute (setScalarSpec dpl sub)
+else instance scalarBuilder ∷
+  ( Builder sub body a ireq oreq res
+  , TypeEquals {} route
+  ) =>
+  Builder (Scalar a sub) body route ireq oreq res where
+  accumSpec s (Scalar dpl sub) =
+    unifyRoute
+      $ setScalarSpec
+          dpl
+          (accumSpec (BuilderStep ∷ BuilderStep a) sub)
+
+setScalarSpec ∷ ∀ t13 t14 t15 t17 t21. Request.Duplex' t17 t21 → AccumSpec t17 t21 t15 t14 t13 → AccumSpec t17 (Record ()) t15 t14 t13
+setScalarSpec dpl (AccumSpec { request, response }) =
+  AccumSpec
+    { request: Request.Accum.scalar dpl request
+    , response
+    }
+
+spec ∷ ∀ t102 t103 t104 t105 t106. Builder t106 t105 (Record ()) t104 t103 t102 ⇒ t106 → Spec t105 t104 t103 t102
+spec = rootAccumSpec <<< accumSpec (BuilderStep ∷ BuilderStep {})
