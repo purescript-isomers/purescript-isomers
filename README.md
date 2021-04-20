@@ -49,11 +49,11 @@ server ((_ /\ reqDec) /\ (resEnc /\ _)) handler httpReq = do
     Nothing -> -- handle bad request
 ```
 
-Please ignore the details like moands which we work in or error handling because they not important now. I want to only describe this idea briefly and clearly.
+Please ignore the details like moands which we work in or error handling because they are not important now.
 
 ### Multiple endpoints
 
-But a single endpoint APIs are a really rare thing. Usually we want to be able to provide multiple functions which serve different types of values for different types of inputs carried by requests. Server should be able to pick a request, decode it and pass the data to the appropriate handler and encode the result using appropriate encoding function. Similar thinking should be applied to the client function which should accept a request in the form of an application level **value** turn it into `HTTPRequest` and wait for a response which should be decoded by appropriate codec which is dedicated for this particular response type. On both ends of the wire we want to use aligning functions in this case of course and our codecs keep them together for us.
+A single endpoint APIs are a really rare thing. Usually we want to be able to provide multiple functions which serve different types of values for different types of inputs carried by requests. Server should be able to pick a request, decode it and pass the data to the appropriate handler and encode the result using appropriate encoding function. Similar thinking should be applied to the client function which should accept a request in the form of an application level **value** turn it into `HTTPRequest` and wait for a response which should be decoded by appropriate codec which is dedicated for this particular response type. On both ends of the wire we want to use aligning functions in this case of course and our codecs keep them together for us.
 
 To fulfill this "dispatch" requirement we use "compatible" `Variant`s and `Record`s types. So let me introduce `RealWorldApi` type :-P which can be used by both the client and the server to describe multiple endpoints safely:
 

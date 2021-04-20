@@ -270,7 +270,7 @@ printRoute (WebSpec { spec: Spec { request: reqDpl } }) = Request.Duplex.print r
 main :: Effect Unit
 main = do
   let
-    handlers' = renderToApi web handlers unit
+    handlers' = renderToApi web handlers identity unit
 
     WebSpec { spec } = web
   onClose ← Node.Server.serve spec handlers' { hostname: "127.0.0.1", port: 9000, backlog: Nothing } (log "127.0.0.1:9000")

@@ -47,14 +47,15 @@ instance foldingRenderHandlerStep ∷
 -- | We should parametrize this by "doc"
 instance foldingRenderHandlerStepLeaf ∷
   ( Row.Cons ix { | mimeHandlers } handlers_ handlers
-  , Row.Cons sourceMime (req → Aff res) mimeHandlers_ mimeHandlers
+  , Row.Cons sourceMime (req → m res) mimeHandlers_ mimeHandlers
   , Row.Lacks HtmlMime mimeHandlers
-  , Row.Cons HtmlMime (req → Aff (RawServer doc)) mimeHandlers mimeHandlers'
+  , Row.Cons HtmlMime (req → m (RawServer doc)) mimeHandlers mimeHandlers'
   -- | Why I'm not able to use mimeHandlers' type var here and below. Why??
-  , Row.Cons ix { "text/html" ∷ req → Aff (RawServer HtmlString) | mimeHandlers } handlers_ handlers'
+  , Row.Cons ix { "text/html" ∷ req → m (RawServer HtmlString) | mimeHandlers } handlers_ handlers'
   , TypeEquals f (Renderer router req res (RawServer doc))
   , IsSymbol ix
   , IsSymbol sourceMime
+  , Monad m
   ) ⇒
   FoldingWithIndex (RenderHandlerStep doc router) (SProxy ix) { | handlers } (Tagged sourceMime f) { | handlers' } where
   foldingWithIndex (RenderHandlerStep renderToHtml router) ix handlers (Tagged render) = do
@@ -62,14 +63,14 @@ instance foldingRenderHandlerStepLeaf ∷
       mimeHandlers ∷ { | mimeHandlers }
       mimeHandlers = Record.get ix handlers
 
-      sourceHandler ∷ req → Aff res
+      sourceHandler ∷ req → m res
       sourceHandler = Record.get (SProxy ∷ SProxy sourceMime) mimeHandlers
 
       f' ∷ router /\ Exchange req res → RawServer HtmlString
       f' = let Renderer f = Type.Equality.to render in map renderToHtml <<< f
 
-      htmlHandler ∷ req → Aff (RawServer HtmlString)
-      htmlHandler req = f' <<< Tuple router <<< Exchange req <<< Just <<< Right <$> (sourceHandler req ∷ Aff res)
+      htmlHandler ∷ req → m (RawServer HtmlString)
+      htmlHandler req = f' <<< Tuple router <<< Exchange req <<< Just <<< Right <$> (sourceHandler req ∷ m res)
 
       -- | Here there is also a problem
       -- | mimeHandlers' ∷ { | mimeHandlers' }
@@ -80,5 +81,6 @@ instance foldingRenderHandlerStepLeaf ∷
 
     handlers'
 
+renderToApi :: forall t10 t17 t18 t20 t21 t5 t6 t7 t8. HFoldlWithIndex (RenderHandlerStep t21 t20) t17 t18 t5 => WebSpec t10 (HJust t18) t8 t7 t6 -> t17 -> (t21 -> HtmlString) -> t20 -> t5
 renderToApi (WebSpec { render: HJust render, spec }) handlers router renderToHtml = do
   hfoldlWithIndex (RenderHandlerStep router renderToHtml) handlers render
