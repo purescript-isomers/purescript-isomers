@@ -1,7 +1,6 @@
 module Test.Web where
 
 import Prelude
-
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.HTTP.Method (Method)
@@ -86,6 +85,7 @@ responseDuplex = responseDual d
 responseDual d = Response.Okayish.Duplexes.asJson ser prs
   where
   ser = Dual.Pure.runSerializer d
+
   prs = lmap unsafeStringify <<< un V <<< Dual.Pure.runValidator d
 
 newtype HTML
@@ -228,7 +228,7 @@ web = do
         }
 
 handlers =
-  { "": { "application/json": (const $ pure $ Okayish.Type.fromEither $ Right { a: 8, b: "test", method: "ANY" })}
+  { "": { "application/json": (const $ pure $ Okayish.Type.fromEither $ Right { a: 8, b: "test", method: "ANY" }) }
   , shop:
       { "application/json":
           (const $ pure $ Okayish.Type.fromEither $ Right { a: 8, b: "test", method: "ANY" })
@@ -244,10 +244,13 @@ handlers =
       }
   , sub:
       { shop:
-          { "GET": { "application/json": \r → do
-            liftEffect $ log "REQUEST"
-            liftEffect $ log $ unsafeStringify r
-            pure $ Okayish.fromEither $ Right { a: r.productId, b: "sub-test:" <> r.test, method: "received GET" } }
+          { "GET":
+              { "application/json":
+                  \r → do
+                    liftEffect $ log "REQUEST"
+                    liftEffect $ log $ unsafeStringify r
+                    pure $ Okayish.fromEither $ Right { a: r.productId, b: "sub-test:" <> r.test, method: "received GET" }
+              }
           , "POST": { "application/json": \r → pure $ Okayish.fromEither $ Right { a: r.productId, b: "sub-test", method: "received POST" } }
           }
       }
@@ -258,7 +261,6 @@ req = Web.requestBuilders web
 webReq = Web.Client.Router.webRequest web
 
 -- webRouter = req.""."application/json" { productId: 8 }
-
 doc = htmlResponse (unit /\ (HTTP.Exchange (req.""."application/json" { productId: 8 }) Nothing))
 
 hostInfo = { hostName: "127.0.0.1", port: 9000, scheme: HTTP }
@@ -273,14 +275,15 @@ main = do
     handlers' = renderToApi web handlers identity unit
 
     WebSpec { spec } = web
-  onClose ← Node.Server.serve spec handlers' { hostname: "127.0.0.1", port: 9000, backlog: Nothing } (log "127.0.0.1:9000")
+  onClose ← Node.Server.serve spec handlers' identity { hostname: "127.0.0.1", port: 9000, backlog: Nothing } (log "127.0.0.1:9000")
   onClose (log "Closed")
   log $ _.path <<< printRoute web $ req.""."application/json" { productId: 130 }
+  launchAff_
+    $ do
+        delay $ Milliseconds 2000.0
+        liftEffect $ log $ "RESULT:"
 
-  launchAff_ $ do
-    delay $ Milliseconds 2000.0
-    liftEffect $ log $ "RESULT:"
-    -- result ← client.sub.shop."GET"."application/json" { productId: 120, test: "request-from-client" }
-    -- liftEffect $ log $ unsafeStringify $ result
-  -- log $ _.path <<< print web $ req.sub.shop."GET"."application/json" {productId: 8}
-  -- log $ unsafeStringify <<< printRoute web $ req.shop."application/json" { productId: 8 }
+-- result ← client.sub.shop."GET"."application/json" { productId: 120, test: "request-from-client" }
+-- liftEffect $ log $ unsafeStringify $ result
+-- log $ _.path <<< print web $ req.sub.shop."GET"."application/json" {productId: 8}
+-- log $ unsafeStringify <<< printRoute web $ req.shop."application/json" { productId: 8 }
