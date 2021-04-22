@@ -1,6 +1,7 @@
 module Isomers.Node.Server where
 
 import Prelude
+
 import Control.Monad.Except (catchError)
 import Data.Either (Either(..))
 import Data.Variant (Variant)
@@ -8,6 +9,7 @@ import Debug.Trace (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Aff (message) as Aff
+import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Effect.Console (error) as Console
 import Heterogeneous.Folding (class HFoldlWithIndex)
@@ -24,13 +26,14 @@ import Node.Stream (end) as Node.Stream
 -- | We need to move `maxBodySize` to a parameter
 -- | and think about error handling etc.
 router ∷
-  ∀ handlers ireq oreq resCodecs.
-  HFoldlWithIndex (RouterStep handlers resCodecs) Unit oreq (Aff ServerResponseWrapper) ⇒
+  ∀ handlers ireq m oreq resCodecs.
+  MonadAff m ⇒
+  HFoldlWithIndex (RouterStep handlers resCodecs) Unit oreq (m ServerResponseWrapper) ⇒
   Spec NodeSimpleRequest ireq oreq { | resCodecs } →
   { | handlers } →
   Node.HTTP.Request →
   Node.HTTP.Response →
-  Aff Unit -- (Either RoutingError ServerResponse)
+  m Unit -- (Either RoutingError ServerResponse)
 router spec handlers nreq nres = do
   let
     maxBodySize = 1000000
@@ -58,20 +61,22 @@ type ServerM
 -- | `ResponseM`, and a `ServerM` containing effects to run on boot, creates and
 -- | runs a HTTPure server without SSL.
 serve ::
-  ∀ handlers ireq oreq resCodecs.
-  HFoldlWithIndex (RouterStep handlers resCodecs) Unit (Variant oreq) (Aff ServerResponseWrapper) ⇒
+  ∀ handlers ireq m oreq resCodecs.
+  MonadAff m ⇒
+  HFoldlWithIndex (RouterStep handlers resCodecs) Unit (Variant oreq) (m ServerResponseWrapper) ⇒
   Spec NodeSimpleRequest ireq (Variant oreq) { | resCodecs } →
   { | handlers } →
+  (m ~> Aff) →
   Node.HTTP.ListenOptions →
   Effect Unit →
   ServerM
-serve spec handlers options onStarted = do
+serve spec handlers interpret options onStarted = do
   let
     r = router spec handlers
 
     handleRequest nreq nres =
       launchAff_ do
-        r nreq nres
+        interpret (r nreq nres)
           `catchError`
             \err → do
               liftEffect
