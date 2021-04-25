@@ -20,7 +20,9 @@ type RequestCodec a =  (a -> HTTPRequest) /\ (HTTPRequest -> Maybe a)
 type ResponseCodec a = (a -> HTTPResponse) /\ (HTTPResponse -> Maybe a)
 ```
 
-These codecs (I'm using `Duplex` term in the codebase following Nate's convention) allow us to send and receive data through HTTP channel. In the lib the representation and parsing/printing is a bit more complicated than that because we have different encodings on the client than on the server of HTTP messages (they are even parametrized) and we work in an effectful monad. Let say that this is not really important now.
+These codecs (I'm using `Duplex` term in the codebase following Nate's convention) allow us to send and receive data through HTTP channel.
+
+> In the lib the representation and parsing/printing is a bit more complicated than that because we have different encodings on the client than on the server of HTTP messages (they are even parametrized) and we work in an effectful monad. Let say that this is not really important now.
 
 ### Single endpoint
 
