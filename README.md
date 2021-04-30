@@ -28,7 +28,7 @@ These codecs (I'm using `Duplex` term in the codebase following Nate's conventio
 
 Given the above types we can define a simple, single endpoint API just by providing a pair:
 
-```
+```purescript
 type Api i o = RequestCodec i /\ ResponseCodec o
 ```
 
