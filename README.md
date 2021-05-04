@@ -79,8 +79,8 @@ client ::
   m (Maybe o)
 client ((reqEnc /\ _) /\ resCodecs) endpoint i = do
   let
-    httpReq = reqEnc (Variant.inj l i)
-    resDec = snd (Record.get l resCodecs)
+    httpReq = reqEnc (Variant.inj endpoint i)
+    resDec = snd (Record.get endpoint resCodecs)
 
   httpRes <- httpFetch httpReq
   pure $ resDec httpRes
