@@ -8,6 +8,7 @@ import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Isomers.Response.Encodings (NodeBody(..), ServerResponse) as Encodings
 import Network.HTTP.Types (Status) as HTTP.Types
+import Node.Buffer.Class (unsafeThaw) as Buffer.Immutable
 import Node.HTTP (Response, responseAsStream, setHeader, setStatusCode, setStatusMessage) as Node.HTTP
 import Node.Stream (end, pipe, write) as Node.Stream
 
@@ -27,7 +28,8 @@ writeNodeResponse sr response = do
     end = Node.Stream.end res $ pure unit
   for_ sr.body case _ of
     Encodings.NodeBuffer buff → do
-      void $ Node.Stream.write res buff $ end
+      buff' ← Buffer.Immutable.unsafeThaw buff
+      void $ Node.Stream.write res buff' $ end
     Encodings.NodeStream readable →
       void $ Node.Stream.pipe readable res
     Encodings.NodeWriter writer → do

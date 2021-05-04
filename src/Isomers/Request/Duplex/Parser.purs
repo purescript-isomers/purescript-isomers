@@ -28,6 +28,7 @@ import Effect (Effect)
 import Effect.Aff (Aff, Fiber, joinFiber)
 import Effect.Class (liftEffect)
 import Isomers.Contrib.Data.Variant (tag) as Contrib.Data.Variant
+import Isomers.Request.Duplex.Path (Params)
 import Isomers.Request.Duplex.Path (Parts, parse) as Path
 import Isomers.Request.Encodings (ServerRequest)
 import Network.HTTP.Types (HeaderName)
@@ -238,6 +239,9 @@ many p = many1 p <|> pure empty
 
 rest :: ∀ b. Parser b (Array String)
 rest = Chomp \state -> pure $ Success (state { path { segments = [] } }) state.path.segments
+
+params :: ∀ b. Parser b Params
+params = Chomp \state -> pure $ Success state state.path.params
 
 default :: forall a body. a -> Parser body a -> Parser body a
 default = flip (<|>) <<< pure

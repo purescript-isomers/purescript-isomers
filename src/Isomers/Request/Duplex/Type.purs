@@ -5,13 +5,16 @@ import Prelude
 import Data.Either (Either)
 import Data.Foldable (foldMap, foldr)
 import Data.HTTP.Method (Method) as Data.HTTP
+import Data.Maybe (Maybe)
 import Data.Profunctor (class Profunctor)
 import Data.String (Pattern(..), split) as String
+import Data.Tuple (uncurry)
 import Effect.Aff (Aff, Fiber)
 import Isomers.Request.Duplex.Parser (Parser, ParsingError)
-import Isomers.Request.Duplex.Parser (as, body, int, method, prefix, rest, run, take) as Parser
+import Isomers.Request.Duplex.Parser (as, body, flag, int, method, optional, param, params, prefix, rest, run, take) as Parser
+import Isomers.Request.Duplex.Path (Params)
 import Isomers.Request.Duplex.Printer (Printer)
-import Isomers.Request.Duplex.Printer (method, prefix, put, run) as Printer
+import Isomers.Request.Duplex.Printer (flag, method, param, prefix, put, run) as Printer
 import Isomers.Request.Encodings (ClientRequest, ServerRequest)
 import Prim.Row (class Cons) as Row
 import Type.Prelude (class IsSymbol, SProxy)
@@ -60,14 +63,26 @@ int = as show Parser.int
 prefix ∷ ∀ body i o. String → Duplex body i o → Duplex body i o
 prefix s (Duplex enc dec) = Duplex (Printer.prefix s <<< enc) (Parser.prefix s dec)
 
+flag ∷ ∀ body. String → Duplex body Boolean Boolean
+flag n = Duplex (Printer.flag n) (Parser.flag n)
+
 string ∷ ∀ body. Duplex' body String → Duplex' body String
 string = as identity pure
 
 segment ∷ ∀ body. Duplex' body String
 segment = Duplex Printer.put Parser.take
 
+param ∷ ∀ body. String → Duplex' body String
+param p = Duplex (Printer.param p) (Parser.param p)
+
 withMethod ∷ ∀ body i o. Data.HTTP.Method → Duplex body i o → Duplex body i o
 withMethod m (Duplex enc dec) = Duplex (append (Printer.method m) <<< enc) (Parser.method m dec)
 
 rest ∷ ∀ body. Duplex' body (Array String)
 rest = Duplex (foldMap Printer.put) Parser.rest
+
+params ∷ ∀ body. Duplex body Params Params
+params = Duplex (foldMap (uncurry Printer.param)) Parser.params
+
+optional ∷ ∀ body i o. Duplex body i o → Duplex body (Maybe i) (Maybe o)
+optional (Duplex enc dec) = Duplex (foldMap enc) (Parser.optional dec)

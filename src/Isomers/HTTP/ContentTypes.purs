@@ -16,12 +16,14 @@ type Html a cts = ("text/html" ∷ a | cts)
 
 _html = SProxy ∷ SProxy HtmlMime
 
+type JpegMime = "image/jpeg"
+
 type Jpeg a cts = ("image/jpeg" ∷ a | cts)
 
-_jpeg = SProxy ∷ SProxy "image/jpeg"
+_jpeg = SProxy ∷ SProxy JpegMime
 
 jpeg ∷ ∀ a cts. a → Variant (Jpeg a + cts)
-jpeg =inj _jpeg
+jpeg = inj _jpeg
 
 type JsonMime = "application/json"
 

@@ -1,7 +1,6 @@
 module Isomers.Request.Accum.Type where
 
 import Prelude
-
 import Data.Either (Either)
 import Data.Foldable (foldr)
 import Data.HTTP.Method (Method) as HTTP.Method
@@ -63,19 +62,22 @@ instance profunctorAccum ∷ Profunctor (Accum body route) where
 -- | When we have same request type we can provide a categorical
 -- | composition and nicely chain accumulation of our final value
 -- | as well as their Printer.
-newtype RouteAccum body route req = RouteAccum (Accum body route req req)
+newtype RouteAccum body route req
+  = RouteAccum (Accum body route req req)
 
 instance semigroupoidRouteAccum ∷ Semigroupoid (RouteAccum body) where
   compose (RouteAccum (Accum (Duplex ser1 prs1) ext1)) (RouteAccum (Accum (Duplex ser2 prs2) ext2)) = RouteAccum $ Accum dpl ext
     where
-      prs = ado
-        g ← prs2
-        f ← prs1
-        in
-          f <<< g
-      ser i = ser1 i <> ser2 (ext1 i)
-      dpl = Duplex ser prs
-      ext = ext2 <<< ext1
+    prs = ado
+      g ← prs2
+      f ← prs1
+      in f <<< g
+
+    ser i = ser1 i <> ser2 (ext1 i)
+
+    dpl = Duplex ser prs
+
+    ext = ext2 <<< ext1
 
 instance categoryRouteAccum ∷ Category (RouteAccum body) where
   identity = RouteAccum (Accum (pure identity) identity)
@@ -91,16 +93,34 @@ insert ∷
   Accum body { | route } ireq oreq
 insert l (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs') dst'
   where
-  prt' ireq = do
-    let
-      acc = dst ireq
-    prt (Record.get l acc) <> dprt ireq
+  prt' ireq = prt (Record.get l $ dst ireq) <> dprt ireq
 
   dst' = Record.delete l <<< dst
 
   prs' = ado
     a ← prs
     f ← dprs
+    in \acc →
+      f (Record.insert l a acc)
+
+insertFlipped ∷
+  ∀ a route route' body l ireq oreq.
+  IsSymbol l ⇒
+  Row.Cons l a route route' ⇒
+  Row.Lacks l route ⇒
+  SProxy l →
+  Duplex' body a →
+  Accum body { | route' } ireq oreq →
+  Accum body { | route } ireq oreq
+insertFlipped l (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs') dst'
+  where
+  prt' ireq = dprt ireq <> prt (Record.get l $ dst ireq)
+
+  dst' = Record.delete l <<< dst
+
+  prs' = ado
+    f ← dprs
+    a ← prs
     in \acc →
       f (Record.insert l a acc)
 
@@ -111,20 +131,28 @@ scalar ∷
   Duplex' body a →
   Accum body a ireq oreq →
   Accum body {} ireq oreq
-scalar (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs') dst'
+scalar (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs') (const {})
   where
-  prt' ireq = do
-    let
-      a = dst ireq
-    prt a <> dprt ireq
-
-  dst' = const {}
+  prt' ireq = prt (dst ireq) <> dprt ireq
 
   prs' = ado
     a ← prs
     f ← dprs
     in const $ f a
 
+scalarFlipped ∷
+  ∀ a body ireq oreq.
+  Duplex' body a →
+  Accum body a ireq oreq →
+  Accum body {} ireq oreq
+scalarFlipped (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs') (const {})
+  where
+  prt' ireq = dprt ireq <> prt (dst ireq)
+
+  prs' = ado
+    f ← dprs
+    a ← prs
+    in const $ f a
 
 -- | Switch from `Record` accumlator into `HList` one.
 hnil ∷ ∀ body ireq oreq. Accum body HNil ireq oreq → Accum body {} ireq oreq
@@ -192,9 +220,10 @@ print (Accum (Duplex enc _) _) = Printer.run <<< enc
 method ∷ ∀ body route i o. HTTP.Method.Method → Accum body route i o → Accum body route i o
 method m (Accum (Duplex enc dec) dst) = do
   let
-    dpl = Duplex
-      (append (Printer.method m) <$> enc)
-      (Parser.method m dec)
+    dpl =
+      Duplex
+        (append (Printer.method m) <$> enc)
+        (Parser.method m dec)
   Accum dpl dst
 
 imapRoute ∷ ∀ body ireq oreq route route'. (route' → route) → (route → route') → Accum body route ireq oreq → Accum body route' ireq oreq
@@ -208,4 +237,3 @@ rootDuplex accum = do
   let
     (Accum (Duplex prt prs) _) = path "" accum
   Duplex (prt) (prs <@> {})
-

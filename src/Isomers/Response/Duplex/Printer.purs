@@ -8,11 +8,15 @@ import Data.Array (cons) as Array
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
 import Data.Tuple.Nested ((/\))
+import Effect (Effect)
 import Effect.Unsafe (unsafePerformEffect)
 import Isomers.Response.Encodings (NodeBody(..), ServerResponse) as Encodings
 import Network.HTTP.Types (HeaderName, Status)
 import Network.HTTP.Types (ok200) as Status
-import Node.Buffer (fromString) as Node.Buffer
+import Node.Buffer (Buffer)
+import Node.Buffer (freeze, unsafeFreeze) as Buffer
+import Node.Buffer.Immutable (ImmutableBuffer) as Buffer
+import Node.Buffer.Immutable (fromString) as Buffer.Immutable
 import Node.Encoding (Encoding(..))
 import Node.Stream (Readable) as Node.Stream
 
@@ -46,8 +50,21 @@ json = Argonaut.stringify >>> string
 stream ∷ (∀ r. Node.Stream.Readable r) → Printer
 stream s = body (Encodings.NodeStream s)
 
+immutableBuffer ∷ Buffer.ImmutableBuffer → Printer
+immutableBuffer buff = body (Encodings.NodeBuffer buff)
+
+buffer ∷ Buffer → Effect Printer
+buffer buff = do
+  buff' ← Buffer.freeze buff
+  pure $ body (Encodings.NodeBuffer $ buff')
+
+unsafeBuffer ∷ Buffer → Printer
+unsafeBuffer buff = unsafePerformEffect $ do
+  buff' ← Buffer.unsafeFreeze buff
+  pure $ body (Encodings.NodeBuffer $ buff')
+
 string ∷ String → Printer
-string str = body $ Encodings.NodeBuffer $ unsafePerformEffect $ Node.Buffer.fromString str UTF8
+string str = body $ Encodings.NodeBuffer $ Buffer.Immutable.fromString str UTF8
 
 defaultResponse ∷ Encodings.ServerResponse
 defaultResponse =

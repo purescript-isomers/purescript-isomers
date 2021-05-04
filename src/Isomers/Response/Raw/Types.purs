@@ -3,8 +3,11 @@ module Isomers.Response.Raw.Types where
 import Prelude
 
 import Control.Comonad (class Comonad, class Extend)
+import Data.Foldable (class Foldable, foldlDefault, foldrDefault)
+import Data.Traversable (class Traversable, traverseDefault)
 import Isomers.Response.Encodings (ClientHeaders, ServerHeaders) as Encodings
 import Network.HTTP.Types (Status) as HTTP.Types
+import Network.HTTP.Types (ok200)
 
 -- | This kind of encoding is useful when we do rendering of the
 -- | response into let say HTML". We
@@ -27,9 +30,19 @@ instance extendRawServer ∷ Extend RawServer where
     let
       body = (f h)
     RawServer { body, headers, status }
+instance foldableRawServer ∷ Foldable RawServer where
+  foldMap f (RawServer { body }) = f body
+  foldl f = foldlDefault f
+  foldr f = foldrDefault f
+instance traversableRawServer ∷ Traversable RawServer where
+  sequence (RawServer { body, headers, status }) = RawServer <<< { body: _, headers, status } <$> body
+  traverse f = traverseDefault f
 
 instance comonadRawServer ∷ Comonad RawServer where
   extract (RawServer { body }) = body
+
+serverOk ∷ ∀ body. body → RawServer body
+serverOk body = RawServer { body, headers: mempty, status: ok200 }
 
 newtype RawClient body = RawClient
   { body ∷  body
@@ -46,3 +59,4 @@ instance extendRawClient ∷ Extend RawClient where
 
 instance comonadRawClient ∷ Comonad RawClient where
   extract (RawClient { body }) = body
+

@@ -1,59 +1,39 @@
-module Isomers.Response.Okayish.Type where
-
---   ( module Exports
---   , asJson
---   , injInto
---   , toEither
---   , fromEither
---   , fromVariant
---   , toVariant
---   , roundtripEither
---   , unsafeFromEither
---   , print
---   , parse
---   , Response
---   , _ok
---   , ok
---   , Ok
---   , json
---   , _notFound
---   , notFound
---   , notFound'
---   , NotFound
---   , _found
---   , found
---   , Found
---   , _movedPermanently
---   , movedPermanently
---   , MovedPermanently
---   , wrapVariantDuplex
---   , unwrapToVariantDuplex
---   ) where
+module Isomers.Response.Okayish.Type
+  ( module Exports
+  , badRequest
+  , _badRequest
+  , BadRequest
+  , toEither
+  , fromEither
+  , fromVariant
+  , toVariant
+  , roundtripEither
+  , unsafeFromEither
+  , _ok
+  , ok
+  , Ok
+  , Okayish
+  , _notFound
+  , notFound
+  , NotFound
+  , _found
+  , found
+  , Found
+  ) where
 
 import Prelude
 
 import Control.Alt (class Alt, alt)
-import Data.Argonaut (Json)
 import Data.Either (Either(..))
 import Data.Foldable (class Foldable, foldMap, foldl, foldr)
-import Data.Lens (iso)
 import Data.Traversable (class Traversable, sequenceDefault, traverse)
 import Data.Variant (Variant)
 import Data.Variant (inj, on) as Variant
-import Effect.Aff (Aff)
 import Isomers.Contrib.Data.Variant (append) as Contrib.Data.Variant
-import Isomers.HTTP.ContentTypes (HtmlMime, _html, _json)
 import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
-import Isomers.Response.Duplex (Duplex(..), Duplex', withStatus)
-import Isomers.Response.Duplex (asJson, json, reqHeader, withHeaderValue, withStatus) as Duplex
-import Isomers.Response.Duplex.Parser (ParsingError)
-import Isomers.Response.Duplex.Parser (run) as Parser
-import Isomers.Response.Duplex.Printer (run) as Printer
-import Isomers.Response.Duplex.Variant (empty, injInto) as Duplex.Variant
-import Isomers.Response.Encodings (ClientResponse, ServerResponse) as Encodings
-import Network.HTTP.Types (found302, hContentType, hLocation, movedPermanently301, notFound404, ok200)
-import Prim.Row (class Cons, class Lacks, class Union) as Row
-import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
+import Isomers.Response.Duplex (Duplex)
+import Prim.Row (class Lacks) as Row
+import Type.Prelude (SProxy(..))
 import Type.Row (type (+))
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -62,6 +42,12 @@ _ok = SProxy ∷ SProxy "ok"
 -- | Alias useful when working with underling `Variant`.
 type Ok a res
   = ( ok ∷ a | res )
+
+ok :: forall a res. a -> Okayish res a
+ok a = Okayish $ Variant.inj _ok a
+
+notOk ∷ ∀ a res. Row.Lacks "ok" res ⇒ Variant res → Okayish res a
+notOk = Okayish <<< Contrib.Data.Variant.append _ok
 
 type OkayishDuplex ct vi vo a b
   = Duplex ct (Okayish vi a) (Okayish vo b)
@@ -90,12 +76,9 @@ toEither ∷ ∀ a res. Okayish res a → Either (Variant res) a
 toEither (Okayish v) = Variant.on _ok Right Left v
 
 fromEither ∷ ∀ a res. Row.Lacks "ok" res ⇒ Either (Variant res) a → Okayish res a
-fromEither (Right a) = Okayish $ Variant.inj _ok a
+fromEither (Right a) = ok a
 
-fromEither (Left v) = Okayish $ (append' v)
-  where
-  append' ∷ Variant res → Variant (Ok a + res)
-  append' = Contrib.Data.Variant.append _ok
+fromEither (Left v) = notOk v
 
 roundtripEither ∷ ∀ a b res res'. (Either (Variant res) a → Either (Variant res') b) → Okayish res a → Okayish res' b
 roundtripEither f = unsafeFromEither <<< f <<< toEither
@@ -150,5 +133,20 @@ type NotFound a res
   = ( notFound ∷ a | res )
 
 notFound ∷ ∀ a b res. Row.Lacks "ok" res ⇒ a → Okayish (NotFound a + res) b
-notFound a = fromEither $ Left (Variant.inj _notFound a)
+notFound = notOk <<< Variant.inj _notFound
 
+_found = SProxy ∷ SProxy "found"
+
+type Found res
+  = ( found ∷ String | res )
+
+found ∷ ∀ a res. Row.Lacks "ok" res ⇒ String → Okayish (Found + res) a
+found = notOk <<< Variant.inj _found
+
+_badRequest = SProxy ∷ SProxy "badRequest"
+
+type BadRequest a res
+  = ( badRequest ∷ a | res )
+
+badRequest ∷ ∀ a b res. Row.Lacks "ok" res ⇒ a → Okayish (BadRequest a + res) b
+badRequest = notOk <<< Variant.inj _badRequest

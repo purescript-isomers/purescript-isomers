@@ -8,9 +8,9 @@ import Data.Map (Map)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
 import Effect (Effect)
-import Effect.Aff (Aff, Fiber)
+import Effect.Aff (Fiber)
 import Network.HTTP.Types (Header, Status, HeaderName)
-import Node.Buffer (Buffer) as Node.HTTP
+import Node.Buffer.Immutable (ImmutableBuffer) as Buffer.Immutable
 import Node.Stream (Writable, Readable) as Node.Stream
 import Type.Prelude (SProxy(..))
 import Web.File.Blob (Blob) as Web.File
@@ -26,7 +26,7 @@ type Base body extra
 -- | building blocks like `Str = (string ∷ String | res)`
 -- | so we can provide basic responses for json, html etc.
 data NodeBody
-  = NodeBuffer Node.HTTP.Buffer
+  = NodeBuffer Buffer.Immutable.ImmutableBuffer
   | NodeStream (∀ r. Node.Stream.Readable r)
   -- | We assume that writer is closing the buffer on its own...
   | NodeWriter (∀ r. Node.Stream.Writable r → Effect Unit)

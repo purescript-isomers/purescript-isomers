@@ -59,7 +59,7 @@ import Isomers.Web.Types (WebSpec(..))
 import Network.HTTP.Types (internalServerError500, ok200)
 import Node.Stream (onClose)
 import Polyform.Batteries.Json.Duals ((:=))
-import Polyform.Batteries.Json.Duals (Pure, arrayOf, int, object, string) as Json.Duals
+import Polyform.Batteries.Json.Duals (Pure, arrayOf, int, number, object, string) as Json.Duals
 import Polyform.Dual (Dual(..))
 import Polyform.Dual.Record (build) as Dual.Record
 import Polyform.Reporter (R)
@@ -222,7 +222,7 @@ web = do
               { shop:
                   Method
                     { "GET": z /\ (Rendered responseDuplex htmlResponse : HNil)
-                    , "POST": z /\ (responseDuplex : HNil)
+                    , "POST": z /\ (Rendered (responseDual Json.Duals.number) htmlResponse : HNil)
                     }
               }
         }
@@ -251,7 +251,7 @@ handlers =
                     liftEffect $ log $ unsafeStringify r
                     pure $ Okayish.fromEither $ Right { a: r.productId, b: "sub-test:" <> r.test, method: "received GET" }
               }
-          , "POST": { "application/json": \r → pure $ Okayish.fromEither $ Right { a: r.productId, b: "sub-test", method: "received POST" } }
+          , "POST": { "application/json": \r → pure $ Okayish.fromEither $ Right 8.0 }
           }
       }
   }
@@ -272,7 +272,7 @@ printRoute (WebSpec { spec: Spec { request: reqDpl } }) = Request.Duplex.print r
 main :: Effect Unit
 main = do
   let
-    handlers' = renderToApi web handlers identity unit
+    handlers' = renderToApi web handlers pure unit
 
     WebSpec { spec } = web
   onClose ← Node.Server.serve spec handlers' identity { hostname: "127.0.0.1", port: 9000, backlog: Nothing } (log "127.0.0.1:9000")

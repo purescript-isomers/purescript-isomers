@@ -3,5 +3,5 @@ module Isomers.Request.Duplex
   )
   where
 
-import Isomers.Request.Duplex.Type (parse, print, as , body , int , path , rest, root , segment , string) as Exports
+import Isomers.Request.Duplex.Type (parse, print, as , body , flag, int , optional, path , param, rest, root , segment , string) as Exports
 

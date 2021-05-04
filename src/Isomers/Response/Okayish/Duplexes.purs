@@ -14,7 +14,7 @@ import Data.Variant (Variant)
 import Data.Variant (inj, on) as Variant
 import Effect.Aff (Aff)
 import Isomers.Contrib.Data.Variant (append) as Contrib.Data.Variant
-import Isomers.HTTP.ContentTypes (HtmlMime, JsonMime, JavascriptMime, _html, _json)
+import Isomers.HTTP.ContentTypes (HtmlMime, JavascriptMime, JsonMime, JpegMime, _html, _json)
 import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
 import Isomers.Response.Duplex (Duplex(..), Duplex', withStatus)
 import Isomers.Response.Duplex (asJson, header, json, reqHeader, withHeaderValue, withStatus) as Duplex
@@ -23,9 +23,9 @@ import Isomers.Response.Duplex.Parser (run, string) as Parser
 import Isomers.Response.Duplex.Printer (run, string) as Printer
 import Isomers.Response.Duplex.Variant (empty, injInto) as Duplex.Variant
 import Isomers.Response.Encodings (ClientResponse, ServerResponse) as Encodings
-import Isomers.Response.Okayish.Type (Ok, Okayish(..), _notFound, _ok, fromVariant, toVariant)
+import Isomers.Response.Okayish.Type (Found, NotFound, Ok, Okayish(..), BadRequest, _badRequest, _found, _notFound, _ok, fromVariant, toVariant)
 import Isomers.Response.Types (HtmlString(..), JavascriptString(..))
-import Network.HTTP.Types (found302, hContentType, hLocation, movedPermanently301, notFound404, ok200)
+import Network.HTTP.Types (badRequest400, found302, hContentType, hLocation, movedPermanently301, notFound404, ok200)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
 import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
 import Type.Row (type (+))
@@ -110,23 +110,42 @@ asJson f g = ok $ Duplex.asJson f g
 javascript ∷ Duplex' JavascriptMime (Okayish () JavascriptString)
 javascript = ok $ _Newtype (Duplex Printer.string Parser.string)
 
--- type Found res
---   = ( found ∷ String | res )
--- 
--- _found = SProxy ∷ SProxy "found"
--- 
--- found ∷
---   ∀ ct res o i.
---   Row.Union res (Found + ()) (Found + res) ⇒
---   Duplex (Okayish res i) (Okayish res o) →
---   Duplex
---     (Okayish (Found + res) i)
---     (Okayish (Found + res) o)
--- found res =
---   res
---     # injInto _found
---         (Duplex.withStatus found302 $ Duplex.reqHeader hLocation)
--- 
+notFound ∷
+  ∀ t105 t107 t110 t111 t113 t114 t115.
+  Row.Union t105 (NotFound t110 + ()) (NotFound t110 + t105) ⇒
+  Row.Union t107 (NotFound t111 + ()) (NotFound t111 + t107) ⇒
+  Duplex t113 t111 t110 →
+  Duplex t113 (Okayish t107 t115) (Okayish t105 t114) →
+  Duplex t113
+    (Okayish (NotFound t111 + t107) t115)
+    (Okayish (NotFound t110 + t105) t114)
+notFound nf res = injInto _notFound (Duplex.withStatus notFound404 $ nf) res
+
+notFound' nf res = injStrangerInto _notFound (Duplex.withStatus notFound404 $ nf) res
+
+found ∷
+  ∀ t105 t107 t110 t111 t113 t114 t115.
+  Row.Union t105 (Found + ()) (Found + t105) ⇒
+  Row.Union t107 (Found + ()) (Found + t107) ⇒
+  Duplex t113 (Okayish t107 t115) (Okayish t105 t114) →
+  Duplex t113
+    (Okayish (Found + t107) t115)
+    (Okayish (Found + t105) t114)
+found res = injInto _found (Duplex.withStatus found302 $ Duplex.reqHeader hLocation) res
+
+badRequest ∷
+  ∀ t105 t107 t110 t111 t113 t114 t115.
+  Row.Union t105 (BadRequest t110 + ()) (BadRequest t110 + t105) ⇒
+  Row.Union t107 (BadRequest t111 + ()) (BadRequest t111 + t107) ⇒
+  Duplex t113 t111 t110 →
+  Duplex t113 (Okayish t107 t115) (Okayish t105 t114) →
+  Duplex t113
+    (Okayish ( BadRequest t111 + t107) t115)
+    (Okayish ( BadRequest t110 + t105) t114)
+badRequest nf res = injInto _badRequest (Duplex.withStatus badRequest400 $ nf) res
+
+badRequest' nf res = injStrangerInto _badRequest (Duplex.withStatus badRequest400 $ nf) res
+
 -- type MovedPermanently res
 --   = ( movedPermanently ∷ String | res )
 -- 
@@ -144,43 +163,3 @@ javascript = ok $ _Newtype (Duplex Printer.string Parser.string)
 --     # injInto _movedPermanently
 --         (Duplex.withStatus movedPermanently301 $ Duplex.reqHeader hLocation)
 -- 
--- _notFound = SProxy ∷ SProxy "notFound"
--- 
--- type NotFound a res
---   = ( notFound ∷ a | res )
--- 
--- notFound ∷
---   ∀ ct res nfi nfo o i.
---   Row.Union res (NotFound nfi + ()) (NotFound nfi + res) ⇒
---   Row.Union res (NotFound nfo + ()) (NotFound nfo + res) ⇒
---   Duplex nfi nfo →
---   Duplex (Okayish res i) (Okayish res o) →
---   Duplex
---     (Okayish (NotFound nfi + res) i)
---     (Okayish (NotFound nfo + res) o)
--- notFound nf res =
---   res
---     # injInto _notFound
---         (Duplex.withStatus notFound404 $ nf)
--- 
--- notFound' ∷
---   ∀ i ct o res.
---   Row.Union res (NotFound Unit + ()) (NotFound Unit + res) ⇒
---   Row.Union res (NotFound Unit + ()) (NotFound Unit + res) ⇒
---   Duplex (Okayish res i) (Okayish res o) →
---   Duplex
---     (Okayish (NotFound Unit + res) i)
---     (Okayish (NotFound Unit + res) o)
--- notFound' res = notFound (pure unit) res
-notFound ∷
-  ∀ t105 t107 t110 t111 t113 t114 t115.
-  Row.Union t105 (notFound ∷ t110) (notFound ∷ t110 | t105) ⇒
-  Row.Union t107 (notFound ∷ t111) (notFound ∷ t111 | t107) ⇒
-  Duplex t113 t111 t110 →
-  Duplex t113 (Okayish t107 t115) (Okayish t105 t114) →
-  Duplex t113
-    (Okayish ( notFound ∷ t111 | t107) t115)
-    (Okayish ( notFound ∷ t110 | t105) t114)
-notFound nf res = injInto _notFound (Duplex.withStatus notFound404 $ nf) res
-
-notFound' nf res = injStrangerInto _notFound (Duplex.withStatus notFound404 $ nf) res

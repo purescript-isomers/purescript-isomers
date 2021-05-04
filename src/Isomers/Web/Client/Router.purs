@@ -89,15 +89,27 @@ type RouterInterface req
     , component ∷ JSX
     }
 
-type NavigationInterface req reqBuilders
+type NavigationInterface ireq req reqBuilders
   = { navigate ∷ req → Effect Unit
+    , print ∷
+      { spec ∷ ireq → String
+      , web ∷ req → String
+      }
     , request ∷ reqBuilders
     , redirect ∷ req → Effect Unit
+    -- | TODO: This is a quick hack to allow route changes without
+    -- | fetch on router side. This does not trigger any rendering
+    -- | of the component which is bad because we have inconsistent
+    -- | route app state.
+    -- | For sure an app should be able to change the URL and response
+    -- | data state without a request on the router side and any unnecessary
+    -- | parsing.
+    , __replace ∷ req → Effect Unit
     }
 
 webRouter ::
   ∀ ireq oreq body rnd rndReq rndReqBuilders doc res.
-  FoldRender (WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res) (NavigationInterface (Variant rndReq) rndReqBuilders) (Variant rndReq) (Aff doc) =>
+  FoldRender (WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res) (NavigationInterface (Variant ireq) (Variant rndReq) rndReqBuilders) (Variant rndReq) (Aff doc) =>
   HFoldlWithIndex (ContractRequest oreq) (Variant oreq → Maybe (Variant ())) rnd (Variant oreq → Maybe (Variant rndReq)) ⇒
   HFoldlWithIndex (ExpandRequest ireq) (Variant () → Variant ireq) rnd (Variant rndReq → Variant ireq) ⇒
   HFoldlWithIndex (RequestBuildersStep (Variant rndReq) (Variant rndReq)) {} (Proxy (Variant rndReq)) rndReqBuilders ⇒
@@ -115,8 +127,8 @@ webRouter ::
     )
 webRouter defaults webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, response }), render: HJust renderers }) hostInfo = do
   let
-    render ∷ Variant rndReq → NavigationInterface (Variant rndReq) rndReqBuilders → Aff doc
-    render = foldRender (Proxy ∷ Proxy (NavigationInterface (Variant rndReq) rndReqBuilders)) webSpec hostInfo
+    render ∷ Variant rndReq → NavigationInterface (Variant ireq) (Variant rndReq) rndReqBuilders → Aff doc
+    render = foldRender (Proxy ∷ Proxy (NavigationInterface (Variant ireq) (Variant rndReq) rndReqBuilders)) webSpec hostInfo
 
     parsePure ∷ String → Identity (AffRoute (Variant rndReq) doc)
     parsePure url = Identity (Parsing url)
@@ -130,63 +142,75 @@ webRouter defaults webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, respon
 
     print (Parsing url) = url
   pushStateInterface ← liftEffect PushState.makeInterface
-  liftEffect pushStateInterface.locationState >>= _.path >>> \initialRoute → parseRoute initialRoute
-    >>= case _ of
-        Nothing → pure $ Left $ "Invalid initial route: \"" <> initialRoute <> "\""
-        Just initialRoute →
-          liftEffect do
-            -- | I'm not able to render out of the box because...
-            -- | I need a router interface for rendering to work :-)
-            { signal, modify: modifySignal } ← Signal.create $ defaults.doc
-            let
-              onRoute ∷
-                RouterInterface (AffRoute (Variant rndReq) doc) →
-                AffRoute (Variant rndReq) doc →
-                Router.Router (AffRoute (Variant rndReq) doc) Router.Transitioning Router.Resolved Unit
-              onRoute self route = do
-                let
-                  self' =
-                    { navigate: self.navigate <<< Fetching
-                    , redirect: self.redirect <<< Fetching
-                    , request: webRequest webSpec
-                    }
-                case route of
-                  Parsing url →
-                    Router.Router do
-                      liftAff (parseRoute url)
-                        >>= case _ of
-                            Just req → do
-                              doc ← liftAff $ render req self'
-                              liftFreeT $ Router.Override $ Fetched req doc
-                            Nothing → pure unit
-                  Fetching req →
-                    Router.Router do
-                      doc ← liftAff $ render req self'
-                      liftFreeT $ Router.Override $ Fetched req doc
-                  Fetched _ _ → continue
+  liftEffect pushStateInterface.locationState >>= _.path
+    >>> \initialRoute →
+        parseRoute initialRoute
+          >>= case _ of
+              Nothing → pure $ Left $ "Invalid initial route: \"" <> initialRoute <> "\""
+              Just initialRoute →
+                liftEffect do
+                  -- | I'm not able to render out of the box because...
+                  -- | I need a router interface for rendering to work :-)
+                  { signal, modify: modifySignal } ← Signal.create $ defaults.doc
+                  reqRef ← liftEffect $ Ref.new $ Nothing -- print (Fetching initialRoute)
+                  let
+                    onRoute ∷
+                      RouterInterface (AffRoute (Variant rndReq) doc) →
+                      AffRoute (Variant rndReq) doc →
+                      Router.Router (AffRoute (Variant rndReq) doc) Router.Transitioning Router.Resolved Unit
+                    onRoute self route = do
+                      let
+                        self' =
+                          { navigate: self.navigate <<< Fetching
+                          , print:
+                            { spec: unsafePrint reqDpl
+                            , web: \req → print (Fetching req)
+                            }
+                          , redirect: self.redirect <<< Fetching
+                          , __replace: \req → do
+                              Ref.write (Just $ print $ Fetching req) reqRef
+                              self.redirect $ Fetching req
+                          , request: webRequest webSpec
+                          }
+                        renderRouter req = do
+                          currReq ← liftEffect $ Ref.read reqRef
+                          when (currReq /= (Just $ print $ Fetching req)) do
+                            doc ← liftAff $ render req self'
+                            liftEffect $ Ref.write (Just $ print $ Fetching req) reqRef
+                            liftFreeT $ Router.Override $ Fetched req doc
+                      case route of
+                        Parsing url →
+                          Router.Router do
+                            liftAff (parseRoute url)
+                              >>= case _ of
+                                  Just req → renderRouter req
+                                  Nothing → pure unit
+                        Fetching req →
+                          Router.Router $ renderRouter req
+                        Fetched _ _ → continue
 
-              onTransition ∷ Transition (AffRoute (Variant rndReq) doc) → Effect Unit
-              onTransition = case _ of
-                Router.Transitioning _ _ → pure unit
-                Router.Resolved _ (Parsing _) → pure unit
-                Router.Resolved _ (Fetching req) → pure unit
-                Router.Resolved _ (Fetched req doc) → do
-                  modifySignal (const $ doc)
-            (interface ∷ (RouterInterface (AffRoute (Variant rndReq) doc))) ←
-              makeRouter'
-                pushStateInterface
-                { onRoute
-                , onTransition
-                , parse: parsePure
-                , print
-                }
-            pure
-              $ Right
-                  { component: interface.component
-                  , navigate: interface.navigate <<< Fetching
-                  , redirect: interface.redirect <<< Fetching
-                  , signal
-                  }
+                    onTransition ∷ Transition (AffRoute (Variant rndReq) doc) → Effect Unit
+                    onTransition = case _ of
+                      Router.Transitioning _ _ → pure unit
+                      Router.Resolved _ (Parsing _) → pure unit
+                      Router.Resolved _ (Fetching req) → pure unit
+                      Router.Resolved _ (Fetched req doc) → do
+                        modifySignal (const $ doc)
+                  (interface ∷ (RouterInterface (AffRoute (Variant rndReq) doc))) ←
+                    makeRouter'
+                      pushStateInterface
+                      { onRoute
+                      , onTransition
+                      , parse: parsePure
+                      , print
+                      }
+                  pure
+                    $ Right
+                        { component: interface.component
+                        , navigate: interface.navigate <<< Fetching
+                        , redirect: interface.redirect <<< Fetching
+                        , signal
+                        }
   where
   -- | `makeRouter` version which passes `self` reference to the `onRoute` function
   makeRouter' interface opts = do
@@ -207,15 +231,18 @@ webRouter defaults webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, respon
 fakeWebRouter ∷
   ∀ ireq oreq body rnd rndReq rndReqBuilders doc res.
   HFoldlWithIndex (ContractRequest oreq) (Variant oreq → Maybe (Variant ())) rnd (Variant oreq → Maybe (Variant rndReq)) ⇒
+  HFoldlWithIndex (ExpandRequest ireq) (Variant () → Variant ireq) rnd (Variant rndReq → Variant ireq) ⇒
   HFoldlWithIndex (RequestBuildersStep (Variant rndReq) (Variant rndReq)) {} (Proxy (Variant rndReq)) rndReqBuilders ⇒
   doc →
   WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res ->
-  { navigate ∷ Variant rndReq → Effect Unit
-  , redirect ∷ Variant rndReq → Effect Unit
-  , request ∷ rndReqBuilders
-  }
-fakeWebRouter doc web =
+  NavigationInterface (Variant ireq) (Variant rndReq) rndReqBuilders
+fakeWebRouter doc web@(WebSpec { spec: Spec { request: reqDpl }, render: HJust renderers }) =
   { navigate: const $ pure unit
+  , print:
+    { spec: unsafePrint reqDpl
+    , web: unsafePrint reqDpl <<< expandRequest (Proxy ∷ Proxy (Variant ireq)) renderers
+    }
   , redirect: const $ pure unit
   , request: webRequest web
+  , __replace: const $ pure unit
   }

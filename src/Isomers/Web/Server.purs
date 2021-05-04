@@ -2,45 +2,45 @@ module Isomers.Web.Server where
 
 import Prelude
 
+import Data.Bifunctor (bimap)
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
+import Data.Profunctor (dimap)
+import Data.Traversable (for)
 import Data.Tuple (Tuple(..))
-import Data.Tuple.Nested (type (/\), (/\))
-import Effect.Aff (Aff)
-import Heterogeneous.Folding (class Folding) as Heterogeneous
+import Data.Tuple.Nested (type (/\))
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
-import Heterogeneous.Mapping (class HMap, class MappingWithIndex, hmap)
 import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..))
 import Isomers.HTTP (Exchange(..))
 import Isomers.HTTP.ContentTypes (HtmlMime, _html)
-import Isomers.Response.Raw (RawServer(..))
-import Isomers.Response.Types (HtmlString(..))
-import Isomers.Server (router) as Server
+import Isomers.Response.Raw (RawServer)
+import Isomers.Response.Types (HtmlString)
 import Isomers.Web.Builder (Tagged(..))
 import Isomers.Web.Renderer (Renderer(..))
 import Isomers.Web.Types (WebSpec(..))
 import Prim.Row (class Cons, class Lacks) as Row
 import Record (get, insert, set) as Record
 import Type.Equality (class TypeEquals)
-import Type.Equality (to) as Type.Equality
+import Type.Equality (from, to) as Type.Equality
 import Type.Prelude (class IsSymbol, SProxy(..))
-import Unsafe.Coerce (unsafeCoerce)
 
 -- | We are passing frontent router so components
 -- | could trigger navigation etc.
-data RenderHandlerStep doc router = RenderHandlerStep (doc → HtmlString) router
+data RenderHandlerStep m doc router
+  = RenderHandlerStep (doc → m HtmlString) router
 
 instance foldingRenderHandlerStep ∷
   ( Row.Cons ix { | subhandlers } handlers_ handlers
   , IsSymbol ix
-  , HFoldlWithIndex (RenderHandlerStep doc router) { | subhandlers } { | rec } { | subhandlers' }
+  , HFoldlWithIndex (RenderHandlerStep m doc router) { | subhandlers } { | rec } { | subhandlers' }
   , Row.Cons ix { | subhandlers' } handlers_ handlers'
   ) ⇒
-  FoldingWithIndex (RenderHandlerStep doc router) (SProxy ix) { | handlers } { | rec } { | handlers' } where
+  FoldingWithIndex (RenderHandlerStep m doc router) (SProxy ix) { | handlers } { | rec } { | handlers' } where
   foldingWithIndex step ix handlers rec = do
     let
       subhandlers ∷ { | subhandlers }
       subhandlers = Record.get ix handlers
+
       subhandlers' = hfoldlWithIndex step subhandlers rec
     Record.set ix subhandlers' handlers
 
@@ -52,13 +52,18 @@ instance foldingRenderHandlerStepLeaf ∷
   , Row.Cons HtmlMime (req → m (RawServer doc)) mimeHandlers mimeHandlers'
   -- | Why I'm not able to use mimeHandlers' type var here and below. Why??
   , Row.Cons ix { "text/html" ∷ req → m (RawServer HtmlString) | mimeHandlers } handlers_ handlers'
+
   , TypeEquals f (Renderer router req res (RawServer doc))
+  -- , TypeEquals rrouter router
+  -- , TypeEquals rreq req
+  -- , TypeEquals rres res
+  -- , TypeEquals rdoc doc
   , IsSymbol ix
   , IsSymbol sourceMime
   , Monad m
   ) ⇒
-  FoldingWithIndex (RenderHandlerStep doc router) (SProxy ix) { | handlers } (Tagged sourceMime f) { | handlers' } where
-  foldingWithIndex (RenderHandlerStep renderToHtml router) ix handlers (Tagged render) = do
+  FoldingWithIndex (RenderHandlerStep m doc router) (SProxy ix) { | handlers } (Tagged sourceMime f) { | handlers' } where
+  foldingWithIndex (RenderHandlerStep renderToHtml router) ix handlers (Tagged f) = do
     let
       mimeHandlers ∷ { | mimeHandlers }
       mimeHandlers = Record.get ix handlers
@@ -66,11 +71,22 @@ instance foldingRenderHandlerStepLeaf ∷
       sourceHandler ∷ req → m res
       sourceHandler = Record.get (SProxy ∷ SProxy sourceMime) mimeHandlers
 
-      f' ∷ router /\ Exchange req res → RawServer HtmlString
-      f' = let Renderer f = Type.Equality.to render in map renderToHtml <<< f
+      -- f' ∷ (router /\ Exchange req res) → RawServer doc
+      -- f' = dimap (bimap Type.Equality.from (bimap Type.Equality.from Type.Equality.from)) (map Type.Equality.to) f
+
+      -- Renderer f' ∷ (router /\ Exchange req res) → RawServer doc
+      Renderer f' = Type.Equality.to f
+
+      f'' ∷ router /\ Exchange req res → m (RawServer HtmlString)
+      f'' i = do
+        let
+          -- Renderer f = dimap (bimap Type.Equality.from (dimap Type.Equality.from Type.Equality.to)) (Type.Equality.to) $ render
+          rs = f' i
+        for rs renderToHtml
+        -- renderToHtml <=< f
 
       htmlHandler ∷ req → m (RawServer HtmlString)
-      htmlHandler req = f' <<< Tuple router <<< Exchange req <<< Just <<< Right <$> (sourceHandler req ∷ m res)
+      htmlHandler req = f'' <<< Tuple router <<< Exchange req <<< Just <<< Right =<< (sourceHandler req ∷ m res)
 
       -- | Here there is also a problem
       -- | mimeHandlers' ∷ { | mimeHandlers' }
@@ -78,9 +94,22 @@ instance foldingRenderHandlerStepLeaf ∷
 
       handlers' ∷ { | handlers' }
       handlers' = Record.set ix mimeHandlers' handlers
-
     handlers'
 
-renderToApi :: forall t10 t17 t18 t20 t21 t5 t6 t7 t8. HFoldlWithIndex (RenderHandlerStep t21 t20) t17 t18 t5 => WebSpec t10 (HJust t18) t8 t7 t6 -> t17 -> (t21 -> HtmlString) -> t20 -> t5
-renderToApi (WebSpec { render: HJust render, spec }) handlers router renderToHtml = do
-  hfoldlWithIndex (RenderHandlerStep router renderToHtml) handlers render
+-- | We don't use ireq / oreq / res. We have to probably remove WebSpec and use its pieces here.
+-- |
+-- | * `handlers` - record of functions into `m res`
+-- | * `res` included in `router /\ Exchange req res` should be rendered into `RawServer doc` by spec renders
+-- | * `doc` is taken by the provided final "page" wrapping render and turned into `HtmlString`
+-- | * We end up with `RawServer HtmlString`
+-- |
+renderToApi ∷
+  ∀ doc clientRouter body handlers handlers' m render ireq oreq res.
+  HFoldlWithIndex (RenderHandlerStep m doc clientRouter) handlers render handlers' ⇒
+  WebSpec body (HJust render) ireq oreq res →
+  handlers →
+  (doc → m HtmlString) →
+  clientRouter →
+  handlers'
+renderToApi (WebSpec { render: HJust render, spec }) handlers renderToHtml router = do
+  hfoldlWithIndex (RenderHandlerStep renderToHtml router) handlers render
