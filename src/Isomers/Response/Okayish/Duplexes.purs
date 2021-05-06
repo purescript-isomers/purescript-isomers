@@ -31,8 +31,8 @@ import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
 import Type.Row (type (+))
 import Unsafe.Coerce (unsafeCoerce)
 
-type OkayishDuplex ct vi vo i o
-  = Duplex ct (Okayish vi i) (Okayish vo o)
+type OkayishDuplex ct v i o
+  = Duplex ct (Okayish v i) (Okayish v o)
 
 type OkayishDuplex' ct v a
   = Duplex' ct (Okayish v a)

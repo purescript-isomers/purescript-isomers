@@ -8,15 +8,14 @@ import Data.Variant (Variant)
 import Heterogeneous.Folding (class HFoldl)
 import Heterogeneous.Mapping (class HMap, class HMapWithIndex, class Mapping, hmap)
 import Isomers.Contrib.Heterogeneous.List (type (:))
-import Isomers.Contrib.Type.Eval.Foldings (SListCons, HomogeneousRow)
+import Isomers.Contrib.Type.Eval.Foldings (HomogeneousRow)
 import Isomers.HTTP (Method(..))
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern)
-import Isomers.Request (Accum, Duplex', Parser, Printer(..)) as Request
-import Isomers.Request.Accum (insert, scalar, unifyRoute) as Request.Accum
+import Isomers.Request (Accum(..), Duplex, Duplex', Parser) as Request
+import Isomers.Request.Accum (insert, insertReq, scalar, unifyRoute) as Request.Accum
 import Isomers.Request.Accum.Generic (class HFoldlAccumVariant)
 import Isomers.Response (Duplex) as Response
-import Isomers.Spec.Accept (ContentTypes)
-import Isomers.Spec.Accept (RequestMediaPatternParser(..), ResponseContentType(..), ResponseContentTypeRecord(..)) as Accept
+import Isomers.Spec.Accept (RequestMediaPatternParser, ResponseContentType, ResponseContentTypeRecord) as Accept
 import Isomers.Spec.Accept (accumSpec) as Spec.Accept
 import Isomers.Spec.Method (MethodStep)
 import Isomers.Spec.Method (accumSpec) as Spec.Method
@@ -24,10 +23,9 @@ import Isomers.Spec.Record (UnifyBody)
 import Isomers.Spec.Record (accumSpec) as Spec.Record
 import Isomers.Spec.Types (AccumSpec(..), GetRequest, GetResponse, Spec, rootAccumSpec)
 import Prim.Row (class Cons, class Lacks) as Row
-import Record.Extra (SLProxy, SNil)
 import Type.Equality (class TypeEquals)
 import Type.Equality (to) as Type.Equality
-import Type.Eval (class Eval, Lift)
+import Type.Eval (class Eval)
 import Type.Prelude (class IsSymbol, RProxy, SProxy(..))
 
 -- | Used for recursive mapping over a record fields.
@@ -40,15 +38,22 @@ instance mappingBuilder ∷
   Mapping (BuilderStep route) a (AccumSpec body route ireq oreq res) where
   mapping = accumSpec
 
-class Builder a body route ireq oreq res | a → body ireq oreq res where
+class Builder a (body ∷ # Type) route ireq oreq res | a → body ireq oreq res where
   accumSpec ∷ BuilderStep route → a → AccumSpec body route ireq oreq res
 
-unifyRoute ∷ ∀ route route' t12 t13 t14 t15 t16. TypeEquals route route' ⇒ AccumSpec t16 route t14 t13 t12 → AccumSpec t16 route' t14 t13 t12
+unifyRoute ∷ ∀ route route' t12 t13 t14 t16. TypeEquals route route' ⇒ AccumSpec t16 route t14 t13 t12 → AccumSpec t16 route' t14 t13 t12
 unifyRoute (AccumSpec { request, response }) =
   AccumSpec
     { request: Request.Accum.unifyRoute request
     , response
     }
+
+-- | TODO: We probably want to restrict this to segments only
+data WithBody (l ∷ Symbol) (body ∷ # Type) i o
+  = WithBody (Request.Duplex body i o)
+
+withBody ∷ ∀ body i l o. SProxy l → Request.Duplex body i o → WithBody l body i o
+withBody _ dpl = WithBody dpl
 
 -- | Build an accept spec from request duplex and a hlist of response duplexes.
 instance builderHListToAcceptSpec ∷
@@ -65,6 +70,18 @@ instance builderHListToAcceptSpec ∷
   ) ⇒
   Builder (Request.Accum body route_ ireq oreq /\ (h : t)) body route (Variant ivReq) (Variant ovReq) res where
   accumSpec _ = Spec.Accept.accumSpec <<< lmap Request.Accum.unifyRoute
+else instance builderWithBodyEndpoint ∷
+  ( Row.Cons l i route ireq
+  , Row.Cons l o route oreq
+  , Row.Lacks l route
+  , IsSymbol l
+  , Builder (Request.Accum body { | route } { | ireq } { | oreq } /\ res) body { | route } { | ireq } { | oreq } res'
+  ) ⇒
+  Builder (WithBody l body i o /\ res) body { | route } { | ireq } { | oreq } res' where
+  accumSpec s ((WithBody dpl) /\ res) = do
+    let
+      req = Request.Accum.insertReq (SProxy ∷ SProxy l) dpl
+    accumSpec s (req /\ res ∷ Request.Accum body { | route } { | ireq } { | oreq } /\ res)
 -- | An endpoint which doesn't care about accept header.
 else instance builderPlainEndpoint ∷
   ( TypeEquals req (Request.Accum body route ireq oreq)
@@ -76,6 +93,22 @@ else instance builderPlainEndpoint ∷
       { request: Type.Equality.to request
       , response: Type.Equality.to response
       }
+
+type Pass body route
+  = Request.Accum body route route route
+
+pass ∷ ∀ body route. Pass body route
+pass = Request.Accum (pure identity) identity
+
+instance builderPlainResponseEndpoint ∷
+  (Builder (Pass body route /\ Response.Duplex ct ires ores) body route ireq oreq res) ⇒
+  Builder (Response.Duplex ct ires ores) body route ireq oreq res where
+  accumSpec s response = accumSpec s ((pass /\ response) ∷ (Pass body route /\ Response.Duplex ct ires ores))
+
+instance builderResponseHListEndpoint ∷
+  (Builder (Pass body route /\ (h : t)) body route ireq oreq res) ⇒
+  Builder ((h : t)) body route ireq oreq res where
+  accumSpec s response = accumSpec s ((pass /\ response) ∷ (Pass body route /\ (h : t)))
 
 instance builderMethodRec ∷
   ( HMap (BuilderStep route) { | rec } { | specs }
@@ -124,9 +157,9 @@ instance insertSpecBuilderSpec ∷
   accumSpec s (Insert dpl sub) = insertIntoAccumSpec (SProxy ∷ SProxy l) dpl sub
 else instance insertSpecBuilder ∷
   ( Row.Cons l a route route'
-  , Builder sub body { | route' } ireq oreq res
   , IsSymbol l
   , Row.Lacks l route
+  , Builder sub body { | route' } ireq oreq res
   ) ⇒
   Builder (Insert l a sub) body { | route } ireq oreq res where
   accumSpec s (Insert dpl sub) =
@@ -134,6 +167,9 @@ else instance insertSpecBuilder ∷
       (SProxy ∷ SProxy l)
       dpl
       (accumSpec (BuilderStep ∷ BuilderStep { | route' }) sub)
+
+insert ∷ ∀ a l sub. SProxy l → (∀ body. Request.Duplex' body a) → sub → Insert l a sub
+insert l dpl sub = Insert dpl sub
 
 insertIntoAccumSpec ∷
   ∀ a body l ireq oreq route route' res.
@@ -149,9 +185,6 @@ insertIntoAccumSpec l dpl (AccumSpec { request, response }) =
     { request: Request.Accum.insert l dpl request
     , response
     }
-
-insert ∷ ∀ a l sub. SProxy l → (∀ body. Request.Duplex' body a) → sub → Insert l a sub
-insert l dpl sub = Insert dpl sub
 
 data Scalar a sub
   = Scalar (∀ body. Request.Duplex' body a) sub

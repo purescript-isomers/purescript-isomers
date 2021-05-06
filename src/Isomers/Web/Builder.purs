@@ -15,24 +15,26 @@ import Isomers.HTTP (Exchange) as HTTP
 import Isomers.HTTP.ContentTypes (HtmlMime)
 import Isomers.HTTP.Request.Method (Method(..))
 import Isomers.Request (Accum) as Request
+import Isomers.Request.Accum (insertReq) as Request.Accum
 import Isomers.Response (Duplex, RawDuplex') as Response
 import Isomers.Response.Raw.Duplexes (html) as Response.Raw.Duplexes
 import Isomers.Response.Types (HtmlString)
-import Isomers.Spec (BuilderStep, accumSpec)
+import Isomers.Spec (BuilderStep, WithBody(..), accumSpec)
 import Isomers.Spec (class Builder, AccumSpec, BuilderStep(..), Insert(..), Scalar(..), accumSpec) as Spec
+import Isomers.Spec.Builder (Pass, pass)
 import Isomers.Web.Builder.HEval (DoIsHJust(..), DoNull(..), FromHJust(..))
 import Isomers.Web.Renderer (Renderer(..))
 import Isomers.Web.Types (AccumWebSpec(..), GetRender, GetSpec, WebSpec, _GetRender, _GetSpec, rootAccumWebSpec)
 import Prim.Row (class Cons, class Lacks) as Row
 import Type.Equality (to) as Type.Equality
-import Type.Prelude (class IsSymbol, class TypeEquals, BProxy)
+import Type.Prelude (class IsSymbol, class TypeEquals, BProxy, SProxy(..))
 
 data WebBuilderStep route = WebBuilderStep
 
 toBuilderStep ∷ ∀ route. WebBuilderStep route → Spec.BuilderStep route
 toBuilderStep _ = Spec.BuilderStep
 
-class Builder a body rnd route ireq oreq res | a route → body rnd ireq oreq res where
+class Builder a (body ∷ # Type) rnd route ireq oreq res | a route → body rnd ireq oreq res where
   accumWebSpec ∷ WebBuilderStep route → a → AccumWebSpec body rnd route ireq oreq res
 
 data Rendered resDpl rnd
@@ -94,12 +96,25 @@ instance hevalDoBuildAccumSpec ∷
   HEval (DoBuildAccumSpec route) (a → Spec.AccumSpec body route ireq oreq res) where
   heval (DoBuildAccumSpec step) i = Spec.accumSpec step i
 
+-- | I'm handling this manually so I can recurse and
+-- | handle other cases like `Rendered` separately.
+instance builderWithBodyEndpoint ∷
+  ( Row.Cons l i route ireq
+  , Row.Cons l o route oreq
+  , Row.Lacks l route
+  , IsSymbol l
+  , Builder (Request.Accum body { | route } { | ireq } { | oreq } /\ res) body rnd { | route } { | ireq } { | oreq } res'
+  ) ⇒ Builder (WithBody l body i o /\ res) body rnd { | route } { | ireq } { | oreq } res' where
+  accumWebSpec s ((WithBody dpl) /\ res) = do
+    let
+      req = Request.Accum.insertReq (SProxy ∷ SProxy l) dpl
+    accumWebSpec s (req /\ res ∷ Request.Accum body { | route } { | ireq } { | oreq } /\ res)
 -- | I extract `ireq_`, `oreq_` from req to be able
 -- | to construct the type of the `Renderer` because
 -- | we pass a non mime `req_` to it finally: `HTTP.Exchange req_ ... → ...`.
 -- | The unification of `ireq_` and `oreq_` is done when
 -- | we find a renderer somewhere on the stack.
-instance builderEndpoinsAccessList ∷
+else instance builderEndpoinsAccessList ∷
   ( HFoldl (ResponseRenderer ireq_ oreq_) HNothing l rnd
   , TypeEquals (h : t) l
   , HEval DoIsHJust (rnd → BProxy hasRender)
@@ -137,6 +152,15 @@ else instance builderPlainEndpoint ∷
   Builder (a /\ d) body HNothing route ireq oreq res where
   accumWebSpec step t = AccumWebSpec { spec: accumSpec (toBuilderStep step) t, render: HNothing }
 
+instance builderPlainResponseEndpoint ∷
+  (Builder (Pass body route /\ Response.Duplex ct ires ores) body rnd route ireq oreq res) ⇒
+  Builder (Response.Duplex ct ires ores) body rnd route ireq oreq res where
+  accumWebSpec s response = accumWebSpec s ((pass /\ response) ∷ (Pass body route /\ Response.Duplex ct ires ores))
+
+instance builderResponseHListEndpoint ∷
+  (Builder (Pass body route /\ (h : t)) body rnd route ireq oreq res) ⇒
+  Builder ((h : t)) body rnd route ireq oreq res where
+  accumWebSpec s response = accumWebSpec s ((pass /\ response) ∷ (Pass body route /\ (h : t)))
 
 instance builderSpec ∷
   Builder (AccumWebSpec b rnd route ireq oreq res) b rnd route ireq oreq res where

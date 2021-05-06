@@ -1,26 +1,18 @@
 module Isomers.Spec.Types where
 
-
 import Data.Newtype (class Newtype)
 import Isomers.Contrib.Heterogeneous.HEval ((<<<), type (<<<)) as H
 import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.Newtype
 import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
-import Isomers.Request (Accum, Duplex, Duplex') as Request
-import Isomers.Request.Accum (insert) as Accum
+import Isomers.Request (Accum, Duplex) as Request
 import Isomers.Request.Accum (rootDuplex, unifyRoute) as Request.Accum
-import Prim.Row (class Cons, class Lacks) as Row
 import Type.Equality (class TypeEquals)
-import Type.Prelude (class IsSymbol, SProxy(..))
+import Type.Prelude (SProxy(..))
 
--- | TODO: Rename to `AccumAccumSpec`. Then create
--- | a new `RootAccumSpec` type which contains a proper
--- | `Duplex body ireq oreq` instead of an `Accum`
--- | and which enforces root `/` handling.
--- |
 -- | TODO: Is changing the order and moving `ireq` and `oreq`
 -- | to the end worth it? We can provide __probably__ more useful
 -- | instances then....
-newtype AccumSpec body route ireq oreq res
+newtype AccumSpec (body ∷ # Type) route ireq oreq res
   = AccumSpec
   { request ∷ Request.Accum body route ireq oreq
   , response ∷ res

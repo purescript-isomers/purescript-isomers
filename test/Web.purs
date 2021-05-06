@@ -1,6 +1,7 @@
 module Test.Web where
 
 import Prelude
+
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.HTTP.Method (Method)
@@ -13,7 +14,7 @@ import Data.Variant (Variant)
 import Data.Variant (case_, default, inj, on) as Variant
 import Debug.Trace (traceM)
 import Effect (Effect)
-import Effect.Aff (Aff, delay, launchAff_)
+import Effect.Aff (Aff, Fiber, delay, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Console (log)
 import Effect.Random (random)
@@ -31,8 +32,9 @@ import Isomers.HTTP.ContentTypes (HtmlMime, _html, _json)
 import Isomers.HTTP.Request (Method(..))
 import Isomers.Node.Server (serve) as Node.Server
 import Isomers.Request (Accum(..))
+import Isomers.Request (Duplex(..)) as Request
 import Isomers.Request.Accum (insert, print) as Request.Accum
-import Isomers.Request.Duplex (int, print, segment, string) as Request.Duplex
+import Isomers.Request.Duplex (body, int, print, segment, string) as Request.Duplex
 import Isomers.Request.Duplex (int, segment) as Request.Duplex.Record
 import Isomers.Request.Duplex.Parser (int) as Parser
 import Isomers.Response (Duplex(..), Duplex') as Response
@@ -47,6 +49,7 @@ import Isomers.Response.Types (HtmlString(..))
 import Isomers.Server (router) as Server
 import Isomers.Spec (BuilderStep(..), accumSpec, client, requestBuilders, rootAccumSpec) as Spec
 import Isomers.Spec (Spec(..))
+import Isomers.Spec.Builder (WithBody(..), withBody)
 import Isomers.Spec.Builder (insert) as Web.Builder
 import Isomers.Web (requestBuilders) as Web
 import Isomers.Web (toSpec)
@@ -122,11 +125,13 @@ testString = Web.Builder.insert (SProxy ∷ SProxy "test") (Request.Duplex.strin
 z :: forall t1 t4. Accum t4 t1 t1 t1
 z = Accum (pure identity) identity
 
+bodyString = (Request.Duplex.body (SProxy ∷ SProxy "str") (const mempty)) ∷ Request.Duplex (str ∷ Fiber String) Int String
+
 shop =
   Spec.rootAccumSpec
     $ Spec.accumSpec Spec.BuilderStep
-        { x: (z /\ (responseDuplex : HNil))
-        , y: z /\ (responseDuplex : HNil)
+        { x: withBody (SProxy ∷ SProxy "payload") bodyString /\ responseDuplex
+        , y: responseDuplex : HNil
         }
 
 x =
@@ -136,8 +141,8 @@ x =
     , sub:
         { shop:
             Method
-              { "GET": z /\ responseDuplex
-              , "POST": z /\ (responseDuplex : HNil)
+              { "GET": responseDuplex
+              , "POST": responseDuplex : HNil
               }
         }
     }

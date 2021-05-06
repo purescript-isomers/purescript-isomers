@@ -7,6 +7,7 @@ module Isomers.Response.Duplex
   , json
   , reqHeader
   , status
+  , string
   , withHeaderValue
   , withStatus
   )
@@ -20,10 +21,10 @@ import Data.Either (Either)
 import Data.Lens.Iso.Newtype (_Newtype)
 import Data.Maybe (Maybe)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
-import Isomers.HTTP.ContentTypes (JavascriptMime, JsonMime, HtmlMime)
+import Isomers.HTTP.ContentTypes (HtmlMime, JavascriptMime, JsonMime, TextMime)
 import Isomers.Response.Duplex.Parser (ParsingError(..), fromJson, header, json, reqHeader, status, statusEquals, string, withContentType) as Parser
-import Isomers.Response.Duplex.Printer (header, json, reqHeader, status, string) as Printer
 import Isomers.Response.Duplex.Printer (Printer(..)) as Exports
+import Isomers.Response.Duplex.Printer (header, json, reqHeader, status, string) as Printer
 import Isomers.Response.Duplex.Type (Duplex(..), Duplex')
 import Isomers.Response.Duplex.Type (Duplex(..), Duplex') as Exports
 import Isomers.Response.Types (HtmlString, JavascriptString)
@@ -61,6 +62,9 @@ withStatus s (Duplex prt prs) = Duplex prt' prs'
   where
     prt' i = Printer.status s <> prt i
     prs' = Parser.statusEquals s *> prs
+
+string ∷ Duplex' TextMime String
+string = withContentType (Duplex Printer.string Parser.string)
 
 json ∷ Duplex' JsonMime Json
 json = withContentType (Duplex Printer.json Parser.json)

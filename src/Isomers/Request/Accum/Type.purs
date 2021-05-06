@@ -103,6 +103,8 @@ insert l (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' pr
     in \acc →
       f (Record.insert l a acc)
 
+-- | Like `insert` but actual "`a` parsing / printing"
+-- | is put on the front.
 insertFlipped ∷
   ∀ a route route' body l ireq oreq.
   IsSymbol l ⇒
@@ -123,6 +125,29 @@ insertFlipped l (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex 
     a ← prs
     in \acc →
       f (Record.insert l a acc)
+
+-- | This insert is useful when we do
+-- | "finall" insert of the "body" etc.
+-- | because we want to be able to "split"
+-- | server / client request types.
+insertReq ∷
+  ∀ a b route body l ireq oreq.
+  IsSymbol l ⇒
+  Row.Cons l a route ireq ⇒
+  Row.Cons l b route oreq ⇒
+  Row.Lacks l route ⇒
+  SProxy l →
+  Duplex body a b →
+  Accum body { | route } { | ireq } { | oreq }
+insertReq l (Duplex prt prs) = Accum (Duplex prt' prs') dst'
+  where
+  prt' ireq = prt (Record.get l ireq)
+
+  dst' = Record.delete l
+
+  prs' = ado
+    a ← prs
+    in \acc → Record.insert l a acc
 
 -- | This can be useful when you want to move into `Tuple` or `HList` accumlation or
 -- | just have to lift a single request `Duplex` into an `Accum`.
