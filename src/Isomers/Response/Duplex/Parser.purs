@@ -26,8 +26,8 @@ import Effect.Aff (Aff, Fiber, joinFiber)
 import Effect.Aff.Class (liftAff)
 import Effect.Exception (Error) as Effect.Exception
 import Isomers.Contrib.Data.Variant (tag) as Contrib.Data.Variant
+import Isomers.Response.Encodings (ClientBodyRow, ClientResponse(..))
 import Isomers.Response.Encodings (ClientHeaders, ClientResponse, ClientBodyRow) as Encodings
-import Isomers.Response.Encodings (ClientResponse(..))
 import Network.HTTP.Types (HeaderName, hContentType)
 import Network.HTTP.Types (Status) as HTTP.Types
 import Prim.Row (class Cons) as Row
@@ -82,6 +82,9 @@ instance altParser ∷ Alt (Parser) where
                 r@(Right o) → pure r
                 otherwise → p2
 
+untouchedResponse :: Parser ClientResponse
+untouchedResponse = unreadBody *> Parser Reader.ask
+
 readBody ∷
   ∀ a br_ l.
   Row.Cons l (Fiber a) br_ Encodings.ClientBodyRow ⇒
@@ -109,6 +112,13 @@ readBody l =
                         pure fb
         liftAff $ joinFiber fb
 
+unreadBody ∷ Parser { | ClientBodyRow }
+unreadBody = Parser $ do
+  State.get >>= case _ of
+    Just fb → throwError $ Expected "unread body" $ (Contrib.Data.Variant.tag fb)
+    Nothing → do
+      Reader.ask >>= \(ClientResponse { body }) → pure body
+
 arrayBuffer ∷ Parser ArrayBuffer
 arrayBuffer = readBody (SProxy ∷ SProxy "arrayBuffer")
 
@@ -123,6 +133,12 @@ string = readBody (SProxy ∷ SProxy "string")
 
 status ∷ Parser HTTP.Types.Status
 status = Parser $ Reader.asks (_.status <<< un ClientResponse)
+
+redirected ∷ Parser Boolean
+redirected = Parser $ Reader.asks (_.redirected <<< un ClientResponse)
+
+url ∷ Parser String
+url = Parser $ Reader.asks (_.url <<< un ClientResponse)
 
 statusEquals ∷ HTTP.Types.Status → Parser Unit
 statusEquals { code: expected } =

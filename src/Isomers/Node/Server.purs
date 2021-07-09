@@ -20,6 +20,7 @@ import Isomers.Server (RouterStep, ServerResponseWrapper)
 import Isomers.Server (router) as Server
 import Isomers.Spec (Spec)
 import Node.HTTP (ListenOptions, Request, Response, close, createServer, listen, responseAsStream, setStatusCode, setStatusMessage) as Node.HTTP
+import Node.HTTP (requestHeaders, requestURL)
 import Node.Stream (end) as Node.Stream
 
 -- | TODO: this is just an ugly prototype.
@@ -39,7 +40,6 @@ router spec handlers nreq nres = do
     maxBodySize = 1000000
 
     req = fromNodeRequest maxBodySize nreq
-  -- traceM nreq
   Server.router spec handlers req
     >>= case _ of
         Right res → do
@@ -74,11 +74,14 @@ serve spec handlers interpret options onStarted = do
   let
     r = router spec handlers
 
-    handleRequest nreq nres =
+    handleRequest nreq nres = do
+      traceM (requestURL nreq)
+      -- traceM (requestHeaders nreq)
       launchAff_ do
         interpret (r nreq nres)
           `catchError`
             \err → do
+              traceM "ERROR?"
               liftEffect
                 $ do
                     Console.error $ Aff.message err

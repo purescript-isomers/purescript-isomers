@@ -3,6 +3,7 @@ module Isomers.Node.Response where
 import Prelude
 
 import Data.Foldable (for_)
+import Data.Maybe (Maybe(..))
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
@@ -26,12 +27,13 @@ writeNodeResponse sr response = do
     res = Node.HTTP.responseAsStream response
     -- | TODO: Ensure that this stream ending is correctly used here?
     end = Node.Stream.end res $ pure unit
-  for_ sr.body case _ of
-    Encodings.NodeBuffer buff → do
+  case sr.body of
+    Just (Encodings.NodeBuffer buff) → do
       buff' ← Buffer.Immutable.unsafeThaw buff
       void $ Node.Stream.write res buff' $ end
-    Encodings.NodeStream readable →
+    Just (Encodings.NodeStream readable) →
       void $ Node.Stream.pipe readable res
-    Encodings.NodeWriter writer → do
+    Just (Encodings.NodeWriter writer) → do
       writer res
+    Nothing → end
   -- void $ Node.Stream.end stream $ pure unit

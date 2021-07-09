@@ -249,12 +249,12 @@ default = flip (<|>) <<< pure
 optional :: forall a body. Parser body a -> Parser body (Maybe a)
 optional = default Nothing <<< map Just
 
-as :: forall a b body. (a -> String) -> (a -> Either String b) -> Parser body a -> Parser body b
-as print decode p =
+as :: forall a b body. { show ∷ a -> String, parse ∷ a -> Either String b } -> Parser body a -> Parser body b
+as { parse, show } p =
   Chomp \state -> runParser state p >>= \r → pure $ case r of
     Fail err -> Fail err
-    Success state' a -> case decode a of
-      Left err -> Fail $ Expected err (print a)
+    Success state' a -> case parse a of
+      Left err -> Fail $ Expected err (show a)
       Right b -> Success state' b
 
 int :: String -> Either String Int

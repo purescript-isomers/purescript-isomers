@@ -4,10 +4,14 @@ import Prelude
 
 import Control.Comonad (class Comonad, class Extend)
 import Data.Foldable (class Foldable, foldlDefault, foldrDefault)
+import Data.Map (singleton) as Map
+import Data.Maybe (Maybe(..))
 import Data.Traversable (class Traversable, traverseDefault)
+import Data.Tuple.Nested ((/\))
 import Isomers.Response.Encodings (ClientHeaders, ServerHeaders) as Encodings
+import Isomers.Response.Okayish.Type (Location)
 import Network.HTTP.Types (Status) as HTTP.Types
-import Network.HTTP.Types (ok200)
+import Network.HTTP.Types (found302, hLocation, ok200)
 
 -- | This kind of encoding is useful when we do rendering of the
 -- | response into let say HTML". We
@@ -43,6 +47,9 @@ instance comonadRawServer ∷ Comonad RawServer where
 
 serverOk ∷ ∀ body. body → RawServer body
 serverOk body = RawServer { body, headers: mempty, status: ok200 }
+
+serverFound ∷ ∀ body. Location → body → RawServer body
+serverFound location body = RawServer { body: body, headers: [ hLocation /\ location ], status: found302 }
 
 newtype RawClient body = RawClient
   { body ∷  body

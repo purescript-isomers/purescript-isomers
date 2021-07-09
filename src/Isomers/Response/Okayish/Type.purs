@@ -19,19 +19,22 @@ module Isomers.Response.Okayish.Type
   , _found
   , found
   , Found
+  , Location
   ) where
 
 import Prelude
-
 import Control.Alt (class Alt, alt)
 import Data.Either (Either(..))
 import Data.Foldable (class Foldable, foldMap, foldl, foldr)
+import Data.Maybe (Maybe)
 import Data.Traversable (class Traversable, sequenceDefault, traverse)
+import Data.Tuple.Nested (type (/\))
 import Data.Variant (Variant)
 import Data.Variant (inj, on) as Variant
 import Isomers.Contrib.Data.Variant (append) as Contrib.Data.Variant
 import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
 import Isomers.Response.Duplex (Duplex)
+import Isomers.Response.Encodings (ClientResponse)
 import Prim.Row (class Lacks) as Row
 import Type.Prelude (SProxy(..))
 import Type.Row (type (+))
@@ -43,18 +46,6 @@ _ok = SProxy ∷ SProxy "ok"
 type Ok a res
   = ( ok ∷ a | res )
 
-ok :: forall a res. a -> Okayish res a
-ok a = Okayish $ Variant.inj _ok a
-
-notOk ∷ ∀ a res. Row.Lacks "ok" res ⇒ Variant res → Okayish res a
-notOk = Okayish <<< Contrib.Data.Variant.append _ok
-
-type OkayishDuplex ct vi vo a b
-  = Duplex ct (Okayish vi a) (Okayish vo b)
-
-type OkayishDuplex' ct v a
-  = Duplex ct (Okayish v a) (Okayish v a)
-
 -- | A simple proposition for http response encoding.
 -- | You can roll your own if you don't like it
 -- | but we provide some convenient helpers here and
@@ -65,6 +56,12 @@ type OkayishDuplex' ct v a
 -- | this kind of encoders.
 newtype Okayish (res ∷ # Type) a
   = Okayish (Variant (Ok a + res))
+
+ok :: forall a res. a -> Okayish res a
+ok a = Okayish $ Variant.inj _ok a
+
+notOk ∷ ∀ a res. Row.Lacks "ok" res ⇒ Variant res → Okayish res a
+notOk = Okayish <<< Contrib.Data.Variant.append _ok
 
 fromVariant ∷ ∀ a res. Variant (Ok a + res) → Okayish res a
 fromVariant = Okayish
@@ -135,12 +132,17 @@ type NotFound a res
 notFound ∷ ∀ a b res. Row.Lacks "ok" res ⇒ a → Okayish (NotFound a + res) b
 notFound = notOk <<< Variant.inj _notFound
 
+-- | On the client side we are going to have actual response at hand because
+-- | we detect redirect post factum (by using `response.redirected`).
 _found = SProxy ∷ SProxy "found"
 
-type Found res
-  = ( found ∷ String | res )
+type Location
+  = String
 
-found ∷ ∀ a res. Row.Lacks "ok" res ⇒ String → Okayish (Found + res) a
+type Found res
+  = ( found ∷ Location /\ Maybe ClientResponse | res )
+
+found ∷ ∀ a res. Row.Lacks "ok" res ⇒ Location /\ Maybe ClientResponse → Okayish (Found + res) a
 found = notOk <<< Variant.inj _found
 
 _badRequest = SProxy ∷ SProxy "badRequest"
@@ -150,3 +152,11 @@ type BadRequest a res
 
 badRequest ∷ ∀ a b res. Row.Lacks "ok" res ⇒ a → Okayish (BadRequest a + res) b
 badRequest = notOk <<< Variant.inj _badRequest
+
+
+type OkayishDuplex ct vi vo a b
+  = Duplex ct (Okayish vi a) (Okayish vo b)
+
+type OkayishDuplex' ct v a
+  = Duplex ct (Okayish v a) (Okayish v a)
+

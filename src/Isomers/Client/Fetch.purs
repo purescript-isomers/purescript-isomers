@@ -2,6 +2,7 @@ module Isomers.Client.Fetch where
 
 import Prelude
 
+import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (catchError)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
@@ -27,8 +28,9 @@ import Web.Fetch.Headers (toArray) as Web.Fetch.Headers
 import Web.Fetch.Request (Request, new) as Fetch
 import Web.Fetch.Request (defaultOptions) as Fetch.Request
 import Web.Fetch.RequestBody (empty, fromArrayBuffer, fromString) as Fetch.RequestBody
+import Web.Fetch.RequestRedirect (RequestRedirect(..)) as Fetch.RequestRedirect
 import Web.Fetch.Response (Response) as Web.Fetch
-import Web.Fetch.Response (arrayBuffer, blob, headers, status, statusText, text, url) as Web.Fetch.Response
+import Web.Fetch.Response (arrayBuffer, blob, headers, redirected, status, statusText, text, url) as Web.Fetch.Response
 import Web.Promise (Promise) as Web
 
 foreign import unsafePatch ∷ String
@@ -53,11 +55,18 @@ toFetchRequest hostInfo c = do
     url = scheme <> "://" <> hostInfo.hostName <> ":" <> show hostInfo.port <> c.path
 
     headers = Fetch.Headers.fromFoldable <<< map (lmap (un CaseInsensitiveString)) $ c.headers
-    opts = Fetch.Request.defaultOptions { body = body, headers = headers, method = c.method }
+    opts = Fetch.Request.defaultOptions
+      { body = body
+      , headers = headers
+      , method = c.method
+      , redirect = Fetch.RequestRedirect.Follow
+      }
 
 
 fromFetchResponse ∷ Web.Fetch.Response → Effect Response.Encodings.ClientResponse
 fromFetchResponse res = do
+  traceM "RAW RESPONSE"
+  traceM res
   let
     headers = Map.fromFoldable <<< map (lmap CaseInsensitiveString) <<< Web.Fetch.Headers.toArray <<< Web.Fetch.Response.headers $ res
 
@@ -67,6 +76,8 @@ fromFetchResponse res = do
       }
 
     url = Web.Fetch.Response.url res
+
+    redirected = Web.Fetch.Response.redirected res
 
     toFiber ∷ ∀ a. Effect (Web.Promise a) → Effect (Fiber a)
     toFiber = launchSuspendedAff <<< Contrib.Web.Promise.toAffE
@@ -85,14 +96,19 @@ fromFetchResponse res = do
     { body
     , headers
     , status
+    , redirected
     , url
     }
 
 fetch ∷ HostInfo → Request.Encodings.ClientRequest → Aff (Either String Response.Encodings.ClientResponse)
 fetch hostInfo req = do
   req' ← liftEffect $ toFetchRequest hostInfo req
+  traceM req'
   let
-    res = Contrib.Web.Pomise.toAffE $ Web.Fetch.fetch req'
+    res = (Contrib.Web.Pomise.toAffE $ Web.Fetch.fetch req') `catchError` \err → do
+      traceM "RESPONSE FAILED"
+      traceM err
+      throwError err
   (res >>= fromFetchResponse >>> map Right >>> liftEffect) `catchError` \err → do
     traceM $ unsafeStringify err
     traceM "EXCEPTION?"

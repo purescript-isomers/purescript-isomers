@@ -10,11 +10,13 @@ import Data.Variant (inj) as Variant
 import Effect.Aff (Aff)
 import Global.Unsafe (unsafeStringify)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
-import Isomers.Client.Fetch (HostInfo, fetch)
+-- import Isomers.Client.Fetch (HostInfo, fetch)
 import Isomers.HTTP.Exchange (Error(..)) as HTTP.Exchange
 import Isomers.Request (Duplex(..), Printer) as Request
 import Isomers.Request.Duplex.Printer (run) as Request.Duplex.Printer
+import Isomers.Request.Encodings (ClientRequest) as Request.Encodings
 import Isomers.Response (Duplex, parse) as Response
+import Isomers.Response.Encodings (ClientResponse) as Response.Encodings
 import Prim.Row (class Cons, class Lacks) as Row
 import Prim.RowList (class RowToList)
 import Record (get, insert) as Record
@@ -87,10 +89,13 @@ else instance hfoldlWithIndexRequestBuildersStepVariant ∷
   HFoldlWithIndex (RequestBuildersStep (Variant v) request) unit (Proxy (Variant v)) { | requestBuilders } where
   hfoldlWithIndex cf init _ = hfoldlWithIndex cf {} (RLProxy ∷ RLProxy vl)
 
+type Fetch = Request.Encodings.ClientRequest → Aff (Either String Response.Encodings.ClientResponse)
+
 -- | This folding creates the actual client which is able to perform
 -- | network requests etc.
 data ClientStep request responseDuplexes
-  = ClientStep HostInfo (request → Request.Printer) responseDuplexes
+  = ClientStep Fetch (request → Request.Printer) responseDuplexes
+
 
 -- | TODO: parameterize the client by fetching function
 -- | so the whole exchange can be performed "purely".
@@ -106,12 +111,12 @@ instance clientFoldingResponseConstructor ∷
     { | client }
     (d → request)
     { | client' } where
-  foldingWithIndex (ClientStep hostInfo reqPrt resDpls) prop c reqBld = do
+  foldingWithIndex (ClientStep fetch reqPrt resDpls) prop c reqBld = do
     let
       resDpl = Record.get prop resDpls
       f d = do
         let r = reqBld d
-        res ← fetch hostInfo (Request.Duplex.Printer.run (reqPrt r)) >>= case _ of
+        res ← fetch (Request.Duplex.Printer.run (reqPrt r)) >>= case _ of
           Right res → lmap (HTTP.Exchange.Error <<< unsafeStringify) <$> Response.parse resDpl res
           Left err → pure $ Left $ HTTP.Exchange.Error err
         pure $ res
@@ -129,11 +134,11 @@ else instance clientFoldingResponseDuplexRec ∷
     { | client }
     { | requestBuilders }
     { | client' } where
-  foldingWithIndex (ClientStep hostInfo reqPrt resDpls) prop c reqBld = do
+  foldingWithIndex (ClientStep fetch reqPrt resDpls) prop c reqBld = do
     let
       sResDpls = Record.get prop resDpls
 
-      subclient = hfoldlWithIndex (ClientStep hostInfo reqPrt sResDpls) {} reqBld
+      subclient = hfoldlWithIndex (ClientStep fetch reqPrt sResDpls) {} reqBld
 
     Record.insert prop subclient c
 else instance clientFoldingResponseDuplexNewtypeWrapper ∷
@@ -146,8 +151,8 @@ else instance clientFoldingResponseDuplexNewtypeWrapper ∷
     { | client }
     { | requestBuilders }
     { | client' } where
-  foldingWithIndex (ClientStep hostInfo reqPrt resDpl) prop c reqBld = do
-    foldingWithIndex (ClientStep hostInfo reqPrt (unwrap resDpl)) prop c reqBld
+  foldingWithIndex (ClientStep fetch reqPrt resDpl) prop c reqBld = do
+    foldingWithIndex (ClientStep fetch reqPrt (unwrap resDpl)) prop c reqBld
 
 -- | Pass a proxy for your nested request `Variant` type to get back
 -- | a nested `Record` with functions which builds a given `Variant`.
@@ -164,13 +169,13 @@ client ∷
   ∀ body client requestBuilders responseDuplexes ireq oreq.
   HFoldlWithIndex (RequestBuildersStep ireq ireq) {} (Proxy ireq) requestBuilders ⇒
   HFoldlWithIndex (ClientStep ireq responseDuplexes) {} requestBuilders client ⇒
-  HostInfo →
+  Fetch →
   Request.Duplex body ireq oreq →
   responseDuplexes →
   client
-client hostInfo (Request.Duplex reqPrt _) resDpl = do
+client fetch (Request.Duplex reqPrt _) resDpl = do
   let
     rb ∷ requestBuilders
     rb = requestBuilders (Proxy ∷ Proxy ireq)
-  hfoldlWithIndex (ClientStep hostInfo reqPrt resDpl) {} rb ∷ client
+  hfoldlWithIndex (ClientStep fetch reqPrt resDpl) {} rb ∷ client
 

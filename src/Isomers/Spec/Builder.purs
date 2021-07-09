@@ -1,6 +1,7 @@
 module Isomers.Spec.Builder where
 
 import Prelude
+
 import Data.Bifunctor (lmap)
 import Data.Homogeneous (class ToHomogeneousRow)
 import Data.Tuple.Nested ((/\), type (/\))
@@ -24,7 +25,7 @@ import Isomers.Spec.Record (accumSpec) as Spec.Record
 import Isomers.Spec.Types (AccumSpec(..), GetRequest, GetResponse, Spec, rootAccumSpec)
 import Prim.Row (class Cons, class Lacks) as Row
 import Type.Equality (class TypeEquals)
-import Type.Equality (to) as Type.Equality
+import Type.Equality (from, to) as Type.Equality
 import Type.Eval (class Eval)
 import Type.Prelude (class IsSymbol, RProxy, SProxy(..))
 
@@ -38,7 +39,7 @@ instance mappingBuilder ∷
   Mapping (BuilderStep route) a (AccumSpec body route ireq oreq res) where
   mapping = accumSpec
 
-class Builder a (body ∷ # Type) route ireq oreq res | a → body ireq oreq res where
+class Builder a (body ∷ #Type) route ireq oreq res | a → body ireq oreq res where
   accumSpec ∷ BuilderStep route → a → AccumSpec body route ireq oreq res
 
 unifyRoute ∷ ∀ route route' t12 t13 t14 t16. TypeEquals route route' ⇒ AccumSpec t16 route t14 t13 t12 → AccumSpec t16 route' t14 t13 t12
@@ -49,7 +50,7 @@ unifyRoute (AccumSpec { request, response }) =
     }
 
 -- | TODO: We probably want to restrict this to segments only
-data WithBody (l ∷ Symbol) (body ∷ # Type) i o
+data WithBody (l ∷ Symbol) (body ∷ #Type) i o
   = WithBody (Request.Duplex body i o)
 
 withBody ∷ ∀ body i l o. SProxy l → Request.Duplex body i o → WithBody l body i o

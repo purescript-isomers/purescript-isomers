@@ -29,6 +29,7 @@ You can edit this file as you like.
   , "stringutils"
   , "tuples"
   , "typelevel-eval"
+  , "undefined-is-not-a-problem"
   , "web-fetch"
   , "wire-react"
   , "wire-react-router"

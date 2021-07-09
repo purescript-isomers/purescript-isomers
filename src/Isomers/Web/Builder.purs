@@ -4,13 +4,15 @@ import Prelude
 
 import Data.Tuple.Nested ((/\), type (/\))
 import Heterogeneous.Folding (class Folding, class HFoldl, hfoldl)
-import Heterogeneous.Mapping (class Mapping)
+import Heterogeneous.Mapping (class Mapping, class MappingWithIndex)
 import Isomers.Contrib (HJust(..)) as Contrib
 import Isomers.Contrib.Heterogeneous.Filtering (CatMaybes(..))
-import Isomers.Contrib.Heterogeneous.HEval (class HEval, DoApply(..), DoConst(..), DoHFilter(..), DoHIfThenElse(..), DoHMap(..), DoIdentity(..), heval)
+import Isomers.Contrib.Heterogeneous.HEval (class HEval, DoApply(..), DoConst(..), DoHFilter(..), DoHIfThenElse(..), DoHMap(..), DoHMapWithIndex(..), DoIdentity(..), heval)
 import Isomers.Contrib.Heterogeneous.HEval (type (<<<), (<<<), type (&&&), (&&&)) as H
 import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..), HNothing(..))
 import Isomers.Contrib.Heterogeneous.List (type (:), (:))
+import Isomers.Contrib.Type.Equality (class TypeEquals')
+import Isomers.Contrib.Type.Equality (to') as Isomers.Contrib.Type.Equality
 import Isomers.HTTP (Exchange) as HTTP
 import Isomers.HTTP.ContentTypes (HtmlMime)
 import Isomers.HTTP.Request.Method (Method(..))
@@ -24,18 +26,19 @@ import Isomers.Spec (class Builder, AccumSpec, BuilderStep(..), Insert(..), Scal
 import Isomers.Spec.Builder (Pass, pass)
 import Isomers.Web.Builder.HEval (DoIsHJust(..), DoNull(..), FromHJust(..))
 import Isomers.Web.Renderer (Renderer(..))
-import Isomers.Web.Types (AccumWebSpec(..), GetRender, GetSpec, WebSpec, _GetRender, _GetSpec, rootAccumWebSpec)
+import Isomers.Web.Types (AccumWebSpec(..), GetRender, GetSpec, WebSpec(..), _GetRender, _GetSpec, rootAccumWebSpec)
 import Prim.Row (class Cons, class Lacks) as Row
+import Record.Extra (type (:::), SCons, SLProxy(..), SNil, kind SList)
 import Type.Equality (to) as Type.Equality
 import Type.Prelude (class IsSymbol, class TypeEquals, BProxy, SProxy(..))
 
-data WebBuilderStep route = WebBuilderStep
+data WebBuilderStep (debugPath ∷ SList) route = WebBuilderStep
 
-toBuilderStep ∷ ∀ route. WebBuilderStep route → Spec.BuilderStep route
+toBuilderStep ∷ ∀ debugPath route. WebBuilderStep debugPath route → Spec.BuilderStep route
 toBuilderStep _ = Spec.BuilderStep
 
-class Builder a (body ∷ # Type) rnd route ireq oreq res | a route → body rnd ireq oreq res where
-  accumWebSpec ∷ WebBuilderStep route → a → AccumWebSpec body rnd route ireq oreq res
+class Builder (debugPath ∷ SList) a (body ∷ # Type) rnd route ireq oreq res | a route → body rnd ireq oreq res where
+  accumWebSpec ∷ WebBuilderStep debugPath route → a → AccumWebSpec body rnd route ireq oreq res
 
 data Rendered resDpl rnd
   = Rendered resDpl rnd
@@ -45,7 +48,7 @@ newtype Tagged (tag ∷ Symbol) a
 
 -- | From list of responses we extract a pair
 -- | which defines response duplex and renderer.
-data ResponseRenderer ireq oreq = ResponseRenderer
+data ResponseRenderer (debugPath ∷ SList) ireq oreq = ResponseRenderer
 
 -- | We unify requests in the case of rendered endpoints
 -- | just for simplicity now (we don't need to carry two
@@ -59,21 +62,20 @@ data ResponseRenderer ireq oreq = ResponseRenderer
 -- | such a case is desired. In such a case... please provide
 -- | a PR :-P
 instance foldingExtractRenderMatch ∷
-  ( TypeEquals ires ores
-  , TypeEquals ireq oreq
+  ( TypeEquals ireq oreq
   , TypeEquals ireq req
   , TypeEquals ires res
-  , TypeEquals rnd ((router /\ HTTP.Exchange ireq ires) → doc)
+  , TypeEquals' rnd ((router /\ HTTP.Exchange ireq ires) → doc) ("foldingExtractRenderMatch:" ::: debugPath)
   ) ⇒
   Folding
-    (ResponseRenderer ireq oreq)
+    (ResponseRenderer debugPath ireq oreq)
     acc
     (Rendered (Response.Duplex ct ires ores) rnd)
     (Contrib.HJust (Tagged ct (Renderer router ireq ires doc))) where
-  folding _ _ (Rendered dpl rnd) = Contrib.HJust (Tagged (Renderer $ Type.Equality.to rnd))
+  folding _ _ (Rendered dpl rnd) = Contrib.HJust (Tagged (Renderer $ Isomers.Contrib.Type.Equality.to' (SLProxy ∷ SLProxy ("foldingExtractRenderMatch:" ::: debugPath)) rnd))
 else instance foldingExtractRenderNoMatch ∷
   Folding
-    (ResponseRenderer ireq oreq)
+    (ResponseRenderer debugPath ireq oreq)
     acc
     resDpl
     acc where
@@ -103,19 +105,20 @@ instance builderWithBodyEndpoint ∷
   , Row.Cons l o route oreq
   , Row.Lacks l route
   , IsSymbol l
-  , Builder (Request.Accum body { | route } { | ireq } { | oreq } /\ res) body rnd { | route } { | ireq } { | oreq } res'
-  ) ⇒ Builder (WithBody l body i o /\ res) body rnd { | route } { | ireq } { | oreq } res' where
-  accumWebSpec s ((WithBody dpl) /\ res) = do
+  , Builder ("WithBody" ::: debugPath) (Request.Accum body { | route } { | ireq } { | oreq } /\ res) body rnd { | route } { | ireq } { | oreq } res'
+  ) ⇒ Builder debugPath (WithBody l body i o /\ res) body rnd { | route } { | ireq } { | oreq } res' where
+  accumWebSpec _ ((WithBody dpl) /\ res) = do
     let
+      s' = WebBuilderStep ∷ WebBuilderStep ("WithBody" ::: debugPath) { | route }
       req = Request.Accum.insertReq (SProxy ∷ SProxy l) dpl
-    accumWebSpec s (req /\ res ∷ Request.Accum body { | route } { | ireq } { | oreq } /\ res)
+    accumWebSpec s' (req /\ res ∷ Request.Accum body { | route } { | ireq } { | oreq } /\ res)
 -- | I extract `ireq_`, `oreq_` from req to be able
 -- | to construct the type of the `Renderer` because
 -- | we pass a non mime `req_` to it finally: `HTTP.Exchange req_ ... → ...`.
 -- | The unification of `ireq_` and `oreq_` is done when
 -- | we find a renderer somewhere on the stack.
 else instance builderEndpoinsAccessList ∷
-  ( HFoldl (ResponseRenderer ireq_ oreq_) HNothing l rnd
+  ( HFoldl (ResponseRenderer debugPath ireq_ oreq_) HNothing l rnd
   , TypeEquals (h : t) l
   , HEval DoIsHJust (rnd → BProxy hasRender)
   , TypeEquals req (Request.Accum b route_ ireq_ oreq_)
@@ -128,12 +131,12 @@ else instance builderEndpoinsAccessList ∷
       )
       (l → Spec.AccumSpec b route ireq oreq res')
   ) ⇒
-  Builder (req /\ (h : t)) b rnd route ireq oreq res' where
+  Builder debugPath (req /\ (h : t)) b rnd route ireq oreq res' where
   accumWebSpec step (req /\ (h : t)) = do
     let
       -- | I'm using this `l` alias
       l  = Type.Equality.to (h : t)
-      render = hfoldl (ResponseRenderer ∷ ResponseRenderer ireq_ oreq_) HNothing l
+      render = hfoldl (ResponseRenderer ∷ ResponseRenderer debugPath ireq_ oreq_) HNothing l
 
       hasRender = heval DoIsHJust render
 
@@ -149,21 +152,21 @@ else instance builderEndpoinsAccessList ∷
 
 else instance builderPlainEndpoint ∷
   ( Spec.Builder (a /\ d) body route ireq oreq res) ⇒
-  Builder (a /\ d) body HNothing route ireq oreq res where
+  Builder debugPath (a /\ d) body HNothing route ireq oreq res where
   accumWebSpec step t = AccumWebSpec { spec: accumSpec (toBuilderStep step) t, render: HNothing }
 
 instance builderPlainResponseEndpoint ∷
-  (Builder (Pass body route /\ Response.Duplex ct ires ores) body rnd route ireq oreq res) ⇒
-  Builder (Response.Duplex ct ires ores) body rnd route ireq oreq res where
-  accumWebSpec s response = accumWebSpec s ((pass /\ response) ∷ (Pass body route /\ Response.Duplex ct ires ores))
+  (Builder ("Pass" ::: debugPath) (Pass body route /\ Response.Duplex ct ires ores) body rnd route ireq oreq res) ⇒
+  Builder debugPath (Response.Duplex ct ires ores) body rnd route ireq oreq res where
+  accumWebSpec WebBuilderStep response = accumWebSpec (WebBuilderStep ∷ WebBuilderStep ("Pass" ::: debugPath) route) ((pass /\ response) ∷ (Pass body route /\ Response.Duplex ct ires ores))
 
 instance builderResponseHListEndpoint ∷
-  (Builder (Pass body route /\ (h : t)) body rnd route ireq oreq res) ⇒
-  Builder ((h : t)) body rnd route ireq oreq res where
-  accumWebSpec s response = accumWebSpec s ((pass /\ response) ∷ (Pass body route /\ (h : t)))
+  (Builder ("Pass" ::: debugPath) (Pass body route /\ (h : t)) body rnd route ireq oreq res) ⇒
+  Builder debugPath ((h : t)) body rnd route ireq oreq res where
+  accumWebSpec WebBuilderStep response = accumWebSpec (WebBuilderStep ∷ WebBuilderStep ("Pass" ::: debugPath) route) ((pass /\ response) ∷ (Pass body route /\ (h : t)))
 
 instance builderSpec ∷
-  Builder (AccumWebSpec b rnd route ireq oreq res) b rnd route ireq oreq res where
+  Builder debugPath (AccumWebSpec b rnd route ireq oreq res) b rnd route ireq oreq res where
   accumWebSpec _ s = s
 
 type DoFoldRender a
@@ -186,12 +189,12 @@ instance builderMethod ∷
       ( ( (DoBuildAccumSpec route H.<<< DoApply (apis → Method apis) H.<<< DoHMap GetSpec)
             H.&&& DoFoldRender a
         )
-          H.<<< DoHMap (WebBuilderStep route)
+          H.<<< DoHMap (WebBuilderStep debugPath route)
       )
       ({ | rec } → Spec.AccumSpec b route ireq oreq res /\ rnd)
   , Spec.Builder (Method apis) b route ireq oreq res
   ) ⇒
-  Builder (Method { | rec }) b rnd route ireq oreq res where
+  Builder debugPath (Method { | rec }) b rnd route ireq oreq res where
   accumWebSpec step (Method rec) = do
     let
       split =
@@ -203,10 +206,10 @@ instance builderMethod ∷
 
 instance builderRec ∷
   ( HEval
-        ((DoBuildAccumSpec route H.<<< DoHMap GetSpec H.&&& DoFoldRender a) H.<<< DoHMap (WebBuilderStep route))
+        ((DoBuildAccumSpec route H.<<< DoHMap GetSpec H.&&& DoFoldRender a) H.<<< DoHMapWithIndex (WebBuilderStep debugPath route))
         ({ | rec } → Spec.AccumSpec b route ireq oreq res /\ rnd)
     ) ⇒
-  Builder { | rec } b rnd route ireq oreq res where
+  Builder debugPath { | rec } b rnd route ireq oreq res where
   accumWebSpec step rec = do
     let
       spec /\ render =
@@ -214,22 +217,22 @@ instance builderRec ∷
           ( ( DoBuildAccumSpec (toBuilderStep step) H.<<< DoHMap _GetSpec
                 H.&&& (_DoFoldRender ∷ DoFoldRender a)
             )
-              H.<<< DoHMap step
+              H.<<< DoHMapWithIndex step
           )
           rec
     AccumWebSpec { render, spec }
 
 instance insertSpecBuilder ∷
-  ( Builder sub b rnd { | route' } ireq oreq res
+  ( Builder ("Insert _" ::: debugPath) sub b rnd { | route' } ireq oreq res
   , Row.Cons l a route route'
   , IsSymbol l
   , Row.Lacks l route
   , Spec.Builder (Spec.Insert l a (Spec.AccumSpec b { | route' } ireq oreq res)) b { | route } ireq oreq res
   ) ⇒
-  Builder (Spec.Insert l a sub) b rnd { | route } ireq oreq res where
+  Builder debugPath (Spec.Insert l a sub) b rnd { | route } ireq oreq res where
   accumWebSpec step (Spec.Insert dpl sub) = do
     let
-      step' = WebBuilderStep ∷ WebBuilderStep { | route' }
+      step' = WebBuilderStep ∷ WebBuilderStep ("Insert _" ::: debugPath) { | route' }
 
       AccumWebSpec { render, spec } = accumWebSpec step' sub
 
@@ -237,22 +240,25 @@ instance insertSpecBuilder ∷
     AccumWebSpec { render, spec: spec' }
 
 instance scalarSpecBuilder ∷
-  ( Builder sub b rnd a ireq oreq res
+  ( Builder ("Sub" ::: debugPath) sub b rnd a ireq oreq res
   , TypeEquals {} route
   , Spec.Builder (Spec.Scalar a (Spec.AccumSpec b a ireq oreq res)) b route ireq oreq res
   ) ⇒
-  Builder (Spec.Scalar a sub) b rnd route ireq oreq res where
+  Builder debugPath (Spec.Scalar a sub) b rnd route ireq oreq res where
   accumWebSpec step (Spec.Scalar dpl sub) = do
     let
-      step' = WebBuilderStep ∷ WebBuilderStep a
+      step' = WebBuilderStep ∷ WebBuilderStep ("Sub" ::: debugPath) a
 
       AccumWebSpec { render, spec } = accumWebSpec step' sub
 
       spec' = Spec.accumSpec (toBuilderStep step) (Spec.Scalar dpl spec ∷ Spec.Scalar a (Spec.AccumSpec b a ireq oreq res))
     AccumWebSpec { render, spec: spec' }
 
-instance builderBuilderStep ∷ Builder a b rnd route ireq oreq res ⇒ Mapping (WebBuilderStep route) a (AccumWebSpec b rnd route ireq oreq res) where
+instance builderBuilderStep ∷ Builder debugPath a b rnd route ireq oreq res ⇒ Mapping (WebBuilderStep debugPath route) a (AccumWebSpec b rnd route ireq oreq res) where
   mapping step a = accumWebSpec step a
 
-webSpec :: forall a bd ireq oreq res rnd. Builder a bd rnd {} ireq oreq res => a -> WebSpec bd rnd ireq oreq res
-webSpec = rootAccumWebSpec <<< accumWebSpec WebBuilderStep
+instance builderBuilderStepNest ∷ Builder (idx ::: debugPath) a b rnd route ireq oreq res ⇒ MappingWithIndex (WebBuilderStep debugPath route) (SProxy idx) a (AccumWebSpec b rnd route ireq oreq res) where
+  mappingWithIndex _ _ a = accumWebSpec (WebBuilderStep ∷ WebBuilderStep (idx ::: debugPath) route) a
+
+webSpec :: forall a bd ireq oreq res rnd. Builder SNil a bd rnd {} ireq oreq res => a -> WebSpec bd rnd ireq oreq res
+webSpec = rootAccumWebSpec <<< accumWebSpec (WebBuilderStep ∷ WebBuilderStep SNil {})

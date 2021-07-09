@@ -21,6 +21,8 @@ type Base body extra
     | extra
     }
 
+type NodeWriter r = Node.Stream.Writable r → Effect Unit
+
 -- | TODO: Move these to the `Isomers.Node.Response.Duplex.Encodings`
 -- | We can probably provide some "basic"
 -- | building blocks like `Str = (string ∷ String | res)`
@@ -29,10 +31,10 @@ data NodeBody
   = NodeBuffer Buffer.Immutable.ImmutableBuffer
   | NodeStream (∀ r. Node.Stream.Readable r)
   -- | We assume that writer is closing the buffer on its own...
-  | NodeWriter (∀ r. Node.Stream.Writable r → Effect Unit)
+  | NodeWriter (∀ r. NodeWriter r)
 
--- | TODO: Parametrize by `body` so other backends can work with this
--- | lib easily.
+-- | TODO: Parametrize by `body` so any other backend can work with this
+-- | lib easily. Currently we are tightly cupled to nodejs.
 -- |
 -- | I'm not able to confirm but it seems that headers value differ between
 -- | `fetch` and `node`.
@@ -71,6 +73,7 @@ newtype ClientResponse = ClientResponse
   ( Base
       { | ClientBodyRow }
       ( headers ∷ ClientHeaders
+      , redirected ∷ Boolean
       , url ∷ String
       )
   )

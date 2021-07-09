@@ -54,11 +54,15 @@ root = path ""
 path ∷ ∀ i body o. String → Duplex body i o → Duplex body i o
 path = flip (foldr prefix) <<< String.split (String.Pattern "/")
 
-as ∷ ∀ body s a b. (a → s) → (String → Either String b) → Duplex body s String → Duplex body a b
-as f g (Duplex enc dec) = Duplex (enc <<< f) (Parser.as identity g dec)
+-- | `show` is a function used to construct parsing error message.
+as ∷ ∀ body i i' o o'. { print ∷ i' → i, parse ∷ o → Either String o', show ∷ o → String } → Duplex body i o → Duplex body i' o'
+as { print: prt, parse: prs, show } (Duplex enc dec) = Duplex (enc <<< prt) (Parser.as { show, parse: prs } dec)
+
+as' ∷ ∀ body i i' o o'. Show o ⇒ (i' → i) → (o → Either String o') → Duplex body i o → Duplex body i' o'
+as' prt prs = as { print: prt, parse: prs, show: show }
 
 int ∷ ∀ body. Duplex' body String → Duplex' body Int
-int = as show Parser.int
+int = as' show Parser.int
 
 prefix ∷ ∀ body i o. String → Duplex body i o → Duplex body i o
 prefix s (Duplex enc dec) = Duplex (Printer.prefix s <<< enc) (Parser.prefix s dec)
@@ -67,7 +71,7 @@ flag ∷ ∀ body. String → Duplex body Boolean Boolean
 flag n = Duplex (Printer.flag n) (Parser.flag n)
 
 string ∷ ∀ body. Duplex' body String → Duplex' body String
-string = as identity pure
+string = as' show pure
 
 segment ∷ ∀ body. Duplex' body String
 segment = Duplex Printer.put Parser.take

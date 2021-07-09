@@ -32,7 +32,7 @@ type Json a cts = ("application/json" ∷ a | cts)
 _json = SProxy ∷ SProxy JsonMime
 
 json ∷ ∀ a cts. a → Variant (Json a + cts)
-json =inj _json
+json = inj _json
 
 type Png a cts = ("image/png" ∷ a | cts)
 

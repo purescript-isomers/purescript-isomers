@@ -3,13 +3,17 @@ module Isomers.Response.Okayish.Duplexes where
 import Prelude
 
 import Control.Alt (class Alt, alt)
+import Control.Monad.Error.Class (throwError)
 import Data.Argonaut (Json)
 import Data.Either (Either(..))
 import Data.Foldable (class Foldable, foldMap, foldl, foldr)
 import Data.Lens (Iso', iso)
 import Data.Lens.Iso.Newtype (_Newtype)
+import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
 import Data.Traversable (class Traversable, sequenceDefault, traverse)
+import Data.Tuple (fst)
+import Data.Tuple.Nested ((/\), type (/\))
 import Data.Variant (Variant)
 import Data.Variant (inj, on) as Variant
 import Effect.Aff (Aff)
@@ -18,12 +22,13 @@ import Isomers.HTTP.ContentTypes (HtmlMime, JavascriptMime, JsonMime, JpegMime, 
 import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
 import Isomers.Response.Duplex (Duplex(..), Duplex', withStatus)
 import Isomers.Response.Duplex (asJson, header, json, reqHeader, withHeaderValue, withStatus) as Duplex
-import Isomers.Response.Duplex.Parser (ParsingError)
-import Isomers.Response.Duplex.Parser (run, string) as Parser
+import Isomers.Response.Duplex.Parser (ParsingError(..), redirected, run, status, string, untouchedResponse, url) as Parser
+import Isomers.Response.Duplex.Parser (ParsingError, untouchedResponse)
+import Isomers.Response.Duplex.Printer (reqHeader) as Duplex.Printer
 import Isomers.Response.Duplex.Printer (run, string) as Printer
 import Isomers.Response.Duplex.Variant (empty, injInto) as Duplex.Variant
 import Isomers.Response.Encodings (ClientResponse, ServerResponse) as Encodings
-import Isomers.Response.Okayish.Type (Found, NotFound, Ok, Okayish(..), BadRequest, _badRequest, _found, _notFound, _ok, fromVariant, toVariant)
+import Isomers.Response.Okayish.Type (BadRequest, Found, NotFound, Ok, Okayish(..), Location, _badRequest, _found, _notFound, _ok, fromVariant, toVariant)
 import Isomers.Response.Types (HtmlString(..), JavascriptString(..))
 import Network.HTTP.Types (badRequest400, found302, hContentType, hLocation, movedPermanently301, notFound404, ok200)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
@@ -123,6 +128,21 @@ notFound nf res = injInto _notFound (Duplex.withStatus notFound404 $ nf) res
 
 notFound' nf res = injStrangerInto _notFound (Duplex.withStatus notFound404 $ nf) res
 
+foundDuplex :: forall t168. Duplex' t168 (Location /\ Maybe Encodings.ClientResponse)
+foundDuplex = Duplex
+  (Duplex.Printer.reqHeader hLocation <<< fst)
+  prs
+  where
+    prs = do
+      Parser.redirected >>= if _
+        then do
+          location ← Parser.url
+          clientResponse ← Parser.untouchedResponse
+          pure $ location /\ Just clientResponse
+        else do
+          s ← Parser.status
+          throwError $ Parser.Expected "redirect" (show s)
+
 found ∷
   ∀ t105 t107 t110 t111 t113 t114 t115.
   Row.Union t105 (Found + ()) (Found + t105) ⇒
@@ -131,7 +151,9 @@ found ∷
   Duplex t113
     (Okayish (Found + t107) t115)
     (Okayish (Found + t105) t114)
-found res = injInto _found (Duplex.withStatus found302 $ Duplex.reqHeader hLocation) res
+found res = injInto _found (Duplex.withStatus found302 $ foundDuplex) res
+
+found' res = injStrangerInto _found (Duplex.withStatus found302 $ foundDuplex) res
 
 badRequest ∷
   ∀ t105 t107 t110 t111 t113 t114 t115.

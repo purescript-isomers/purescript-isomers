@@ -96,12 +96,12 @@ instance foldingRenderHandlerStepLeaf ∷
       handlers' = Record.set ix mimeHandlers' handlers
     handlers'
 
--- | We don't use ireq / oreq / res. We have to probably remove WebSpec and use its pieces here.
+-- | TODO: As we don't use ireq / oreq / res here we have to probably remove WebSpec and use its pieces here.
 -- |
 -- | * `handlers` - record of functions into `m res`
--- | * `res` included in `router /\ Exchange req res` should be rendered into `RawServer doc` by spec renders
+-- | * `res` is included in the `router /\ Exchange req res` value and should be rendered into `RawServer doc` by spec renders
 -- | * `doc` is taken by the provided final "page" wrapping render and turned into `HtmlString`
--- | * We end up with `RawServer HtmlString`
+-- | * we end up with `RawServer HtmlString`
 -- |
 renderToApi ∷
   ∀ doc clientRouter body handlers handlers' m render ireq oreq res.

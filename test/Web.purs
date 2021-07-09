@@ -24,6 +24,7 @@ import Heterogeneous.Mapping (hmap, hmapWithIndex)
 import Isomers.Client (RequestBuildersStep(..), requestBuilders)
 import Isomers.Client (client) as Client
 import Isomers.Client.Fetch (Scheme(..))
+import Isomers.Client.Fetch (fetch) as Fetch
 import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..))
 import Isomers.Contrib.Heterogeneous.List (HNil(..), (:))
 import Isomers.HTTP (Exchange(..))
@@ -163,7 +164,7 @@ x =
 --                           -> Aff (Either Error (RawClient HtmlString))
 --          }
 --  }
-client = Spec.client hostInfo $ toSpec web
+client = Spec.client (Fetch.fetch hostInfo) $ toSpec web
 
 -- web :: forall t738 t898.
 --    WebSpec t738

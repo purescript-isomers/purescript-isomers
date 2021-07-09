@@ -4,18 +4,16 @@ import Prelude
 
 import Data.Either (Either)
 import Data.Maybe (Maybe(..))
-import Data.Symbol (reflectSymbol)
 import Data.Tuple.Nested ((/\))
 import Data.Variant (case_, default, expand, inj, match, on) as Variant
 import Data.Variant (class VariantMatchCases, Variant)
-import Debug.Trace (traceM)
 import Effect.Aff (Aff)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
 import Heterogeneous.Mapping (class HMapWithIndex, class MappingWithIndex, hmapWithIndex)
 import Isomers.Client (ClientStep, RequestBuildersStep) as Client
-import Isomers.Client.Fetch (HostInfo)
+import Isomers.Client (Fetch)
 import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..))
-import Isomers.HTTP.ContentTypes (HtmlMime, _html)
+import Isomers.HTTP.ContentTypes (_html)
 import Isomers.HTTP.Exchange (Error) as HTTP.Exchange
 import Isomers.HTTP.Exchange (Exchange(..)) as HTTP
 import Isomers.Spec (Spec(..))
@@ -23,7 +21,6 @@ import Isomers.Spec (client) as Spec
 import Isomers.Web.Builder (Tagged(..))
 import Isomers.Web.Renderer (Renderer(..))
 import Isomers.Web.Types (WebSpec(..))
-import Prelude (bind, const, map, pure, (#), ($), (<<<))
 import Prim.Row (class Cons, class Union) as Row
 import Prim.RowList (class RowToList)
 import Record (get) as Record
@@ -100,7 +97,7 @@ instance mappingRenderNode ::
 
 -- | Handy alias
 class FoldRender spec clientRouter rndReq doc | spec → rndReq doc where
-  foldRender ∷ Proxy clientRouter → spec → HostInfo → (rndReq → clientRouter → doc)
+  foldRender ∷ Proxy clientRouter → spec → Fetch → (rndReq → clientRouter → doc)
 
 instance instanceFoldRender ∷
   ( HFoldlWithIndex (ExpandRequest ireq) (Variant () → Variant ireq) rnd (Variant rndReq → Variant ireq)
@@ -111,10 +108,10 @@ instance instanceFoldRender ∷
   , VariantMatchCases rndrl' rndReq (clientRouter → Aff doc)
   , Row.Union rndReq () rndReq
   ) ⇒ FoldRender (WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res) clientRouter (Variant rndReq) (Aff doc) where
-    foldRender _ webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, response }), render: HJust render }) hostInfo = do
+    foldRender _ webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, response }), render: HJust render }) fetch = do
       let
         client ∷ { | client }
-        client = Spec.client hostInfo spec
+        client = Spec.client fetch spec
 
         fetchAndRender = hmapWithIndex (RenderStep client ∷ RenderStep clientRouter { | client }) (render ∷ rnd)
       Variant.match fetchAndRender

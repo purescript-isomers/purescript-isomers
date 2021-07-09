@@ -6,7 +6,7 @@ import Data.Profunctor.Strong ((&&&), (***)) as Strong
 import Data.Profunctor.Strong (first, second)
 import Data.Tuple.Nested ((/\), type (/\))
 import Heterogeneous.Folding (class Folding, class HFoldl, folding, hfoldl)
-import Heterogeneous.Mapping (class HMap, class Mapping, hmap, mapping)
+import Heterogeneous.Mapping (class HMap, class HMapWithIndex, class Mapping, hmap, hmapWithIndex, mapping)
 import Isomers.Contrib.Heterogeneous.Filtering (class HFilter, hfilter)
 import Prelude ((<<<)) as Prelude
 import Prim.Boolean (False, True, kind Boolean)
@@ -34,6 +34,11 @@ data DoHMap f = DoHMap f
 
 instance hevalDoHMap ∷ (HMap f i o) ⇒ HEval (DoHMap f) (i → o) where
   heval (DoHMap f) = hmap f
+
+data DoHMapWithIndex f = DoHMapWithIndex f
+
+instance hevalDoHMapWithIndex ∷ (HMapWithIndex f i o) ⇒ HEval (DoHMapWithIndex f) (i → o) where
+  heval (DoHMapWithIndex f) = hmapWithIndex f
 
 data DoHFoldl f acc = DoHFoldl f acc
 
