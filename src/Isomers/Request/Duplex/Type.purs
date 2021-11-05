@@ -17,7 +17,7 @@ import Isomers.Request.Duplex.Printer (Printer)
 import Isomers.Request.Duplex.Printer (flag, method, param, prefix, put, run) as Printer
 import Isomers.Request.Encodings (ClientRequest, ServerRequest)
 import Prim.Row (class Cons) as Row
-import Type.Prelude (class IsSymbol, SProxy)
+import Type.Prelude (class IsSymbol, Proxy)
 
 data Duplex body i o
   = Duplex (i → Printer) (Parser body o)
@@ -45,7 +45,7 @@ parse (Duplex _ dec) req = Parser.run dec req
 print ∷ ∀ body i o. Duplex body i o → i → ClientRequest
 print (Duplex enc _) = Printer.run <<< enc
 
-body ∷ ∀ b body body_ i o. IsSymbol b ⇒ Row.Cons b (Fiber o) body_ body ⇒ SProxy b → (i → Printer) → Duplex body i o
+body ∷ ∀ b body body_ i o. IsSymbol b ⇒ Row.Cons b (Fiber o) body_ body ⇒ Proxy b → (i → Printer) → Duplex body i o
 body l prt = Duplex prt (Parser.body l)
 
 root ∷ ∀ body i o. Duplex body i o → Duplex body i o

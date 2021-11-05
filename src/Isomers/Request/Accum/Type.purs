@@ -1,6 +1,7 @@
 module Isomers.Request.Accum.Type where
 
 import Prelude
+
 import Data.Either (Either)
 import Data.Foldable (foldr)
 import Data.HTTP.Method (Method) as HTTP.Method
@@ -18,7 +19,7 @@ import Isomers.Request.Encodings (ClientRequest, ServerRequest)
 import Prim.Row (class Cons, class Lacks) as Row
 import Record (delete, get, insert) as Record
 import Type.Equality (from, to) as Type.Equality
-import Type.Prelude (class IsSymbol, class TypeEquals, SProxy)
+import Type.Prelude (class IsSymbol, class TypeEquals, Proxy)
 
 -- | TODO: Would there be any gain when we have something like
 -- | "builder yoneda" here instead of a plain `route → oreq` function:
@@ -87,7 +88,7 @@ insert ∷
   IsSymbol l ⇒
   Row.Cons l a route route' ⇒
   Row.Lacks l route ⇒
-  SProxy l →
+  Proxy l →
   Duplex' body a →
   Accum body { | route' } ireq oreq →
   Accum body { | route } ireq oreq
@@ -110,7 +111,7 @@ insertFlipped ∷
   IsSymbol l ⇒
   Row.Cons l a route route' ⇒
   Row.Lacks l route ⇒
-  SProxy l →
+  Proxy l →
   Duplex' body a →
   Accum body { | route' } ireq oreq →
   Accum body { | route } ireq oreq
@@ -136,7 +137,7 @@ insertReq ∷
   Row.Cons l a route ireq ⇒
   Row.Cons l b route oreq ⇒
   Row.Lacks l route ⇒
-  SProxy l →
+  Proxy l →
   Duplex body a b →
   Accum body { | route } { | ireq } { | oreq }
 insertReq l (Duplex prt prs) = Accum (Duplex prt' prs') dst'

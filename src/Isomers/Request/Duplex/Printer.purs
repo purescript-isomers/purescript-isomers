@@ -9,10 +9,11 @@ import Data.Newtype (class Newtype)
 import Data.String (joinWith)
 import Data.Tuple (Tuple(..), uncurry)
 import Data.Tuple.Nested (type (/\))
-import Global.Unsafe (unsafeEncodeURIComponent)
+import JSURI (encodeURIComponent)
 import Isomers.Request.Duplex.Path (Parts) as Path
 import Isomers.Request.Encodings (ClientBody, ClientRequest)
 import Network.HTTP.Types (HeaderName)
+import Partial.Unsafe (unsafeCrashWith)
 
 type State =
   { body ∷ Maybe ClientBody
@@ -73,6 +74,11 @@ printPath { segments, params, hash: hash' } = printSegments segments <> printPar
   printSegments = case _ of
     [ "" ] -> "/"
     xs -> joinWith "/" $ map unsafeEncodeURIComponent xs
+
+  unsafeEncodeURIComponent s = do
+    case encodeURIComponent s of
+      Just s → s
+      Nothing → unsafeCrashWith ("URI encoding failed: " <> s)
 
   printParams [] = ""
 

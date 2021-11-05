@@ -12,13 +12,13 @@ import Data.Tuple.Nested ((/\))
 import Data.Validation.Semigroup (V(..))
 import Data.Variant (Variant)
 import Data.Variant (case_, default, inj, on) as Variant
-import Debug.Trace (traceM)
+import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, Fiber, delay, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Console (log)
 import Effect.Random (random)
-import Global.Unsafe (unsafeStringify)
+import JS.Unsafe.Stringify (unsafeStringify)
 import Heterogeneous.Folding (class HFoldlWithIndex, hfoldlWithIndex)
 import Heterogeneous.Mapping (hmap, hmapWithIndex)
 import Isomers.Client (RequestBuildersStep(..), requestBuilders)
@@ -70,7 +70,7 @@ import Polyform.Reporter (R)
 import Polyform.Validator.Dual (runSerializer, runValidator)
 import Polyform.Validator.Dual.Pure (runSerializer, runValidator) as Dual.Pure
 import React.Basic.Hooks (Component)
-import Type.Prelude (Proxy(..), SProxy(..))
+import Type.Prelude (Proxy(..), Proxy(..))
 
 responseDuplex = responseDual d
   where
@@ -79,11 +79,11 @@ responseDuplex = responseDual d
     where
     rec =
       Dual.Record.build
-        $ (SProxy ∷ SProxy "a")
+        $ (Proxy ∷ Proxy "a")
         := Json.Duals.int
-        <<< (SProxy ∷ SProxy "b")
+        <<< (Proxy ∷ Proxy "b")
         := Json.Duals.string
-        <<< (SProxy ∷ SProxy "method")
+        <<< (Proxy ∷ Proxy "method")
         := Json.Duals.string
 
 responseDual d = Response.Okayish.Duplexes.asJson ser prs
@@ -120,18 +120,18 @@ htmlResponse _ =
 
 render = htmlResponse
 
-testString = Web.Builder.insert (SProxy ∷ SProxy "test") (Request.Duplex.string Request.Duplex.segment)
+testString = Web.Builder.insert (Proxy ∷ Proxy "test") (Request.Duplex.string Request.Duplex.segment)
 
 ---------------------------------------------
 z :: forall t1 t4. Accum t4 t1 t1 t1
 z = Accum (pure identity) identity
 
-bodyString = (Request.Duplex.body (SProxy ∷ SProxy "str") (const mempty)) ∷ Request.Duplex (str ∷ Fiber String) Int String
+bodyString = (Request.Duplex.body (Proxy ∷ Proxy "str") (const mempty)) ∷ Request.Duplex (str ∷ Fiber String) Int String
 
 shop =
   Spec.rootAccumSpec
     $ Spec.accumSpec Spec.BuilderStep
-        { x: withBody (SProxy ∷ SProxy "payload") bodyString /\ responseDuplex
+        { x: withBody (Proxy ∷ Proxy "payload") bodyString /\ responseDuplex
         , y: responseDuplex : HNil
         }
 
@@ -219,7 +219,7 @@ client = Spec.client (Fetch.fetch hostInfo) $ toSpec web
 --      }
 web = do
   webSpec
-    $ Web.Builder.insert (SProxy ∷ SProxy "productId") (Request.Duplex.int Request.Duplex.segment)
+    $ Web.Builder.insert (Proxy ∷ Proxy "productId") (Request.Duplex.int Request.Duplex.segment)
         { "": z /\ (Rendered responseDuplex htmlResponse : HNil) --responseDuplex
         , shop: z /\ (responseDuplex : HNil)
         , admin: z /\ (responseDuplex : HNil)

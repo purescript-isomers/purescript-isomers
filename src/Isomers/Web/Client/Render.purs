@@ -25,7 +25,7 @@ import Prim.Row (class Cons, class Union) as Row
 import Prim.RowList (class RowToList)
 import Record (get) as Record
 import Type.Equality (from, to) as Type.Equality
-import Type.Prelude (class IsSymbol, class TypeEquals, Proxy, SProxy(..))
+import Type.Prelude (class IsSymbol, class TypeEquals, Proxy, Proxy(..))
 
 -- | * We map the renderers `Record` (which is in some sens a subtree of
 -- | the spec request `Variant` tree) recursively.
@@ -64,12 +64,12 @@ instance mappingRenderLeaf ::
   ) =>
   MappingWithIndex
     (RenderStep clientRouter { | client })
-    (SProxy sym)
+    (Proxy sym)
     (Tagged ct (Renderer rcr rreq rres doc))
     (creq → clientRouter → Aff doc) where
   mappingWithIndex (RenderStep client) prop (Tagged (Renderer renderer)) creq clientRouter = do
     let
-      ct = SProxy ∷ SProxy ct
+      ct = Proxy ∷ Proxy ct
       fetch = Record.get ct (Record.get prop client)
     res ← fetch creq
     pure $ renderer (Type.Equality.from clientRouter /\ HTTP.Exchange (Type.Equality.to $ creq) (Just $ map Type.Equality.to res))
@@ -84,7 +84,7 @@ instance mappingRenderNode ::
   ) =>
   MappingWithIndex
     (RenderStep clientRouter { | client })
-    (SProxy sym)
+    (Proxy sym)
     { | renderers }
     (Variant vreq → clientRouter → Aff doc) where
   mappingWithIndex (RenderStep client) prop renderers = do
@@ -131,10 +131,10 @@ instance foldingContractRequest ∷
   , Row.Union rndReq rndReq_ rndReq'
   , Row.Union vReq_ vReq__ vReq
   ) =>
-  FoldingWithIndex (ContractRequest vReq) (SProxy sym) (Variant vReq → Maybe (Variant rndReq)) (Tagged ct rnd) (Variant vReq → Maybe (Variant rndReq')) where
+  FoldingWithIndex (ContractRequest vReq) (Proxy sym) (Variant vReq → Maybe (Variant rndReq)) (Tagged ct rnd) (Variant vReq → Maybe (Variant rndReq')) where
   foldingWithIndex _ prop contractAcc _ = do
     let
-      ct = SProxy ∷ SProxy ct
+      ct = Proxy ∷ Proxy ct
       expandRndReq = Variant.expand ∷ Variant rndReq → Variant rndReq'
       expandVReq = Variant.expand ∷ Variant vReq_ → Variant vReq
 
@@ -153,7 +153,7 @@ instance foldingContractRequestRec ∷
   , Row.Union rndReq rndReq_ rndReq'
   , Row.Union specReq_ specReq__ specReq
   ) ⇒
-  FoldingWithIndex (ContractRequest specReq) (SProxy sym) (Variant specReq → Maybe (Variant rndReq)) { | renderers } (Variant specReq → Maybe (Variant rndReq')) where
+  FoldingWithIndex (ContractRequest specReq) (Proxy sym) (Variant specReq → Maybe (Variant rndReq)) { | renderers } (Variant specReq → Maybe (Variant rndReq')) where
   foldingWithIndex _ prop contractSpecReq v = do
     let
       cr = ContractRequest ∷ ContractRequest specSubReq
@@ -190,10 +190,10 @@ instance foldingExpandRequest ∷
   , Row.Cons sym (Variant specSubReq) specReq_ specReq
   , Row.Cons sym req rndReq rndReq'
   ) ⇒
-  FoldingWithIndex (ExpandRequest specReq) (SProxy sym) (Variant rndReq → Variant specReq) (Tagged ct rnd) (Variant rndReq' → Variant specReq) where
+  FoldingWithIndex (ExpandRequest specReq) (Proxy sym) (Variant rndReq → Variant specReq) (Tagged ct rnd) (Variant rndReq' → Variant specReq) where
   foldingWithIndex _ prop expandRndReq tagged = do
     let
-      ct = SProxy ∷ SProxy ct
+      ct = Proxy ∷ Proxy ct
     Variant.on prop (Variant.inj prop <<< Variant.inj ct) expandRndReq
 
 instance foldingExpandRequestRec ∷
@@ -202,7 +202,7 @@ instance foldingExpandRequestRec ∷
   , Row.Cons sym (Variant specSubReq) specReq_ specReq
   , Row.Cons sym (Variant rndSubReq) rndReq rndReq'
   ) ⇒
-  FoldingWithIndex (ExpandRequest specReq) (SProxy sym) (Variant rndReq → Variant specReq) { | renderers } (Variant rndReq' → Variant specReq) where
+  FoldingWithIndex (ExpandRequest specReq) (Proxy sym) (Variant rndReq → Variant specReq) { | renderers } (Variant rndReq' → Variant specReq) where
   foldingWithIndex _ prop expandRndReq rs = do
     let
       expandRndSubReq ∷ Variant rndSubReq → Variant specSubReq

@@ -2,10 +2,9 @@ module Isomers.HTTP.Exchange where
 
 import Prelude
 
-import Data.Array (foldMap)
 import Data.Bifunctor (class Bifunctor)
 import Data.Either (Either)
-import Data.Foldable (class Foldable, foldlDefault, foldrDefault)
+import Data.Foldable (class Foldable, foldMap, foldlDefault, foldrDefault)
 import Data.Maybe (Maybe)
 import Data.Traversable (class Traversable, sequence, traverse, traverseDefault)
 

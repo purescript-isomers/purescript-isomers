@@ -14,9 +14,9 @@ import Isomers.Request.Duplex.Type (withMethod) as Type
 import Isomers.Request.Duplex.Variant (empty) as Request.Duplex.Variant
 import Isomers.Request.Duplex.Variant (injInto)
 import Prim.Row (class Cons, class Union) as Row
-import Type.Prelude (SProxy, reflectSymbol)
+import Type.Prelude (Proxy, reflectSymbol)
 
-newtype VariantStep = VariantStep (∀ body i o s. IsSymbol s ⇒ SProxy s → Duplex body i o → Duplex body i o)
+newtype VariantStep = VariantStep (∀ body i o s. IsSymbol s ⇒ Proxy s → Duplex body i o → Duplex body i o)
 
 -- | Fold over a record with duplexes and build duplex
 -- | for a variant.
@@ -27,7 +27,7 @@ instance foldingVariantStepDuplex ∷
   , Row.Cons l i vi vi'
   , IsSymbol l
   ) ⇒
-  FoldingWithIndex VariantStep (SProxy l) (Duplex body (Variant vi) (Variant vo)) (Duplex body i o) (Duplex body (Variant vi') (Variant vo')) where
+  FoldingWithIndex VariantStep (Proxy l) (Duplex body (Variant vi) (Variant vo)) (Duplex body i o) (Duplex body (Variant vi') (Variant vo')) where
   foldingWithIndex (VariantStep step) l vd d = do
     let
       f = injInto l <<< step l
@@ -47,7 +47,7 @@ variant ∷ ∀ body vi vo rec.
 variant prefixRoutes rec = do
   hfoldlWithIndex (VariantStep step) (Request.Duplex.Variant.empty ∷ Duplex body _ _) rec
   where
-    step ∷ ∀ si so sb ss. IsSymbol ss ⇒ SProxy ss → Duplex sb si so → Duplex sb si so
+    step ∷ ∀ si so sb ss. IsSymbol ss ⇒ Proxy ss → Duplex sb si so → Duplex sb si so
     step l = if prefixRoutes
       then
         prefix (reflectSymbol l)
@@ -65,7 +65,7 @@ data MethodStep = MethodStep
 
 instance mappingMethodStep ∷
   (IsSymbol l, Row.Cons l Unit ms ("DELETE" :: Unit , "POST" :: Unit, "PUT" :: Unit, "GET" ∷ Unit))
-  ⇒ MappingWithIndex MethodStep (SProxy l) (Duplex body i o) (Duplex body i o) where
+  ⇒ MappingWithIndex MethodStep (Proxy l) (Duplex body i o) (Duplex body i o) where
   mappingWithIndex _ l v = Type.withMethod (toHTTPMethod m) v
     where
       m ∷ Request.Method (Variant ("DELETE" :: Unit , "POST" :: Unit, "PUT" :: Unit, "GET" ∷ Unit))

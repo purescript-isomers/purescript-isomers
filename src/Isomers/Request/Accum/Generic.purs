@@ -8,10 +8,10 @@ import Isomers.Request.Accum.Type (Accum, prefix)
 import Isomers.Request.Accum.Variant (empty) as Request.Accum.Variant
 import Isomers.Request.Accum.Variant (injInto)
 import Prim.Row (class Cons, class Union) as Row
-import Type.Prelude (SProxy, reflectSymbol)
+import Type.Prelude (Proxy, reflectSymbol)
 
 newtype VariantStep
-  = VariantStep (∀ body route i o s. IsSymbol s ⇒ SProxy s → Accum body route i o → Accum body route i o)
+  = VariantStep (∀ body route i o s. IsSymbol s ⇒ Proxy s → Accum body route i o → Accum body route i o)
 
 -- | Fold over a record with duplexes and build duplex
 -- | for a variant.
@@ -23,7 +23,7 @@ instance foldingVariantStepAccum ∷
   ) ⇒
   FoldingWithIndex
     VariantStep
-    (SProxy l)
+    (Proxy l)
     (Accum body route (Variant vi) (Variant vo))
     (Accum body route i o)
     (Accum body route (Variant vi') (Variant vo')) where
@@ -59,7 +59,7 @@ variant ∷ ∀ body vi vo route rec.
 variant prefixRoutes rec = do
   hfoldlWithIndex (VariantStep step) (Request.Accum.Variant.empty ∷ Accum body route _ _) rec
   where
-    step ∷ ∀ sr si sb so ss. IsSymbol ss ⇒ SProxy ss → Accum sb sr si so → Accum sb sr si so
+    step ∷ ∀ sr si sb so ss. IsSymbol ss ⇒ Proxy ss → Accum sb sr si so → Accum sb sr si so
     step l = if prefixRoutes
       then
         prefix (reflectSymbol l)

@@ -12,7 +12,7 @@ import Isomers.Response.Encodings (_string)
 import Isomers.Response.Raw.Types (RawClient(..), RawServer(..))
 import Isomers.Response.Types (HtmlString(..))
 import Network.HTTP.Types (hContentType)
-import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
+import Type.Prelude (class IsSymbol, Proxy(..), reflectSymbol)
 
 type RawDuplex ct i o = Duplex ct (RawServer i) (RawClient o)
 type RawDuplex' ct a = RawDuplex ct a a
@@ -20,7 +20,7 @@ type RawDuplex' ct a = RawDuplex ct a a
 withContentType ∷ ∀ ct i o. IsSymbol ct ⇒ RawDuplex ct i o → RawDuplex ct i o
 withContentType (Duplex prt prs) = Duplex prt' prs'
   where
-  ct = reflectSymbol (SProxy ∷ SProxy ct)
+  ct = reflectSymbol (Proxy ∷ Proxy ct)
   prt' i = Printer.reqHeader hContentType ct <> prt i
   prs' = Parser.withContentType ct prs
 

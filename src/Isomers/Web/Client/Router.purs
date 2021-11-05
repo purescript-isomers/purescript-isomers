@@ -1,5 +1,3 @@
--- | I'm not very proud of the current implementation
--- |
 module Isomers.Web.Client.Router where
 
 import Prelude
@@ -15,20 +13,22 @@ import Data.Symbol (reflectSymbol)
 import Data.Tuple.Nested ((/\), type (/\))
 import Data.Variant (Variant)
 import Effect (Effect)
-import Effect.Aff (Aff)
+import Effect.Aff (Aff, launchAff_)
 import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
 import Effect.Ref (new, read, write) as Ref
-import Global.Unsafe (unsafeStringify)
+import Halogen.Subscription (Emitter, Subscription)
+import Halogen.Subscription (create, notify) as Subscription
 import Heterogeneous.Folding (class HFoldlWithIndex)
 import Isomers.Client (ClientStep(..), Fetch, RequestBuildersStep)
 import Isomers.Client (client, requestBuilders) as Client
 import Isomers.Client.Fetch (HostInfo, fetch)
 import Isomers.Client.Fetch (fetch) as Fetch
 import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..))
+import Isomers.Contrib.Routing.PushState (foldPathsAff) as Contrib.Routing.PushState
+import Isomers.Contrib.Web.Router.Driver.PushState (makeDriverAff)
 import Isomers.HTTP.ContentTypes (_html, _json) as ContentTypes
-import Isomers.Request (Duplex) as Request
-import Isomers.Request (ParsingError) as Isomers.Request
+import Isomers.Request (Duplex, ParsingError) as Request
 import Isomers.Request.Duplex (as) as Isomers.Request.Duplex
 import Isomers.Request.Duplex (parse, print) as Request.Duplex
 import Isomers.Request.Encodings (ServerRequest)
@@ -38,24 +38,44 @@ import Isomers.Spec.Accept (ContentTypes)
 import Isomers.Web.Client.Render (class FoldRender, ContractRequest, ExpandRequest, contractRequest, expandRequest, foldRender)
 import Isomers.Web.Client.Render (contractRequest, expandRequest) as Isomers.Web.Client.Render
 import Isomers.Web.Types (WebSpec(..))
+import JS.Unsafe.Stringify (unsafeStringify)
 import Network.HTTP.Types (hAccept)
 import React.Basic (JSX)
-import Routing.PushState (makeInterface) as PushState
+import Routing.PushState (LocationState, makeInterface) as PushState
+import Routing.PushState (LocationState, makeInterface) as PushStateInterface
+import Routing.PushState (PushStateInterface)
 import Type.Prelude (Proxy(..))
-import Wire.React.Router (Transition, continue, makeRouter)
-import Wire.React.Router.Control (Command(..), Router(..), Transition(..), Transitioning, Resolved) as Router
-import Wire.Signal (Signal)
-import Wire.Signal (create) as Signal
+import Web.Router (Router, RouterState(..), Transitioning) as Router
+import Web.Router (RouterState(..), Router, continue, makeRouter) as Web.Router
+import Web.Router (Transition, continue, makeRouter)
+import Web.Router.Types (Command(..), Resolved, Transition(..)) as Router
 
--- | TODO: this is somewhat unsafe because we don't preserve any HTTP semantics
--- | on the requsts level at the moment. We would like to probably
--- | have something like this here:
+-- import Wire.React.Router.Control (Command(..), Router(..), Transition(..), Transitioning, Resolved) as Router
+-- import Wire.Signal (Signal)
+-- import Wire.Signal (create) as Signal
+
+-- | This printing is somewhat unsafe because we turn a given URL into just
+-- | URL string (without headers and using method to "GET").
+-- | Because we don't preserve any HTTP semantics on the request level at the moment
+-- | it is hard to guard against invalid encoding.
+-- | We would like to probably have something like this here:
+-- | ```
+-- | HTTPRequest (method ∷ Method ("GET" ::: SNil), headers ∷ HNil) req ⇒
+-- | ```
+-- | so we can be sure that a give request can be safely dumped into just an URL
 -- |
--- | HTTPRequest (method ∷ Method ("GET ::: SList), headers ∷ HNil) req ⇒
--- |
--- | so we can be sure that a give request can be safely dumped into just URL
 unsafePrint ∷ ∀ body ireq oreq. Request.Duplex body ireq oreq → ireq → String
 unsafePrint requestDuplex request = _.path $ Request.Duplex.print requestDuplex request
+
+parseWebURL ∷
+  ∀ body ireq oreq rnd rndReq.
+  HFoldlWithIndex (ContractRequest oreq) (Variant oreq → Maybe (Variant ())) rnd (Variant oreq → Maybe (Variant rndReq)) ⇒
+  Request.Duplex body (Variant ireq) (Variant oreq) → rnd → String → Aff (Maybe (Variant rndReq))
+parseWebURL requestDuplex renderers path = do
+  let
+    -- | TODO: There is probably a bug here because we are contracting "application/json"... why?
+    parsePath = Request.Duplex.parse requestDuplex <<< webServerRequest
+  map (contractRequest (Proxy ∷ Proxy (Variant oreq)) renderers <=< hush) <<< parsePath $ path
 
 serverRequest :: ∀ body. String → String → ServerRequest body
 serverRequest accept path =
@@ -72,21 +92,6 @@ apiServerRequest = serverRequest (reflectSymbol $ ContentTypes._json)
 webServerRequest :: ∀ body. String → ServerRequest body
 webServerRequest = serverRequest (reflectSymbol $ ContentTypes._html)
 
-parse ∷
-  ∀ body ireq oreq rnd rndReq.
-  HFoldlWithIndex (ContractRequest oreq) (Variant oreq → Maybe (Variant ())) rnd (Variant oreq → Maybe (Variant rndReq)) ⇒
-  Request.Duplex body (Variant ireq) (Variant oreq) → rnd → String → Aff (Maybe (Variant rndReq))
-parse requestDuplex renderers path = do
-  let
-    -- | TODO: There is a bug probably because we are contracting "application/json"... why?
-    parsePath = Request.Duplex.parse requestDuplex <<< webServerRequest
-  map (contractRequest (Proxy ∷ Proxy (Variant oreq)) renderers <=< hush) <<< parsePath $ path
-
-data AffRoute req res
-  = Parsing Fetch String
-  | Fetching Fetch req
-  | Fetched req res
-
 webRequest ∷
   ∀ body rnd ireq oreq rndReq rndReqBuilders res.
   HFoldlWithIndex (ContractRequest oreq) (Variant oreq → Maybe (Variant ())) rnd (Variant oreq → Maybe (Variant rndReq)) ⇒
@@ -98,53 +103,50 @@ webRequest webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, response }), r
 type Defaults doc
   = { doc ∷ doc }
 
-type RouterInterface req
-  = { navigate ∷ req → Effect Unit
-    , redirect ∷ req → Effect Unit
-    , component ∷ JSX
-    }
+type UrlString
+  = String
 
-type UrlString = String
-
-type NavigationInterface client specReq oSpecReq webReq -- reqBuilders
+type NavigationInterface client inSpecReq outSpecReq webReq -- reqBuilders
   = { client ∷ client
     , navigate ∷ webReq → Effect Unit
-    -- | String based parsing - should work only for
     , parse ∷
-      { spec ∷ UrlString → Aff (Either Isomers.Request.ParsingError oSpecReq)
-      , web ∷ UrlString → Aff (Either Isomers.Request.ParsingError webReq)
-      }
+        { spec ∷ UrlString → Aff (Either Request.ParsingError outSpecReq)
+        , web ∷ UrlString → Aff (Either Request.ParsingError webReq)
+        }
     , print ∷
-      { spec ∷ specReq → String
-      , web ∷ webReq → String
-      }
+        { spec ∷ inSpecReq → String
+        , web ∷ webReq → String
+        }
     -- , request ∷ reqBuilders
     , redirect ∷ webReq → Effect Unit
     -- | TODO: This is a quick hack to allow route changes without
-    -- | fetch on router side. This does not trigger any rendering
+    -- | fetch on the router side. This does not trigger any rendering
     -- | of the component which is bad because we have inconsistent
     -- | route app state.
-    -- | For sure an app should be able to change the URL and response
-    -- | data state without a request on the router side and any unnecessary
-    -- | parsing.
+    -- | I think that an app should be able to change the URL and the response
+    -- | data state without triggering a request on the router side.
     , __replace ∷ webReq → Effect Unit
-    -- | Because ajax calls result in automatic redirects handling
-    -- | we probably should allow handling its results. like this.
+    -- | Because ajax redirects are automatically handled by the browser
+    -- | we probably should allow handling its results like this.
     , __redirected ∷ String /\ ClientResponse → Effect Unit
     }
 
-type NavigationInterface' client specReq webSpec = NavigationInterface client specReq specReq webSpec
+type NavigationInterface' client specReq webSpec
+  = NavigationInterface client specReq specReq webSpec
 
+parseSpecReq :: forall t165 t166 t167. Request.Duplex t165 t166 t167 -> String -> Aff (Either Request.ParsingError t167)
 parseSpecReq specReqDpl = Request.Duplex.parse specReqDpl <<< apiServerRequest
 
+-- parseWebReq :: forall t179 t181 t191 t192 t193 t206. HFoldlWithIndex (ExpandRequest t179) (Variant () -> Variant t179) t192 (Variant t181 -> Variant t179) => HFoldlWithIndex (ContractRequest t191) (Variant t191 -> Maybe (Variant ())) t192 (Variant t191 -> Maybe (Variant t193)) => Request.Duplex t206 (Variant t179) (Variant t191) -> t192 -> String -> Aff (Either Request.ParsingError (Variant t193))
 parseWebReq specReqDpl render = do
   let
-    dpl = Isomers.Request.Duplex.as
-      { print: Isomers.Web.Client.Render.expandRequest Proxy render
-      , parse: note "Given URL is not a web route but a spec route." <<< Isomers.Web.Client.Render.contractRequest (Proxy ∷ Proxy (Variant _)) render
-      , show: unsafeStringify
-      }
-      specReqDpl
+    dpl =
+      Isomers.Request.Duplex.as
+        { print: Isomers.Web.Client.Render.expandRequest Proxy render
+        , parse: note "Given URL is not a web route but a spec route." <<< Isomers.Web.Client.Render.contractRequest (Proxy ∷ Proxy (Variant _)) render
+        , show: unsafeStringify
+        }
+        specReqDpl
   Request.Duplex.parse dpl <<< apiServerRequest
 
 webRouter ::
@@ -156,129 +158,103 @@ webRouter ::
   -- | client
   HFoldlWithIndex (RequestBuildersStep (Variant ireq) (Variant ireq)) {} (Proxy (Variant ireq)) requestBuilders ⇒
   HFoldlWithIndex (ClientStep (Variant ireq) res) {} requestBuilders client ⇒
-
   Defaults doc ->
   WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res ->
   HostInfo →
   -- (NavigationInterface (Variant ireq) (Variant rndReq) rndReqBuilders → clientRouter) →
   (NavigationInterface client (Variant ireq) (Variant oreq) (Variant rndReq) → clientRouter) →
-  Aff
+  Effect
     ( Either
         String
-        { component ∷ JSX
+        { initialize ∷ Effect (Effect Unit)
         , navigate ∷ Variant rndReq → Effect Unit
         , redirect ∷ Variant rndReq → Effect Unit
-        , signal ∷ Signal doc
+        , emitter ∷ Emitter doc
         }
     )
 webRouter defaults webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, response }), render: HJust renderers }) hostInfo toClientRouter = do
   let
+    -- | TODO: fetch should be parameterized
     defFetch = Fetch.fetch hostInfo
 
     render ∷ Fetch → Variant rndReq → clientRouter → Aff doc
     render = foldRender (Proxy ∷ Proxy clientRouter) webSpec
 
-    parsePure ∷ String → Identity (AffRoute (Variant rndReq) doc)
-    parsePure url = Identity (Parsing defFetch url)
+    printWebRequest req = unsafePrint reqDpl (expandRequest (Proxy ∷ Proxy (Variant ireq)) renderers req)
+    printSpecRequest req = unsafePrint reqDpl req
 
-    parseRoute url = parse reqDpl renderers url
+  driver ← makeDriverAff (parseWebURL reqDpl renderers) printWebRequest
 
-    print ∷ AffRoute (Variant rndReq) doc → String
-    print (Fetched req _) = unsafePrint reqDpl (expandRequest (Proxy ∷ Proxy (Variant ireq)) renderers req)
+  reqRef ← Ref.new $ Nothing
+  { emitter, listener } ← Subscription.create
 
-    print (Fetching _ req) = unsafePrint reqDpl (expandRequest (Proxy ∷ Proxy (Variant ireq)) renderers req)
+  let
+    handleState ∷
+      Web.Router.Router (Variant rndReq) →
+      Web.Router.RouterState (Variant rndReq) →
+      Effect Unit
+    handleState self = case _ of
+      Web.Router.Transitioning _ _ → pure unit
+      Web.Router.Resolved _ req → do
+        currReq ← Ref.read reqRef
+        when (currReq /= (Just $ printWebRequest req)) do
+          let
+            self' =
+              toClientRouter
+                { client: Client.client defFetch reqDpl response
+                , navigate: self.navigate
+                , parse:
+                    { spec: parseSpecReq reqDpl
+                    , web: parseWebReq reqDpl renderers
+                    }
+                , print:
+                    { spec: printSpecRequest
+                    , web: printWebRequest
+                    }
+                , redirect: self.redirect
+                , __replace:
+                    \req → do
+                      Ref.write (Just $ printWebRequest $ req) reqRef
+                      self.redirect $ req
+                , __redirected: \(url /\ res) → do
+                  -- | TODO: I'm not sure what should go into `url`
+                  -- self.navigate $ Parsing (const $ pure $ pure $ res) url
+                  pure unit
+                -- , request: webRequest webSpec
+                }
+          Ref.write (Just $ printWebRequest req) reqRef
+          launchAff_ do
+            doc ← render defFetch req self'
+            liftEffect $ Subscription.notify listener doc
 
-    print (Parsing _ url) = url
-  pushStateInterface ← liftEffect PushState.makeInterface
-  liftEffect pushStateInterface.locationState >>= _.path
-    >>> \initialRoute →
-        parseRoute initialRoute
-          >>= case _ of
-              Nothing → pure $ Left $ "Invalid initial route: \"" <> initialRoute <> "\""
-              Just initialRoute →
-                liftEffect do
-                  -- | I'm not able to render out of the box because...
-                  -- | I need a router interface for rendering to work :-)
-                  { signal, modify: modifySignal } ← Signal.create $ defaults.doc
-                  reqRef ← liftEffect $ Ref.new $ Nothing -- print (Fetching initialRoute)
-                  let
-                    onRoute ∷
-                      RouterInterface (AffRoute (Variant rndReq) doc) →
-                      AffRoute (Variant rndReq) doc →
-                      Router.Router (AffRoute (Variant rndReq) doc) Router.Transitioning Router.Resolved Unit
-                    onRoute self route = do
-                      let
-                        -- I'm not sure if I should use `defFetch` in `client`
-                        self' = toClientRouter
-                          { client: Client.client defFetch reqDpl response
-                          , navigate: self.navigate <<< Fetching defFetch
-                          , parse:
-                            { spec: parseSpecReq reqDpl
-                            , web: parseWebReq reqDpl renderers
-                            }
-                          , print:
-                            { spec: unsafePrint reqDpl
-                            , web: \req → print (Fetching defFetch req)
-                            }
-                          , redirect: self.redirect <<< Fetching defFetch
-                          , __replace: \req → do
-                              Ref.write (Just $ print $ Fetching defFetch req) reqRef
-                              self.redirect $ Fetching defFetch req
-                          , __redirected: \(url /\ res) → self.navigate $ Parsing (const $ pure $ pure $ res) url
-                          -- , request: webRequest webSpec
-                          }
-                        renderRouter fetch req = do
-                          currReq ← liftEffect $ Ref.read reqRef
-                          when (currReq /= (Just $ print $ Fetching fetch req)) do
-                            doc ← liftAff $ render fetch req self'
-                            liftEffect $ Ref.write (Just $ print $ Fetching fetch req) reqRef
-                            liftFreeT $ Router.Override $ Fetched req doc
-                      case route of
-                        Parsing fetch url →
-                          Router.Router do
-                            liftAff (parseRoute url)
-                              >>= case _ of
-                                  Just req → renderRouter fetch req
-                                  Nothing → pure unit
-                        Fetching fetch req →
-                          Router.Router $ renderRouter fetch req
-                        Fetched _ _ → continue
-
-                    onTransition ∷ Transition (AffRoute (Variant rndReq) doc) → Effect Unit
-                    onTransition = case _ of
-                      Router.Transitioning _ _ → pure unit
-                      Router.Resolved _ (Parsing _ _) → pure unit
-                      Router.Resolved _ (Fetching req _) → pure unit
-                      Router.Resolved _ (Fetched req doc) → do
-                        modifySignal (const $ doc)
-                  (interface ∷ (RouterInterface (AffRoute (Variant rndReq) doc))) ←
-                    makeRouter'
-                      pushStateInterface
-                      { onRoute
-                      , onTransition
-                      , parse: parsePure
-                      , print
-                      }
-                  pure
-                    $ Right
-                        { component: interface.component
-                        , navigate: interface.navigate <<< Fetching defFetch
-                        , redirect: interface.redirect <<< Fetching defFetch
-                        , signal
-                        }
+  (interface ∷ (Web.Router.Router (Variant rndReq))) ←
+    makeRouter'
+      driver
+      handleState
+  pure
+    $ Right
+        { initialize: interface.initialize
+        , navigate: interface.navigate
+        , redirect: interface.redirect
+        , emitter
+        }
   where
   -- | `makeRouter` version which passes `self` reference to the `onRoute` function
-  makeRouter' interface opts = do
-    ref ← Ref.new { component: mempty, navigate: const $ pure unit, redirect: const $ pure unit }
+  makeRouter' driver handleState = do
+    ref ← Ref.new
+      { initialize: pure (pure unit)
+      , navigate: const $ pure unit
+      , redirect: const $ pure unit
+      }
     let
-      onRoute = \route → do
-        router ← Router.Router $ liftEffect $ Ref.read ref
-        opts.onRoute router route
-        where
-        bind = ibind
+      handleState' st = do
+        router ← Ref.read ref
+        handleState router st
 
-      opts' = opts { onRoute = onRoute }
-    router ← makeRouter interface opts'
+    router ← Web.Router.makeRouter
+      (\_ _ → Web.Router.continue)
+      handleState'
+      driver
     Ref.write router ref
     pure router
 
@@ -299,13 +275,13 @@ fakeWebRouter fetch doc web@(WebSpec { spec: Spec spec@{ request: reqDpl, respon
   { client: Client.client fetch reqDpl responseDpls
   , navigate: const $ pure unit
   , parse:
-    { spec: parseSpecReq reqDpl
-    , web: parseWebReq reqDpl renderers
-    }
+      { spec: parseSpecReq reqDpl
+      , web: parseWebReq reqDpl renderers
+      }
   , print:
-    { spec: unsafePrint reqDpl
-    , web: unsafePrint reqDpl <<< expandRequest (Proxy ∷ Proxy (Variant ireq)) renderers
-    }
+      { spec: unsafePrint reqDpl
+      , web: unsafePrint reqDpl <<< expandRequest (Proxy ∷ Proxy (Variant ireq)) renderers
+      }
   , redirect: const $ pure unit
   , __redirected: const $ pure unit
   , __replace: const $ pure unit

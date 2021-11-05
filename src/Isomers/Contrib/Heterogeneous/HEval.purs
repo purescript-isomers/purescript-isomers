@@ -9,8 +9,8 @@ import Heterogeneous.Folding (class Folding, class HFoldl, folding, hfoldl)
 import Heterogeneous.Mapping (class HMap, class HMapWithIndex, class Mapping, hmap, hmapWithIndex, mapping)
 import Isomers.Contrib.Heterogeneous.Filtering (class HFilter, hfilter)
 import Prelude ((<<<)) as Prelude
-import Prim.Boolean (False, True, kind Boolean)
-import Type.Prelude (BProxy)
+import Prim.Boolean (False, True)
+import Type.Prelude (Proxy)
 
 data HCompose f g
   = HCompose f g
@@ -92,7 +92,7 @@ instance hevalDoSecond ∷ (HEval f (j → j')) ⇒ HEval (DoSecond f) (i /\ j �
   heval (DoSecond f) = second $ heval f
 
 class HIfThenElse (b ∷ Boolean) t f r | b t f → r where
-  hifThenElse ∷ BProxy b → t → f → r
+  hifThenElse ∷ Proxy b → t → f → r
 
 instance hifThenElseTrue ∷ HIfThenElse True t f t where
   hifThenElse _ t _ = t
@@ -103,7 +103,7 @@ instance hifFalse ∷ HIfThenElse False t f f where
 data DoHIfThenElse c t f = DoHIfThenElse c t f
 
 instance heavalDoHIfThenElse ∷
-  ( HEval c (i → BProxy b)
+  ( HEval c (i → Proxy b)
   , HEval t (i → t')
   , HEval f (i → f')
   , HIfThenElse b t' f' r

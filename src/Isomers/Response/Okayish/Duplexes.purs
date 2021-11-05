@@ -32,7 +32,7 @@ import Isomers.Response.Okayish.Type (BadRequest, Found, NotFound, Ok, Okayish(.
 import Isomers.Response.Types (HtmlString(..), JavascriptString(..))
 import Network.HTTP.Types (badRequest400, found302, hContentType, hLocation, movedPermanently301, notFound404, ok200)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
-import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
+import Type.Prelude (class IsSymbol, Proxy(..), reflectSymbol)
 import Type.Row (type (+))
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -54,7 +54,7 @@ injInto ∷
   Row.Cons l i () li ⇒
   Row.Union vi li vi' ⇒
   Row.Cons l i (Ok a + vi) (Ok a + vi') ⇒
-  SProxy l →
+  Proxy l →
   Duplex ct i o →
   Duplex ct (Okayish vi a) (Okayish vo b) →
   Duplex ct (Okayish vi' a) (Okayish vo' b)
@@ -73,7 +73,7 @@ injStrangerInto ∷
   Row.Cons l i () li ⇒
   Row.Union vi li vi' ⇒
   Row.Cons l i (Ok a + vi) (Ok a + vi') ⇒
-  SProxy l →
+  Proxy l →
   Duplex ct' i o →
   Duplex ct (Okayish vi a) (Okayish vo b) →
   Duplex ct (Okayish vi' a) (Okayish vo' b)
@@ -171,7 +171,7 @@ badRequest' nf res = injStrangerInto _badRequest (Duplex.withStatus badRequest40
 -- type MovedPermanently res
 --   = ( movedPermanently ∷ String | res )
 -- 
--- _movedPermanently = SProxy ∷ SProxy "movedPermanently"
+-- _movedPermanently = Proxy ∷ Proxy "movedPermanently"
 -- 
 -- movedPermanently ∷
 --   ∀ ct res o i.

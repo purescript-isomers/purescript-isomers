@@ -8,22 +8,21 @@ import Isomers.Contrib.Type.Eval.Foldable (Foldl')
 import Isomers.Request.Accum.Generic (class HFoldlAccumVariant)
 import Isomers.Request.Accum.Generic (variant) as Request.Accum.Generic
 import Isomers.Spec.Types (AccumSpec(..), GetResponse, GetRequest, _GetRequest, _GetResponse)
-import Type.Eval (class Eval, kind TypeExpr)
+import Type.Eval (class Eval, TypeExpr)
 import Type.Eval.Function (type (<<<))
 import Type.Eval.RowList (FromRow)
-import Type.Prelude (class TypeEquals)
-import Type.Row (RProxy)
+import Type.Prelude (class TypeEquals, Proxy)
 
 foreign import data UnifyBodyStep ∷ Type → Type → TypeExpr
 
 instance evalSubspecBodyUnit ∷
-  Eval (UnifyBodyStep Unit (AccumSpec body route ireq oreq res)) (RProxy body)
+  Eval (UnifyBodyStep Unit (AccumSpec body route ireq oreq res)) (Proxy body)
 else instance evalSubspecBodyStep ∷
-  (TypeEquals (RProxy body) (RProxy body')) ⇒
-  Eval (UnifyBodyStep (RProxy body) (AccumSpec body' route ireq oreq res)) (RProxy body)
+  (TypeEquals (Proxy body) (Proxy body')) ⇒
+  Eval (UnifyBodyStep (Proxy body) (AccumSpec body' route ireq oreq res)) (Proxy body)
 
 type UnifyBody row
-  = (Foldl' UnifyBodyStep Unit <<< FromRow) (RProxy row)
+  = (Foldl' UnifyBodyStep Unit <<< FromRow) (Proxy row)
 
 type PrefixRoutes = Boolean
 
@@ -42,7 +41,7 @@ type PrefixRoutes = Boolean
 -- | which is a value which we want to pass to the final spec record.
 accumSpec ∷
   ∀ rb rec reqs res route ivreq ovreq.
-  Eval (UnifyBody rec) (RProxy rb) ⇒
+  Eval (UnifyBody rec) (Proxy rb) ⇒
   HMap GetResponse { | rec } { | res } ⇒
   HMap GetRequest { | rec } { | reqs } ⇒
   HFoldlAccumVariant rb route { | reqs } ivreq ovreq ⇒

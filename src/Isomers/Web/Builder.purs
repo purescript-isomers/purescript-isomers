@@ -28,9 +28,9 @@ import Isomers.Web.Builder.HEval (DoIsHJust(..), DoNull(..), FromHJust(..))
 import Isomers.Web.Renderer (Renderer(..))
 import Isomers.Web.Types (AccumWebSpec(..), GetRender, GetSpec, WebSpec(..), _GetRender, _GetSpec, rootAccumWebSpec)
 import Prim.Row (class Cons, class Lacks) as Row
-import Record.Extra (type (:::), SCons, SLProxy(..), SNil, kind SList)
+import Record.Extra (type (:::), SCons, SNil, SList)
 import Type.Equality (to) as Type.Equality
-import Type.Prelude (class IsSymbol, class TypeEquals, BProxy, SProxy(..))
+import Type.Prelude (class IsSymbol, class TypeEquals, Proxy(..))
 
 data WebBuilderStep (debugPath ∷ SList) route = WebBuilderStep
 
@@ -72,7 +72,7 @@ instance foldingExtractRenderMatch ∷
     acc
     (Rendered (Response.Duplex ct ires ores) rnd)
     (Contrib.HJust (Tagged ct (Renderer router ireq ires doc))) where
-  folding _ _ (Rendered dpl rnd) = Contrib.HJust (Tagged (Renderer $ Isomers.Contrib.Type.Equality.to' (SLProxy ∷ SLProxy ("foldingExtractRenderMatch:" ::: debugPath)) rnd))
+  folding _ _ (Rendered dpl rnd) = Contrib.HJust (Tagged (Renderer $ Isomers.Contrib.Type.Equality.to' (Proxy ∷ Proxy ("foldingExtractRenderMatch:" ::: debugPath)) rnd))
 else instance foldingExtractRenderNoMatch ∷
   Folding
     (ResponseRenderer debugPath ireq oreq)
@@ -110,7 +110,7 @@ instance builderWithBodyEndpoint ∷
   accumWebSpec _ ((WithBody dpl) /\ res) = do
     let
       s' = WebBuilderStep ∷ WebBuilderStep ("WithBody" ::: debugPath) { | route }
-      req = Request.Accum.insertReq (SProxy ∷ SProxy l) dpl
+      req = Request.Accum.insertReq (Proxy ∷ Proxy l) dpl
     accumWebSpec s' (req /\ res ∷ Request.Accum body { | route } { | ireq } { | oreq } /\ res)
 -- | I extract `ireq_`, `oreq_` from req to be able
 -- | to construct the type of the `Renderer` because
@@ -120,13 +120,13 @@ instance builderWithBodyEndpoint ∷
 else instance builderEndpoinsAccessList ∷
   ( HFoldl (ResponseRenderer debugPath ireq_ oreq_) HNothing l rnd
   , TypeEquals (h : t) l
-  , HEval DoIsHJust (rnd → BProxy hasRender)
+  , HEval DoIsHJust (rnd → Proxy hasRender)
   , TypeEquals req (Request.Accum b route_ ireq_ oreq_)
   , Spec.Builder (req /\ l'') b route ireq oreq res'
   , HEval
       ( DoBuildAccumSpec route
           H.<<< DoApply (l'' → req /\ l'')
-          H.<<< DoHIfThenElse (DoConst (BProxy hasRender)) (DoApply (l' → Response.RawDuplex' HtmlMime HtmlString : l')) DoIdentity
+          H.<<< DoHIfThenElse (DoConst (Proxy hasRender)) (DoApply (l' → Response.RawDuplex' HtmlMime HtmlString : l')) DoIdentity
           H.<<< DoHMap DropRender
       )
       (l → Spec.AccumSpec b route ireq oreq res')
@@ -257,7 +257,7 @@ instance scalarSpecBuilder ∷
 instance builderBuilderStep ∷ Builder debugPath a b rnd route ireq oreq res ⇒ Mapping (WebBuilderStep debugPath route) a (AccumWebSpec b rnd route ireq oreq res) where
   mapping step a = accumWebSpec step a
 
-instance builderBuilderStepNest ∷ Builder (idx ::: debugPath) a b rnd route ireq oreq res ⇒ MappingWithIndex (WebBuilderStep debugPath route) (SProxy idx) a (AccumWebSpec b rnd route ireq oreq res) where
+instance builderBuilderStepNest ∷ Builder (idx ::: debugPath) a b rnd route ireq oreq res ⇒ MappingWithIndex (WebBuilderStep debugPath route) (Proxy idx) a (AccumWebSpec b rnd route ireq oreq res) where
   mappingWithIndex _ _ a = accumWebSpec (WebBuilderStep ∷ WebBuilderStep (idx ::: debugPath) route) a
 
 webSpec :: forall a bd ireq oreq res rnd. Builder SNil a bd rnd {} ireq oreq res => a -> WebSpec bd rnd ireq oreq res

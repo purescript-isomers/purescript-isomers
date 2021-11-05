@@ -36,11 +36,11 @@ import Isomers.Response.Duplex (Duplex(..), Duplex') as Exports
 import Isomers.Response.Duplex (Duplex)
 import Isomers.Response.Encodings (ClientResponse)
 import Prim.Row (class Lacks) as Row
-import Type.Prelude (SProxy(..))
+import Type.Prelude (Proxy(..))
 import Type.Row (type (+))
 import Unsafe.Coerce (unsafeCoerce)
 
-_ok = SProxy ∷ SProxy "ok"
+_ok = Proxy ∷ Proxy "ok"
 
 -- | Alias useful when working with underling `Variant`.
 type Ok a res
@@ -124,7 +124,7 @@ lmapOkayish f (Okayish v) = Okayish v'
   where
   v' = Variant.on _ok (Variant.inj _ok) (Contrib.Data.Variant.append _ok <<< f) v
 
-_notFound = SProxy ∷ SProxy "notFound"
+_notFound = Proxy ∷ Proxy "notFound"
 
 type NotFound a res
   = ( notFound ∷ a | res )
@@ -134,7 +134,7 @@ notFound = notOk <<< Variant.inj _notFound
 
 -- | On the client side we are going to have actual response at hand because
 -- | we detect redirect post factum (by using `response.redirected`).
-_found = SProxy ∷ SProxy "found"
+_found = Proxy ∷ Proxy "found"
 
 type Location
   = String
@@ -145,7 +145,7 @@ type Found res
 found ∷ ∀ a res. Row.Lacks "ok" res ⇒ Location /\ Maybe ClientResponse → Okayish (Found + res) a
 found = notOk <<< Variant.inj _found
 
-_badRequest = SProxy ∷ SProxy "badRequest"
+_badRequest = Proxy ∷ Proxy "badRequest"
 
 type BadRequest a res
   = ( badRequest ∷ a | res )

@@ -11,7 +11,7 @@ import Prelude
 
 import Data.Either (Either(..))
 import Data.Newtype (class Newtype, un, unwrap)
-import Data.Symbol (class IsSymbol, SProxy)
+import Data.Symbol (class IsSymbol)
 import Data.Variant (Variant)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
@@ -24,6 +24,7 @@ import Isomers.Server.Handler (unifyMonad, Handler) as Exports
 import Isomers.Spec (Spec(..))
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
+import Type.Prelude (Proxy)
 
 -- | TODO: Drop wrapper when on purs-0.14.0
 -- | because it is just an for quite a large
@@ -43,7 +44,7 @@ instance routerFoldingRec ::
   ) =>
   FoldingWithIndex
     (RouterStep handlers resCodecs)
-    (SProxy sym)
+    (Proxy sym)
     Unit
     (Variant req)
     (m ServerResponseWrapper) where
@@ -65,7 +66,7 @@ else instance routerFoldingNewtypeRec ::
   ) =>
   FoldingWithIndex
     (RouterStep handlers resDuplexes)
-    (SProxy sym)
+    (Proxy sym)
     Unit
     (f (Variant req))
     (m ServerResponseWrapper) where
@@ -86,7 +87,7 @@ else instance routerFoldingFun ::
   ) =>
   FoldingWithIndex
     (RouterStep handlers resDuplexes)
-    (SProxy sym)
+    (Proxy sym)
     Unit
     req
     (m ServerResponseWrapper) where

@@ -18,13 +18,13 @@ import Isomers.Spec.Record (UnifyBody)
 import Isomers.Spec.Types (AccumSpec(..), GetRequest, GetResponse, _GetRequest, _GetResponse)
 import Prim.Row (class Cons) as Row
 import Type.Eval (class Eval)
-import Type.Prelude (RProxy, SProxy)
+import Type.Prelude (Proxy, Proxy)
 
 data MethodStep = MethodStep
 
 instance mappingMethodStep ∷
   (IsSymbol l, Row.Cons l Unit ms ("DELETE" :: Unit , "POST" :: Unit, "PUT" :: Unit, "GET" ∷ Unit))
-  ⇒ MappingWithIndex MethodStep (SProxy l) (Accum body acc i o) (Accum body acc i o) where
+  ⇒ MappingWithIndex MethodStep (Proxy l) (Accum body acc i o) (Accum body acc i o) where
   mappingWithIndex _ l v = Request.Accum.Type.method (toHTTPMethod m) v
     where
       m ∷ Request.Method (Variant ("DELETE" :: Unit , "POST" :: Unit, "PUT" :: Unit, "GET" ∷ Unit))
@@ -44,7 +44,7 @@ withMethod rec = do
 -- | we fold it by prefixing with method duplex.
 accumSpec ∷
   ∀ body specs resDpls reqDpls reqDpls' route vi vo.
-  Eval (UnifyBody specs) (RProxy body) ⇒
+  Eval (UnifyBody specs) (Proxy body) ⇒
   HMap GetResponse { | specs } resDpls ⇒
   HMap GetRequest { | specs } reqDpls ⇒
   HMapWithIndex MethodStep reqDpls reqDpls' ⇒

@@ -10,11 +10,11 @@ import Data.Map (fromFoldable) as Map
 import Data.Maybe (fromMaybe)
 import Data.Newtype (un)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
-import Debug.Trace (traceM)
+import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, Fiber, launchSuspendedAff)
 import Effect.Class (liftEffect)
-import Global.Unsafe (unsafeStringify)
+import JS.Unsafe.Stringify (unsafeStringify)
 import Isomers.Contrib.Web.Fetch (json) as Contrib.Web.Fetch.Response
 import Isomers.Contrib.Web.Fetch.Request (fromJson) as Contrib.Web.Fetch.Request
 import Isomers.Contrib.Web.Promise (toAffE) as Contrib.Web.Pomise

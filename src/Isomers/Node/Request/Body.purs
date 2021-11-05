@@ -18,7 +18,7 @@ import Node.HTTP (Request) as HTTP.Node
 import Node.HTTP (Request) as Node.HTTP
 import Node.HTTP (requestAsStream) as HTTP
 import Node.Stream (onData, onEnd) as Stream
-import Type.Prelude (SProxy(..))
+import Type.Prelude (Proxy(..))
 
 -- | TODO:
 -- | * Catching underlining errors `onError`
@@ -44,7 +44,7 @@ _buffs maxBodySize request = Aff.makeAff \done → do
     Ref.read ref >>= _.bufs >>> Right >>> done
   pure nonCanceler
 
-_buff = SProxy ∷ SProxy "buff"
+_buff = Proxy ∷ Proxy "buff"
 
 type Buff req
   = ( buff ∷ Fiber Buffer | req )
@@ -53,13 +53,13 @@ buff ∷ Int → Node.HTTP.Request → Aff Buffer
 buff maxBodySize request =
   _buffs maxBodySize request >>= Buffer.concat >>> liftEffect
 
-_json = SProxy ∷ SProxy "json"
+_json = Proxy ∷ Proxy "json"
 
 type Json req
   = ( json ∷ Fiber Argonaut.Json | req )
 
 
-_str = SProxy ∷ SProxy "str"
+_str = Proxy ∷ Proxy "str"
 
 type Str req
   = ( str ∷ Fiber String | req )

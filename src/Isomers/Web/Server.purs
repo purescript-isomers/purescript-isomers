@@ -22,7 +22,7 @@ import Prim.Row (class Cons, class Lacks) as Row
 import Record (get, insert, set) as Record
 import Type.Equality (class TypeEquals)
 import Type.Equality (from, to) as Type.Equality
-import Type.Prelude (class IsSymbol, SProxy(..))
+import Type.Prelude (class IsSymbol, Proxy(..))
 
 -- | We are passing frontent router so components
 -- | could trigger navigation etc.
@@ -35,7 +35,7 @@ instance foldingRenderHandlerStep ∷
   , HFoldlWithIndex (RenderHandlerStep m doc router) { | subhandlers } { | rec } { | subhandlers' }
   , Row.Cons ix { | subhandlers' } handlers_ handlers'
   ) ⇒
-  FoldingWithIndex (RenderHandlerStep m doc router) (SProxy ix) { | handlers } { | rec } { | handlers' } where
+  FoldingWithIndex (RenderHandlerStep m doc router) (Proxy ix) { | handlers } { | rec } { | handlers' } where
   foldingWithIndex step ix handlers rec = do
     let
       subhandlers ∷ { | subhandlers }
@@ -62,14 +62,14 @@ instance foldingRenderHandlerStepLeaf ∷
   , IsSymbol sourceMime
   , Monad m
   ) ⇒
-  FoldingWithIndex (RenderHandlerStep m doc router) (SProxy ix) { | handlers } (Tagged sourceMime f) { | handlers' } where
+  FoldingWithIndex (RenderHandlerStep m doc router) (Proxy ix) { | handlers } (Tagged sourceMime f) { | handlers' } where
   foldingWithIndex (RenderHandlerStep renderToHtml router) ix handlers (Tagged f) = do
     let
       mimeHandlers ∷ { | mimeHandlers }
       mimeHandlers = Record.get ix handlers
 
       sourceHandler ∷ req → m res
-      sourceHandler = Record.get (SProxy ∷ SProxy sourceMime) mimeHandlers
+      sourceHandler = Record.get (Proxy ∷ Proxy sourceMime) mimeHandlers
 
       -- f' ∷ (router /\ Exchange req res) → RawServer doc
       -- f' = dimap (bimap Type.Equality.from (bimap Type.Equality.from Type.Equality.from)) (map Type.Equality.to) f

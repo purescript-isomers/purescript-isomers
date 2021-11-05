@@ -30,7 +30,7 @@ import Isomers.Response.Duplex.Type (Duplex(..), Duplex') as Exports
 import Isomers.Response.Types (HtmlString, JavascriptString)
 import Network.HTTP.Types (HeaderName, hContentType)
 import Network.HTTP.Types (Status) as HTTP.Types
-import Type.Prelude (class IsSymbol, SProxy(..), reflectSymbol)
+import Type.Prelude (class IsSymbol, Proxy(..), reflectSymbol)
 
 status ∷ ∀ ct. Duplex' ct HTTP.Types.Status
 status = Duplex Printer.status Parser.status
@@ -53,7 +53,7 @@ withHeaderValue hn@(CaseInsensitiveString str) expected (Duplex prt prs) = Duple
 withContentType ∷ ∀ ct i o. IsSymbol ct ⇒ Duplex ct i o → Duplex ct i o
 withContentType (Duplex prt prs) = Duplex prt' prs'
   where
-  ct = reflectSymbol (SProxy ∷ SProxy ct)
+  ct = reflectSymbol (Proxy ∷ Proxy ct)
   prt' i = Printer.reqHeader hContentType ct <> prt i
   prs' = Parser.withContentType ct prs
 

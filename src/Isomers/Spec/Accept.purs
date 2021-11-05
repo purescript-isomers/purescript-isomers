@@ -15,7 +15,6 @@ import Data.MediaType (MediaType(..))
 import Data.Tuple.Nested ((/\), type (/\))
 import Data.Variant (Variant)
 import Data.Variant (expand, inj) as Variant
-import Global.Unsafe (unsafeStringify)
 import Heterogeneous.Folding (class Folding, class HFoldl, hfoldl)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Isomers.Contrib.Data.Variant (tag) as Contrib.Data.Variant
@@ -30,12 +29,13 @@ import Isomers.Request.Duplex.Parser (runParser) as Request.Parser
 import Isomers.Request.Duplex.Printer (header) as Request.Duplex.Printer
 import Isomers.Response (Duplex) as Response
 import Isomers.Spec.Types (AccumSpec(..))
+import JS.Unsafe.Stringify (unsafeStringify)
 import Network.HTTP.Types (hAccept)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
 import Record (insert) as Record
-import Record.Extra (type (:::), SLProxy, SNil)
-import Type.Eval (class Eval, Lift, kind TypeExpr)
-import Type.Prelude (class IsSymbol, class TypeEquals, RProxy, SProxy(..), reflectSymbol)
+import Record.Extra (type (:::), SNil)
+import Type.Eval (class Eval, Lift, TypeExpr)
+import Type.Prelude (class IsSymbol, class TypeEquals, Proxy(..), Proxy, reflectSymbol)
 
 -- | Fold from `Response.Duplex`es a `Record`
 -- | with according content types as labels.
@@ -52,7 +52,7 @@ instance foldingResponseContentTypeRecord ∷
     { | acc }
     (Response.Duplex ct i o)
     { | acc' } where
-  folding _ acc r = Record.insert (SProxy ∷ SProxy ct) r acc
+  folding _ acc r = Record.insert (Proxy ∷ Proxy ct) r acc
 
 -- | Extract content type symbol from `Response` type.
 -- | We use it to extract a heterogeneous list of proxies
@@ -63,8 +63,8 @@ data ResponseContentType
 
 instance mappingResponseContentType ∷
   (TypeEquals f (Response.Duplex ct i o), IsSymbol ct) ⇒
-  Mapping ResponseContentType f (SProxy ct) where
-  mapping _ _ = SProxy ∷ SProxy ct
+  Mapping ResponseContentType f (Proxy ct) where
+  mapping _ _ = Proxy ∷ Proxy ct
 
 -- | Fold over a `HList` of content types encoding `Symbol`s to
 -- | build a media pattern matching parser which outputs an
@@ -86,7 +86,7 @@ instance foldingRequestMediaPatternParser ∷
   Folding
     (RequestMediaPatternParser body r req)
     (MediaPattern → Request.Parser body (r → Variant vReq))
-    (SProxy contentType)
+    (Proxy contentType)
     (MediaPattern → Request.Parser body (r → Variant vReq')) where
   folding (RequestMediaPatternParser prs) vprs ct = do
     let
@@ -125,7 +125,7 @@ parserBuilder mediaType@(MediaType mtStr) prs = do
 -- | and I have to put here `RowSList` too.
 requestAccum ∷
   ∀ body ireq route oreq cts ivReq ovReq ls.
-  Eval (HomogeneousRow Void cts) (RProxy ls) ⇒
+  Eval (HomogeneousRow Void cts) (Proxy ls) ⇒
   ToHomogeneousRow ls ireq ivReq ⇒
   HFoldl
     (RequestMediaPatternParser body route oreq)
@@ -186,11 +186,11 @@ responsePrinters lst = (hfoldl ResponseContentTypeRecord {} $ lst)
 foreign import data DoSCons ∷ Type → TypeExpr → TypeExpr
 
 instance evalDoSCons ∷
-  (Eval t (SLProxy t')) ⇒
-  Eval (DoSCons (SProxy h) t) (SLProxy (h ::: t'))
+  (Eval t (Proxy t')) ⇒
+  Eval (DoSCons (Proxy h) t) (Proxy (h ::: t'))
 
 type ContentTypes cts
-  = (Foldr' DoSCons (Lift (SLProxy SNil))) cts
+  = (Foldr' DoSCons (Lift (Proxy SNil))) cts
 
 -- | From a pair of request / response duplexes and a hlist of response codecs create a spec which
 -- | labels everything by content types.
@@ -198,7 +198,7 @@ accumSpec ∷
   ∀ body res resLst route ireq oreq cts sl ivReq ovReq.
   HFoldl ResponseContentTypeRecord {} resLst res ⇒
   HMap ResponseContentType resLst cts ⇒
-  Eval (HomogeneousRow Void cts) (RProxy sl) ⇒
+  Eval (HomogeneousRow Void cts) (Proxy sl) ⇒
   ToHomogeneousRow sl ireq ivReq ⇒
   HFoldl
     (RequestMediaPatternParser body route oreq)

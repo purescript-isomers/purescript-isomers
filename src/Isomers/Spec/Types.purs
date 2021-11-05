@@ -7,7 +7,7 @@ import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Recor
 import Isomers.Request (Accum, Duplex) as Request
 import Isomers.Request.Accum (rootDuplex, unifyRoute) as Request.Accum
 import Type.Equality (class TypeEquals)
-import Type.Prelude (SProxy(..))
+import Type.Prelude (Proxy(..))
 
 -- | TODO: Is changing the order and moving `ireq` and `oreq`
 -- | to the end worth it? We can provide __probably__ more useful
@@ -20,9 +20,9 @@ newtype AccumSpec (body ∷ # Type) route ireq oreq res
 
 derive instance newtypeAccumSpec ∷ Newtype (AccumSpec req route ireq oreq res) _
 
-_request = SProxy ∷ SProxy "request"
+_request = Proxy ∷ Proxy "request"
 
-_response = SProxy ∷ SProxy "response"
+_response = Proxy ∷ Proxy "response"
 
 type GetRequest
   = Mappings.Record.Get "request" H.<<< Mappings.Newtype.Unwrap

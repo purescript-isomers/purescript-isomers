@@ -12,7 +12,7 @@ import Effect.Aff (Fiber)
 import Network.HTTP.Types (Header, Status, HeaderName)
 import Node.Buffer.Immutable (ImmutableBuffer) as Buffer.Immutable
 import Node.Stream (Writable, Readable) as Node.Stream
-import Type.Prelude (SProxy(..))
+import Type.Prelude (Proxy(..))
 import Web.File.Blob (Blob) as Web.File
 
 type Base body extra
@@ -52,7 +52,7 @@ type ServerResponse
         ( headers ∷ ServerHeaders )
     )
 
-_string = SProxy ∷ SProxy "string"
+_string = Proxy ∷ Proxy "string"
 
 type ClientBodyRow
   = ( arrayBuffer ∷ Fiber ArrayBuffer -- Effect (Promise ArrayBuffer)

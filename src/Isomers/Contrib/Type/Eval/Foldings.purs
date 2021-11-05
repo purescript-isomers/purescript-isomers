@@ -5,25 +5,25 @@ import Prelude
 import Data.Variant.Prefix (NilExpr)
 import Isomers.Contrib.Type.Eval.Foldable (Foldr')
 import Prim.RowList (Cons) as RL
-import Record.Extra (type (:::), SLProxy, SNil)
-import Type.Eval (class Eval, Lift, kind TypeExpr)
+import Record.Extra (type (:::), SNil)
+import Type.Eval (class Eval, Lift, TypeExpr)
 import Type.Eval.Function (type (<<<))
 import Type.Eval.RowList (FromRow, ToRow)
-import Type.Prelude (RLProxy, SProxy)
+import Type.Prelude (Proxy)
 
 -- | Iterate over symbols a build a row with a give type.
 foreign import data HomogeneousRowStep ∷ Type → Type → TypeExpr → TypeExpr
 
 instance evalHomogeneousRowStep ∷
-  (Eval te (RLProxy t)) ⇒
-  Eval (HomogeneousRowStep a (SProxy l) te) (RLProxy (RL.Cons l a t))
+  (Eval te (Proxy t)) ⇒
+  Eval (HomogeneousRowStep a (Proxy l) te) (Proxy (RL.Cons l a t))
 
 type HomogeneousRow a = ToRow <<< Foldr' (HomogeneousRowStep a) NilExpr
 
 
 -- | Create sorted SList.
 foreign import data SListCons ∷ Type → TypeExpr → TypeExpr
-instance evalToSList ∷ (Eval t (SLProxy t')) ⇒ Eval (SListCons (SProxy s) t)  (SLProxy (s ::: t'))
+instance evalToSList ∷ (Eval t (Proxy t')) ⇒ Eval (SListCons (Proxy s) t)  (Proxy (s ::: t'))
 
-type ToSortedSList hlist = (Foldr' SListCons (Lift (SLProxy SNil)) <<< FromRow <<< HomogeneousRow Unit) hlist
+type ToSortedSList hlist = (Foldr' SListCons (Lift (Proxy SNil)) <<< FromRow <<< HomogeneousRow Unit) hlist
 

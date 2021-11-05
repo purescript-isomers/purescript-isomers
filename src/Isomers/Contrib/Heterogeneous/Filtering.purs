@@ -2,25 +2,24 @@ module Isomers.Contrib.Heterogeneous.Filtering where
 
 import Prelude
 
-import Heterogeneous.Mapping (class HMap, class Mapping, ConstMapping(..))
-import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..), HNothing)
+import Heterogeneous.Mapping (ConstMapping(..))
+import Isomers.Contrib.Heterogeneous.HMaybe (HJust, HNothing)
 import Prim.Boolean (False, True)
 import Prim.Row (class Cons, class Lacks) as Row
 import Prim.RowList (class RowToList, Cons, Nil) as RL
-import Prim.RowList (kind RowList)
+import Prim.RowList (RowList)
 import Record (get) as Record
 import Record.Builder (Builder) as Record
 import Record.Builder (build) as Builder
 import Record.Builder (build, insert) as Record.Builder
-import Type.Data.Boolean (BProxy(..))
-import Type.Prelude (class IsSymbol, RLProxy(..), SProxy(..))
+import Type.Prelude (class IsSymbol, Proxy(..), Proxy(..))
 
 -- | Should we express these as folds?
 class Filtering f a b | f a → b where
-  filtering ∷ f → a → BProxy b
+  filtering ∷ f → a → Proxy b
 
 class FilteringWithIndex f i a b | f i a → b where
-  filteringWithIndex ∷ f → i → a → BProxy b
+  filteringWithIndex ∷ f → i → a → Proxy b
 
 class HFilter f t t' | f t → t'  where
   hfilter ∷ f → t → t'
@@ -35,7 +34,7 @@ instance constFiltering ::
   filteringWithIndex (ConstMapping f) _ = filtering f
 
 class OptApply b f x y |  b f x → y where
-  optApply ∷ BProxy b → f → x → y
+  optApply ∷ Proxy b → f → x → y
 
 instance optApplyFalse ∷ OptApply False f x x where
   optApply _ _ x = x
@@ -51,7 +50,7 @@ instance hfilterRecord ::
   where
   hfilter fn rec =
     Record.Builder.build
-    (filterRecordWithIndexBuilder (RLProxy :: RLProxy rl) rec (ConstMapping fn))
+    (filterRecordWithIndexBuilder (Proxy :: Proxy rl) rec (ConstMapping fn))
     {}
 
 instance hfilterWithIndexRecord ::
@@ -61,14 +60,14 @@ instance hfilterWithIndexRecord ::
   HFilterWithIndex fn { | rin } { | rout }
   where
   hfilterWithIndex fn rec =
-    Builder.build (filterRecordWithIndexBuilder (RLProxy :: RLProxy rl) rec fn) {}
+    Builder.build (filterRecordWithIndexBuilder (Proxy :: Proxy rl) rec fn) {}
 
-class FilterRecordWithIndex (xs ∷ RowList) rxs f (as ∷ # Type) (bs ∷ # Type) | xs → rxs, xs f → bs, xs → as where
-  filterRecordWithIndexBuilder ∷ RLProxy xs → { | rxs } → f → Record.Builder { | as } { | bs }
+class FilterRecordWithIndex (xs ∷ RowList Type) rxs f (as ∷ Row Type) (bs ∷ Row Type) | xs → rxs, xs f → bs, xs → as where
+  filterRecordWithIndexBuilder ∷ Proxy xs → { | rxs } → f → Record.Builder { | as } { | bs }
 
 instance filterRecordWithIndexCons ::
   ( IsSymbol sym
-  , FilteringWithIndex f (SProxy sym) a keep
+  , FilteringWithIndex f (Proxy sym) a keep
   , FilterRecordWithIndex rest rec f as bs
   , Row.Cons sym a rec_ rec
   , Row.Cons sym a bs bs'
@@ -84,12 +83,12 @@ instance filterRecordWithIndexCons ::
   filterRecordWithIndexBuilder _ rec f =
     optApply (filteringWithIndex f prop a) g rest
     where
-    prop = SProxy ∷ SProxy sym
+    prop = Proxy ∷ Proxy sym
     a = Record.get prop rec
     bld = Record.Builder.insert prop a ∷ Record.Builder { | bs } { | bs' }
 
     rest ∷ Record.Builder { | as } { | bs }
-    rest = filterRecordWithIndexBuilder (RLProxy ∷ RLProxy rest) rec f
+    rest = filterRecordWithIndexBuilder (Proxy ∷ Proxy rest) rec f
 
     g ∷ Record.Builder { | as } { | bs } → Record.Builder { | as } { | bs' }
     g = compose bld
@@ -100,10 +99,10 @@ instance filterRecordWithIndexNil ∷ FilterRecordWithIndex RL.Nil rec fn as as 
 data CatMaybes = CatMaybes
 
 instance catMaybesNothing ∷ Filtering CatMaybes HNothing False where
-  filtering _ _ = BProxy ∷ BProxy False
+  filtering _ _ = Proxy ∷ Proxy False
 
 instance catMaybesJust ∷ Filtering CatMaybes (HJust a) True where
-  filtering _ _ = BProxy ∷ BProxy True
+  filtering _ _ = Proxy ∷ Proxy True
 
 -- instance unwrapJustMapping ∷ Mapping CatMaybes (HJust a) a where
 --   mapping _ (HJust a) = a

@@ -2,7 +2,7 @@ let mkPackage =
       https://raw.githubusercontent.com/purescript/package-sets/psc-0.13.0-20190626/src/mkPackage.dhall sha256:0b197efa1d397ace6eb46b243ff2d73a3da5638d8d0ac8473e8e4a8fc528cf57
 
 let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.13.8-20210118/packages.dhall sha256:a59c5c93a68d5d066f3815a89f398bcf00e130a51cb185b2da29b20e2d8ae115
+      https://github.com/purescript/package-sets/releases/download/psc-0.14.1-20210506/packages.dhall sha256:d199e142515f9cc15838d8e6d724a98cd0ca776ceb426b7b36e841311643e3ef
 
 in  upstream
   with
@@ -11,12 +11,18 @@ in  upstream
       , "record-extra", "typelevel-eval", "variant"
       ]
       "https://github.com/paluh/purescript-homogeneous.git"
-      "v0.2.0"
+      "v0.3.0"
   with
     http-types =
-      { dependencies = [ "tuples", "unicode", "generics-rep" ]
+      { dependencies = [ "tuples", "unicode"]
       , repo = "https://github.com/Woody88/purescript-http-types.git"
-      , version = "7c39cb9da789ccfafc1c687a7397c961431f09b8"
+      , version = "3bcbf8b63d6ffce66356186519365cbf38697eb2"
+      }
+  with
+    js-unsafe-stringify =
+      { dependencies = ([] : List Text)
+      , repo = "https://github.com/paluh/purescript-js-unsafe-stringify"
+      , version = "03cbaf1837c85ad06402226a2f564a384ab8a96e"
       }
   with
     polyform = ../polyform/spago.dhall as Location
@@ -24,20 +30,25 @@ in  upstream
     polyform-batteries-core = ../batteries-core/spago.dhall as Location
   with
     polyform-batteries-json = ../batteries-json/spago.dhall as Location
+  -- with
+  --   request-duplex = ../request-duplex/spago.dhall as Location
+  -- with
+  --   request-duplex-variant = ../request-duplex-variant/spago.dhall as Location
   with
-    request-duplex = ../request-duplex/spago.dhall as Location
+    record-prefix = ../../external/purescript-record-prefix/spago.dhall as Location
+    -- record-prefix = mkPackage
+    --   [ "avar", "console", "prelude", "react-basic-hooks" ]
+    --   "https://github.com/paluh/purescript-record-prefix"
+    --   "master"
   with
-    request-duplex-variant = ../request-duplex-variant/spago.dhall as Location
-  with
-    record-prefix = mkPackage
-      [ "avar", "console", "prelude", "react-basic-hooks" ]
-      "https://github.com/paluh/purescript-record-prefix"
-      "master"
-  with
+    -- typelevel-eval = mkPackage
+    --   [ "console", "effect", "leibniz", "psci-support", "record" ]
+    --   "https://github.com/natefaubion/purescript-typelevel-eval.git"
+    --   "04e86ce3be5c46a7a13270d4fca183af6de648f5"
     typelevel-eval = mkPackage
-      [ "console", "effect", "globals", "leibniz", "psci-support", "record" ]
-      "https://github.com/natefaubion/purescript-typelevel-eval.git"
-      "04e86ce3be5c46a7a13270d4fca183af6de648f5"
+      [ "console", "effect", "leibniz", "psci-support", "record" ]
+      "https://github.com/mikesol/purescript-typelevel-eval"
+      "mikesol"
   with
     web-fetch = ../purescript-web-fetch/spago.dhall as Location
     --   { dependencies =
@@ -89,16 +100,21 @@ in  upstream
       "https://github.com/robertdp/purescript-wire-react"
       "v0.0.1"
   with
-    wire-react-router = mkPackage
-      [ "aff"
-      , "freet"
-      , "indexed-monad"
-      , "profunctor-lenses"
-      , "react-basic-hooks"
-      , "routing"
-      ]
-      "https://github.com/robertdp/purescript-web-router.git"
-      "v0.2.1"
+    web-router = mkPackage
+      ["aff", "effect", "freet", "indexed-monad", "prelude", "profunctor-lenses", "routing" ]
+      "https://github.com/robertdp/purescript-web-router"
+      "v0.3.0"
+  -- with
+  --   wire-react-router = mkPackage
+  --     [ "aff"
+  --     , "freet"
+  --     , "indexed-monad"
+  --     , "profunctor-lenses"
+  --     , "react-basic-hooks"
+  --     , "routing"
+  --     ]
+  --     "https://github.com/robertdp/purescript-web-router.git"
+  --     "v0.2.1"
   with
     web-streams =
       { dependencies =

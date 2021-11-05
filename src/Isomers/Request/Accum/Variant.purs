@@ -5,7 +5,7 @@ import Prelude
 import Control.Alt ((<|>))
 import Data.Variant (Variant)
 import Data.Variant (expand, inj, on) as Variant
-import Global.Unsafe (unsafeStringify)
+import JS.Unsafe.Stringify (unsafeStringify)
 import Isomers.Request.Accum.Type (Accum(..))
 import Isomers.Request.Duplex.Parser (Parser(..), ParsingError(..), Result(..)) as Parser
 import Isomers.Request.Duplex.Parser (Parser)
@@ -13,7 +13,7 @@ import Isomers.Request.Duplex.Printer (Printer)
 import Isomers.Request.Duplex.Type (Duplex(..))
 import Partial.Unsafe (unsafeCrashWith)
 import Prim.Row (class Cons, class Union) as Row
-import Type.Prelude (class IsSymbol, SProxy)
+import Type.Prelude (class IsSymbol, Proxy)
 
 injInto ∷
   ∀ body route i l o lo vi vi' vo vo'.
@@ -21,7 +21,7 @@ injInto ∷
   Row.Cons l o vo vo' ⇒
   Row.Cons l i vi vi' ⇒
   Row.Union vo lo vo' ⇒
-  SProxy l →
+  Proxy l →
   Accum body route i o →
   Accum body route (Variant vi) (Variant vo) →
   Accum body route (Variant vi') (Variant vo')

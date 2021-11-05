@@ -1,6 +1,6 @@
 module Isomers.HTTP.Response.Headers where
 
-import Type.Prelude (SProxy(..))
+import Type.Prelude (Proxy(..))
 
-_location = SProxy ∷ SProxy "Location"
+_location = Proxy ∷ Proxy "Location"
 

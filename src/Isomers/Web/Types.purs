@@ -6,7 +6,7 @@ import Isomers.Contrib.Heterogeneous.Mappings.Newtype (Unwrap(..)) as Mappings.N
 import Isomers.Contrib.Heterogeneous.Mappings.Record (Get(..)) as Mappings.Record
 import Isomers.Spec (AccumSpec, Spec)
 import Isomers.Spec (rootAccumSpec) as Spec
-import Type.Prelude (SProxy(..))
+import Type.Prelude (Proxy(..))
 
 newtype AccumWebSpec body rnd route ireq oreq res = AccumWebSpec
   { spec ∷ AccumSpec body route ireq oreq res
@@ -27,14 +27,14 @@ type Web' body rnd req = WebSpec body rnd req req
 -- | Heterogeneous mappings which extract pieces of the specs.
 -- | Useful when you want to turn a record of specs into a record
 -- | of its subparts.
-_spec = SProxy ∷ SProxy "spec"
+_spec = Proxy ∷ Proxy "spec"
 
 type GetSpec = Mappings.Record.Get "spec" H.<<< Mappings.Newtype.Unwrap
 
 _GetSpec ∷ GetSpec
 _GetSpec = Mappings.Record.Get _spec H.<<< Mappings.Newtype.Unwrap
 
-_render = SProxy ∷ SProxy "render"
+_render = Proxy ∷ Proxy "render"
 
 type GetRender = Mappings.Record.Get "render" H.<<< Mappings.Newtype.Unwrap
 

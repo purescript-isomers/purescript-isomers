@@ -7,7 +7,7 @@ import Type.Eval (class Eval, Lift, kind TypeExpr)
 import Type.Eval.Foldable (Foldr)
 import Type.Eval.Function (type (<<<)) as E
 import Type.Eval.RowList (FromRow)
-import Type.Prelude (class TypeEquals, RProxy)
+import Type.Prelude (class TypeEquals, Proxy)
 
 type Handler m req res
   = req → m res
@@ -15,7 +15,7 @@ type Handler m req res
 foreign import data UnifyMonadStep ∷ Type → TypeExpr → TypeExpr
 
 type UnifyMonad m row
-  = (Foldr UnifyMonadStep (Lift (m Unit)) E.<<< FromRow) (RProxy row)
+  = (Foldr UnifyMonadStep (Lift (m Unit)) E.<<< FromRow) (Proxy row)
 
 instance evalUnifyMonadRec ∷
   ( Eval acc (m Unit)

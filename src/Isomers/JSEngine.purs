@@ -2,7 +2,7 @@ module Isomers.JSEngine where
 
 import Prelude
 
-import Global.Unsafe (unsafeStringify)
+import JS.Unsafe.Stringify (unsafeStringify)
 import Unsafe.Reference (unsafeRefEq)
 
 foreign import data JSEngine ∷ Type

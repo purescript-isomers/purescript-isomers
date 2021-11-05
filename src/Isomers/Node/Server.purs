@@ -5,7 +5,7 @@ import Prelude
 import Control.Monad.Except (catchError)
 import Data.Either (Either(..))
 import Data.Variant (Variant)
-import Debug.Trace (traceM)
+import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Aff (message) as Aff

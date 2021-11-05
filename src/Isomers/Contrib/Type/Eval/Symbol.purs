@@ -1,17 +1,18 @@
 module Isomers.Contrib.Type.Eval.Symbol where
 
-import Prim.Boolean (False, True, kind Boolean)
+-- import Prim.Boolean (False, True, kind Boolean)
+
+import Prim.Boolean (False, True)
 import Prim.Symbol (class Append, class Cons) as Symbol
-import Type.Eval (class Eval, kind TypeExpr)
-import Type.Eval.Boolean (BProxy)
-import Type.Prelude (SProxy)
+import Type.Eval (class Eval, TypeExpr)
+import Type.Prelude (Proxy)
 
 -- | Strips existing prefix. Failes if a value is not a prefix.
 foreign import data StripPrefix ∷ Type → Type → TypeExpr
 
 instance evalStripPrefix ∷
   (Symbol.Append prefix suffix symbol) ⇒
-  Eval (StripPrefix (SProxy prefix) (SProxy symbol)) (SProxy suffix)
+  Eval (StripPrefix (Proxy prefix) (Proxy symbol)) (Proxy suffix)
 
 class IsPrefixStep (p ∷ Symbol) (s ∷ Symbol) (r ∷ Boolean) | p s → r
 instance isPrefixStep ∷ (Symbol.Cons ph pt p, Symbol.Cons sh st s, IsPrefixStep' ph pt sh st r) ⇒ IsPrefixStep p s r
@@ -24,5 +25,5 @@ else instance isPrefixStepNonEq' :: IsPrefixStep' h pt h' st False
 foreign import data IsPrefixOf ∷ Type → Type → TypeExpr
 
 instance evalIsPrefixOf ∷
-  ( IsPrefixStep prefix symbol b) ⇒ Eval (IsPrefixOf (SProxy prefix) (SProxy symbol)) (BProxy b)
+  ( IsPrefixStep prefix symbol b) ⇒ Eval (IsPrefixOf (Proxy prefix) (Proxy symbol)) (Proxy b)
 

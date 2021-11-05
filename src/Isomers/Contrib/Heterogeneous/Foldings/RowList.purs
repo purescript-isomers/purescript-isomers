@@ -1,10 +1,10 @@
 module Isomers.Contrib.Heterogeneous.Foldings.RowList where
 
-import Prim.Boolean (False, True, kind Boolean)
+import Prim.Boolean (False, True)
 import Prim.RowList (Nil) as RL
-import Prim.RowList (kind RowList)
+import Prim.RowList (RowList)
 
-class Null (rl ∷ RowList) (b ∷ Boolean) | rl → b
+class Null (rl ∷ RowList Type) (b ∷ Boolean) | rl → b
 
 instance nullNil ∷ Null RL.Nil True
 else instance nullCons ∷ Null l False

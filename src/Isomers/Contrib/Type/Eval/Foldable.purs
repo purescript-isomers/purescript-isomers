@@ -3,10 +3,10 @@ module Isomers.Contrib.Type.Eval.Foldable where
 import Isomers.Contrib.Heterogeneous.List (HCons, HNil)
 import Isomers.Contrib.Type.Data.Maybe (Just', MProxy, Nothing')
 import Prim.RowList (Cons, Nil) as RL
-import Type.Eval (class Eval, kind TypeExpr)
+import Type.Eval (class Eval, TypeExpr)
 import Type.Eval.Boolean (Bool, TrueExpr, FalseExpr)
 import Type.Eval.Foldable (Foldr, FoldrWithIndex)
-import Type.Prelude (RLProxy)
+import Type.Prelude (Proxy)
 
 foreign import data SomeFoldWithIndex ∷ (Type → Type → TypeExpr) → Type → Type → TypeExpr → TypeExpr
 
@@ -63,8 +63,8 @@ foreign import data Foldl' ∷ (Type → Type → TypeExpr) → Type → Type �
 
 instance foldlRowListCons' ::
   ( Eval (fn acc a) acc'
-  , Eval (Foldl' fn acc' (RLProxy rl)) ty
+  , Eval (Foldl' fn acc' (Proxy rl)) ty
   ) =>
-  Eval (Foldl' fn acc (RLProxy (RL.Cons sym a rl))) ty
+  Eval (Foldl' fn acc (Proxy (RL.Cons sym a rl))) ty
 
-instance foldlRowListNil :: Eval (Foldl' fn acc (RLProxy RL.Nil)) acc
+instance foldlRowListNil :: Eval (Foldl' fn acc (Proxy RL.Nil)) acc

@@ -6,10 +6,10 @@ import Prim.Symbol (class Append) as Symbol
 import Record (insert, union) as Record
 import Record.Builder (Builder) as Record.Builder
 import Record.Prefix (PrefixProps, add) as Record.Prefix
-import Type.Prelude (class IsSymbol, SProxy(SProxy))
+import Type.Prelude (class IsSymbol, Proxy(Proxy))
 
 newtype Flatten (sep ∷ Symbol)
-  = Flatten (SProxy sep)
+  = Flatten (Proxy sep)
 
 -- | TODO: Cover `Variant` too.
 instance flattenRecordRec ∷
@@ -19,13 +19,13 @@ instance flattenRecordRec ∷
   ) ⇒
   FoldingWithIndex
     (Flatten sep)
-    (SProxy l)
+    (Proxy l)
     ({ | acc })
     ({ | res })
     ({ | acc' }) where
   foldingWithIndex (Flatten sep) l acc v = do
     let
-      sym = SProxy ∷ SProxy sym
+      sym = Proxy ∷ Proxy sym
     Record.union (Record.Prefix.add sym v) acc
 else instance flattenRecord ∷
   ( IsSymbol l
@@ -34,7 +34,7 @@ else instance flattenRecord ∷
   ) ⇒
   FoldingWithIndex
     (Flatten sep)
-    (SProxy l)
+    (Proxy l)
     { | acc }
     a
     { | acc' } where

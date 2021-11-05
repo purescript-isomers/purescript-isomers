@@ -19,7 +19,6 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, un)
 import Data.String (Pattern(..), split) as String
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
-import Data.Symbol (SProxy(..))
 import Data.Variant (Variant)
 import Data.Variant (default, inj, on) as Variant
 import Effect.Aff (Aff, Fiber, joinFiber)
@@ -32,7 +31,7 @@ import Network.HTTP.Types (HeaderName, hContentType)
 import Network.HTTP.Types (Status) as HTTP.Types
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
-import Type.Prelude (class IsSymbol, reflectSymbol)
+import Type.Prelude (class IsSymbol, Proxy(..), reflectSymbol)
 import Web.File.Blob (Blob) as Web.File
 
 -- | TODO: Error handling
@@ -71,7 +70,7 @@ instance lazyParser ∷ Control.Lazy (Parser a) where
       Parser (ExceptT (StateT f')) = f unit
     f' s
 
-_responseParserError = SProxy ∷ SProxy "responseParserError"
+_responseParserError = Proxy ∷ Proxy "responseParserError"
 
 instance altParser ∷ Alt (Parser) where
   alt (Parser (ExceptT p1)) (Parser (ExceptT p2)) =
@@ -89,7 +88,7 @@ readBody ∷
   ∀ a br_ l.
   Row.Cons l (Fiber a) br_ Encodings.ClientBodyRow ⇒
   IsSymbol l ⇒
-  SProxy l → Parser a
+  Proxy l → Parser a
 readBody l =
   Parser
     $ do
@@ -120,16 +119,16 @@ unreadBody = Parser $ do
       Reader.ask >>= \(ClientResponse { body }) → pure body
 
 arrayBuffer ∷ Parser ArrayBuffer
-arrayBuffer = readBody (SProxy ∷ SProxy "arrayBuffer")
+arrayBuffer = readBody (Proxy ∷ Proxy "arrayBuffer")
 
 json ∷ Parser Json
-json = readBody (SProxy ∷ SProxy "json")
+json = readBody (Proxy ∷ Proxy "json")
 
 blob ∷ Parser Web.File.Blob
-blob = readBody (SProxy ∷ SProxy "blob")
+blob = readBody (Proxy ∷ Proxy "blob")
 
 string ∷ Parser String
-string = readBody (SProxy ∷ SProxy "string")
+string = readBody (Proxy ∷ Proxy "string")
 
 status ∷ Parser HTTP.Types.Status
 status = Parser $ Reader.asks (_.status <<< un ClientResponse)

@@ -25,13 +25,18 @@ type ClientRequest =
   }
 
 -- | TODO:
--- | * Drop this premature optimizing `Effect` wrapper from the body record
+-- | Simplify this `body` into a single type parameter. We want to finally
+-- | abstract parsing monad away (by probably using `run`) too and this complication
+-- | here is unnecessary.
 -- |
--- | I'm not sure how "generic" the current body representation
--- | really is. If you find something simpler please let me know:
+-- | It seems that interesting approach could be something like `m (Variant body)`.
+-- |
+-- | --------
+-- |
+-- | Current solution was a quick and dirty working aproach - it is for sure overcomplicated.
 -- |
 -- | * We start with a record of `Fiber`s in the `Left` branch.
--- | * When we want to use the body we pass `SProxy` to access the fiber
+-- | * When we want to use the body we pass `Proxy` to access the fiber
 -- | in the record.
 -- | * We build a `Variant` from the fiber and the label.
 -- | * We pass the raw result to the parser result.
@@ -44,8 +49,6 @@ type ClientRequest =
 -- | on the client (in the router)... we can probably do this too by using
 -- | `pure ""`... so it is not definitive how it would end up.
 -- |
--- | The wrapping `Effect` would make record build up lazy... in the future :-P
-
 type ServerRequest (body ∷ # Type) =
   { body ∷ Either (Effect { | body }) (Maybe (Variant body))
   , headers ∷ Lazy (Map HeaderName String)

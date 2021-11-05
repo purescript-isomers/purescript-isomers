@@ -12,7 +12,7 @@ module Test.Api where
 -- import Data.Validation.Semigroup (V(..))
 -- import Effect (Effect)
 -- import Effect.Console (log)
--- import Global.Unsafe (unsafeStringify)
+-- import JS.Unsafe.Stringify (unsafeStringify)
 -- import Heterogeneous.Folding (class HFoldlWithIndex)
 -- import Isomers.Client (RequestBuildersStep(..), ResponseM(..), requestBuilders, runResponseM)
 -- import Isomers.Client (client) as Client

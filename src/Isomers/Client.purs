@@ -8,7 +8,7 @@ import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Variant (Variant)
 import Data.Variant (inj) as Variant
 import Effect.Aff (Aff)
-import Global.Unsafe (unsafeStringify)
+import JS.Unsafe.Stringify (unsafeStringify)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
 -- import Isomers.Client.Fetch (HostInfo, fetch)
 import Isomers.HTTP.Exchange (Error(..)) as HTTP.Exchange
@@ -20,7 +20,7 @@ import Isomers.Response.Encodings (ClientResponse) as Response.Encodings
 import Prim.Row (class Cons, class Lacks) as Row
 import Prim.RowList (class RowToList)
 import Record (get, insert) as Record
-import Type.Prelude (class IsSymbol, Proxy(..), RLProxy(..), SProxy)
+import Type.Prelude (class IsSymbol, Proxy(..), Proxy(..), Proxy)
 
 -- | This folding creates a request builder:
 -- | a record which contains functions which put a
@@ -37,11 +37,11 @@ instance requestFoldingVariant ::
   , Row.Cons sym (Variant v) curr_ curr
   , Row.Lacks sym requestBuilders
   , Row.Cons sym { | subrequestBuilders } requestBuilders requestBuilders'
-  , HFoldlWithIndex (RequestBuildersStep (Variant v) request) {} (RLProxy vl) { | subrequestBuilders }
+  , HFoldlWithIndex (RequestBuildersStep (Variant v) request) {} (Proxy vl) { | subrequestBuilders }
   ) =>
   FoldingWithIndex
     (RequestBuildersStep (Variant curr) request)
-    (SProxy sym)
+    (Proxy sym)
     { | requestBuilders }
     (Proxy (Variant v))
     { | requestBuilders' } where
@@ -52,7 +52,7 @@ instance requestFoldingVariant ::
 
       inj' = inj <<< f
 
-      subrequestBuilders = hfoldlWithIndex (RequestBuildersStep inj') {} (RLProxy ∷ RLProxy vl)
+      subrequestBuilders = hfoldlWithIndex (RequestBuildersStep inj') {} (Proxy ∷ Proxy vl)
     Record.insert prop subrequestBuilders rb
 else instance requestFoldingData ::
   ( IsSymbol sym
@@ -62,7 +62,7 @@ else instance requestFoldingData ::
   ) =>
   FoldingWithIndex
     (RequestBuildersStep (Variant r) request)
-    (SProxy sym)
+    (Proxy sym)
     { | requestBuilders }
     (Proxy d)
     { | requestBuilders' } where
@@ -76,18 +76,18 @@ else instance requestFoldingData ::
 -- | by passing appropriate proxies
 -- | into the fold.
 instance hfoldlWithIndexRequestBuildersStepVariantWrapper ∷
-  ( HFoldlWithIndex (RequestBuildersStep (Variant v) request) {} (RLProxy vl) { | requestBuilders }
+  ( HFoldlWithIndex (RequestBuildersStep (Variant v) request) {} (Proxy vl) { | requestBuilders }
   , Newtype (f (Variant v)) (Variant v)
   , RowToList v vl
   ) ⇒
   HFoldlWithIndex (RequestBuildersStep (f (Variant v)) request) unit (Proxy (f (Variant v))) { | requestBuilders } where
-  hfoldlWithIndex (RequestBuildersStep f) init _ = hfoldlWithIndex (RequestBuildersStep (f <<< wrap)) {} (RLProxy ∷ RLProxy vl)
+  hfoldlWithIndex (RequestBuildersStep f) init _ = hfoldlWithIndex (RequestBuildersStep (f <<< wrap)) {} (Proxy ∷ Proxy vl)
 else instance hfoldlWithIndexRequestBuildersStepVariant ∷
-  ( HFoldlWithIndex (RequestBuildersStep (Variant v) request) {} (RLProxy vl) { | requestBuilders }
+  ( HFoldlWithIndex (RequestBuildersStep (Variant v) request) {} (Proxy vl) { | requestBuilders }
   , RowToList v vl
   ) ⇒
   HFoldlWithIndex (RequestBuildersStep (Variant v) request) unit (Proxy (Variant v)) { | requestBuilders } where
-  hfoldlWithIndex cf init _ = hfoldlWithIndex cf {} (RLProxy ∷ RLProxy vl)
+  hfoldlWithIndex cf init _ = hfoldlWithIndex cf {} (Proxy ∷ Proxy vl)
 
 type Fetch = Request.Encodings.ClientRequest → Aff (Either String Response.Encodings.ClientResponse)
 
@@ -107,7 +107,7 @@ instance clientFoldingResponseConstructor ∷
   ) =>
   FoldingWithIndex
     (ClientStep request { | resDpls })
-    (SProxy sym)
+    (Proxy sym)
     { | client }
     (d → request)
     { | client' } where
@@ -130,7 +130,7 @@ else instance clientFoldingResponseDuplexRec ∷
   ) =>
   FoldingWithIndex
     (ClientStep request { | responseDuplexes })
-    (SProxy sym)
+    (Proxy sym)
     { | client }
     { | requestBuilders }
     { | client' } where
@@ -143,11 +143,11 @@ else instance clientFoldingResponseDuplexRec ∷
     Record.insert prop subclient c
 else instance clientFoldingResponseDuplexNewtypeWrapper ∷
   ( Newtype (f responseDuplexes) responseDuplexes
-  , FoldingWithIndex (ClientStep request responseDuplexes) (SProxy sym) { | client } { | requestBuilders } { | client' }
+  , FoldingWithIndex (ClientStep request responseDuplexes) (Proxy sym) { | client } { | requestBuilders } { | client' }
   ) =>
   FoldingWithIndex
     (ClientStep request (f responseDuplexes))
-    (SProxy sym)
+    (Proxy sym)
     { | client }
     { | requestBuilders }
     { | client' } where

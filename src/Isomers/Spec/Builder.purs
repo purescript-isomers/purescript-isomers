@@ -27,7 +27,7 @@ import Prim.Row (class Cons, class Lacks) as Row
 import Type.Equality (class TypeEquals)
 import Type.Equality (from, to) as Type.Equality
 import Type.Eval (class Eval)
-import Type.Prelude (class IsSymbol, RProxy, SProxy(..))
+import Type.Prelude (class IsSymbol, Proxy(..), Proxy)
 
 -- | Used for recursive mapping over a record fields.
 -- | `route` variable is carried around because it helps inference.
@@ -53,14 +53,14 @@ unifyRoute (AccumSpec { request, response }) =
 data WithBody (l ∷ Symbol) (body ∷ #Type) i o
   = WithBody (Request.Duplex body i o)
 
-withBody ∷ ∀ body i l o. SProxy l → Request.Duplex body i o → WithBody l body i o
+withBody ∷ ∀ body i l o. Proxy l → Request.Duplex body i o → WithBody l body i o
 withBody _ dpl = WithBody dpl
 
 -- | Build an accept spec from request duplex and a hlist of response duplexes.
 instance builderHListToAcceptSpec ∷
   ( HFoldl Accept.ResponseContentTypeRecord {} (h : t) res
   , HMap Accept.ResponseContentType (h : t) cts
-  , Eval (HomogeneousRow Void cts) (RProxy sl)
+  , Eval (HomogeneousRow Void cts) (Proxy sl)
   , ToHomogeneousRow sl ireq ivReq
   , HFoldl
       (Accept.RequestMediaPatternParser body route oreq)
@@ -81,7 +81,7 @@ else instance builderWithBodyEndpoint ∷
   Builder (WithBody l body i o /\ res) body { | route } { | ireq } { | oreq } res' where
   accumSpec s ((WithBody dpl) /\ res) = do
     let
-      req = Request.Accum.insertReq (SProxy ∷ SProxy l) dpl
+      req = Request.Accum.insertReq (Proxy ∷ Proxy l) dpl
     accumSpec s (req /\ res ∷ Request.Accum body { | route } { | ireq } { | oreq } /\ res)
 -- | An endpoint which doesn't care about accept header.
 else instance builderPlainEndpoint ∷
@@ -113,7 +113,7 @@ instance builderResponseHListEndpoint ∷
 
 instance builderMethodRec ∷
   ( HMap (BuilderStep route) { | rec } { | specs }
-  , Eval (UnifyBody specs) (RProxy body)
+  , Eval (UnifyBody specs) (Proxy body)
   , HMap GetResponse { | specs } { | resDpls }
   , HMap GetRequest { | specs } reqDpls
   , HMapWithIndex MethodStep reqDpls reqDpls'
@@ -135,7 +135,7 @@ instance builderPlainSpec ∷
 -- | Next we fold the record to get the final Spec.
 instance recBuilderRecord ∷
   ( HMap (BuilderStep route) { | rec } { | rec' }
-  , Eval (UnifyBody rec') (RProxy body)
+  , Eval (UnifyBody rec') (Proxy body)
   , HMap GetResponse { | rec' } { | res }
   , HMap GetRequest { | rec' } { | reqs }
   , HFoldlAccumVariant body route { | reqs } ivreq ovreq
@@ -155,7 +155,7 @@ instance insertSpecBuilderSpec ∷
   , Row.Lacks l route
   ) ⇒
   Builder (Insert l a (AccumSpec body { | route' } ireq oreq res)) body { | route } ireq oreq res where
-  accumSpec s (Insert dpl sub) = insertIntoAccumSpec (SProxy ∷ SProxy l) dpl sub
+  accumSpec s (Insert dpl sub) = insertIntoAccumSpec (Proxy ∷ Proxy l) dpl sub
 else instance insertSpecBuilder ∷
   ( Row.Cons l a route route'
   , IsSymbol l
@@ -165,19 +165,19 @@ else instance insertSpecBuilder ∷
   Builder (Insert l a sub) body { | route } ireq oreq res where
   accumSpec s (Insert dpl sub) =
     insertIntoAccumSpec
-      (SProxy ∷ SProxy l)
+      (Proxy ∷ Proxy l)
       dpl
       (accumSpec (BuilderStep ∷ BuilderStep { | route' }) sub)
 
-insert ∷ ∀ a l sub. SProxy l → (∀ body. Request.Duplex' body a) → sub → Insert l a sub
-insert l dpl sub = Insert dpl sub
+insert ∷ ∀ a l sub. Proxy l → (∀ body. Request.Duplex' body a) → sub → Insert l a sub
+insert _ dpl sub = Insert dpl sub
 
 insertIntoAccumSpec ∷
   ∀ a body l ireq oreq route route' res.
   IsSymbol l ⇒
   Row.Lacks l route ⇒
   Row.Cons l a route route' ⇒
-  SProxy l →
+  Proxy l →
   Request.Duplex' body a →
   AccumSpec body { | route' } ireq oreq res →
   AccumSpec body { | route } ireq oreq res
