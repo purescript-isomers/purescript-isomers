@@ -13,7 +13,7 @@ import Type.Eval.Function (type (<<<))
 import Type.Eval.RowList (FromRow)
 import Type.Prelude (class TypeEquals, Proxy)
 
-foreign import data UnifyBodyStep ∷ Type → Type → TypeExpr
+foreign import data UnifyBodyStep ∷ Type → Type → TypeExpr Type
 
 instance evalSubspecBodyUnit ∷
   Eval (UnifyBodyStep Unit (AccumSpec body route ireq oreq res)) (Proxy body)
@@ -22,7 +22,7 @@ else instance evalSubspecBodyStep ∷
   Eval (UnifyBodyStep (Proxy body) (AccumSpec body' route ireq oreq res)) (Proxy body)
 
 type UnifyBody row
-  = (Foldl' UnifyBodyStep Unit <<< FromRow) (Proxy row)
+  = (Foldl' UnifyBodyStep Unit <<< FromRow) row
 
 type PrefixRoutes = Boolean
 

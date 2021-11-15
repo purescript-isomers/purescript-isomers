@@ -1,6 +1,7 @@
 module Isomers.HTTP.Request.Method where
 
 import Prelude
+
 import Control.Comonad (class Comonad, class Extend)
 import Data.HTTP.Method (Method(..)) as HTTP.Method
 import Data.HTTP.Method (Method) as HTTP
@@ -8,8 +9,7 @@ import Data.Newtype (class Newtype)
 import Data.Variant (Variant, inj)
 import Data.Variant (case_, on) as Variant
 import Heterogeneous.Folding (class HFoldl, class HFoldlWithIndex, hfoldl, hfoldlWithIndex)
-import Heterogeneous.Mapping (class HMap, class HMapWithIndex)
-import Isomers.Contrib.Heterogeneous (class HMap', class HMapWithIndex', hmap', hmapWithIndex')
+import Heterogeneous.Mapping (class HMap, class HMapWithIndex, hmap, hmapWithIndex)
 import Type.Prelude (Proxy(..))
 import Type.Row (type (+))
 
@@ -20,12 +20,18 @@ derive instance newtypeMethod ∷ Newtype (Method m) _
 
 derive instance functorMethod ∷ Functor Method
 
-instance hmapMethod ∷ (HMap' f v v') ⇒ HMap f (Method v) (Method v') where
-  hmap f (Method v) = Method (hmap' f v)
+instance hmapMethod ∷ (HMap f v v') ⇒ HMap f (Method v) (Method v') where
+  hmap f (Method v) = Method (hmap f v)
 
-instance hmapWithIndexMethod ∷ (HMapWithIndex' f v v') ⇒ HMapWithIndex f (Method v) (Method v') where
-  hmapWithIndex f (Method v) = Method (hmapWithIndex' f v)
+instance hmapWithIndexMethod ∷ (HMapWithIndex f v v') ⇒ HMapWithIndex f (Method v) (Method v') where
+  hmapWithIndex f (Method v) = Method (hmapWithIndex f v)
 
+-- instance hmapMethod ∷ (HMap' f v v') ⇒ HMap f (Method v) (Method v') where
+--   hmap f (Method v) = Method (hmap' f v)
+-- 
+-- instance hmapWithIndexMethod ∷ (HMapWithIndex' f v v') ⇒ HMapWithIndex f (Method v) (Method v') where
+--   hmapWithIndex f (Method v) = Method (hmapWithIndex' f v)
+-- 
 instance hfoldlMethod ∷ (HFoldl f acc v a) ⇒ HFoldl f acc (Method v) a where
   hfoldl f acc (Method v) = hfoldl f acc v
 

@@ -1,7 +1,6 @@
 module Isomers.Response.Encodings where
 
 import Prelude
-
 import Data.Argonaut (Json)
 import Data.ArrayBuffer.Types (ArrayBuffer)
 import Data.Map (Map)
@@ -13,6 +12,7 @@ import Network.HTTP.Types (Header, Status, HeaderName)
 import Node.Buffer.Immutable (ImmutableBuffer) as Buffer.Immutable
 import Node.Stream (Writable, Readable) as Node.Stream
 import Type.Prelude (Proxy(..))
+import Unsafe.Coerce (unsafeCoerce)
 import Web.File.Blob (Blob) as Web.File
 
 type Base body extra
@@ -21,7 +21,11 @@ type Base body extra
     | extra
     }
 
-type NodeWriter r = Node.Stream.Writable r → Effect Unit
+type NodeWriter r
+  = Node.Stream.Writable r → Effect Unit
+
+newtype UseWritable
+  = UseWritable (∀ r. NodeWriter r)
 
 -- | TODO: Move these to the `Isomers.Node.Response.Duplex.Encodings`
 -- | We can probably provide some "basic"
@@ -31,7 +35,10 @@ data NodeBody
   = NodeBuffer Buffer.Immutable.ImmutableBuffer
   | NodeStream (∀ r. Node.Stream.Readable r)
   -- | We assume that writer is closing the buffer on its own...
-  | NodeWriter (∀ r. NodeWriter r)
+  | NodeWriter UseWritable
+
+nodeWriter ∷ ∀ r. NodeWriter r → NodeBody
+nodeWriter f = NodeWriter $ UseWritable (unsafeCoerce f)
 
 -- | TODO: Parametrize by `body` so any other backend can work with this
 -- | lib easily. Currently we are tightly cupled to nodejs.
@@ -69,7 +76,8 @@ type ClientBodyRow
 type ClientHeaders
   = Map HeaderName String
 
-newtype ClientResponse = ClientResponse
+newtype ClientResponse
+  = ClientResponse
   ( Base
       { | ClientBodyRow }
       ( headers ∷ ClientHeaders
@@ -77,4 +85,5 @@ newtype ClientResponse = ClientResponse
       , url ∷ String
       )
   )
+
 derive instance newtypeClientResponse ∷ Newtype ClientResponse _

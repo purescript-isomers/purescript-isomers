@@ -10,7 +10,8 @@ import Data.Newtype (class Newtype)
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Effect.Unsafe (unsafePerformEffect)
-import Isomers.Response.Encodings (NodeWriter, NodeBody(..), ServerResponse) as Encodings
+import Isomers.Response.Encodings (NodeBody(..), ServerResponse) as Encodings
+import Isomers.Response.Encodings (nodeWriter)
 import Network.HTTP.Types (HeaderName, Status)
 import Network.HTTP.Types (ok200) as Status
 import Node.Buffer (Buffer)
@@ -18,7 +19,7 @@ import Node.Buffer (freeze, unsafeFreeze) as Buffer
 import Node.Buffer.Immutable (ImmutableBuffer) as Buffer
 import Node.Buffer.Immutable (fromString) as Buffer.Immutable
 import Node.Encoding (Encoding(..))
-import Node.Stream (Readable) as Node.Stream
+import Node.Stream (Readable, Writable) as Node.Stream
 
 newtype Printer = Printer (Encodings.ServerResponse → Encodings.ServerResponse)
 
@@ -50,8 +51,8 @@ json = Argonaut.stringify >>> string
 stream ∷ (∀ r. Node.Stream.Readable r) → Printer
 stream s = body (Encodings.NodeStream s)
 
-writer ∷ (∀ r. Encodings.NodeWriter r) → Printer
-writer w = body (Encodings.NodeWriter w)
+writer ∷ ∀ r. (Node.Stream.Writable r → Effect Unit) → Printer
+writer w = body $ nodeWriter w
 
 immutableBuffer ∷ Buffer.ImmutableBuffer → Printer
 immutableBuffer buff = body (Encodings.NodeBuffer buff)

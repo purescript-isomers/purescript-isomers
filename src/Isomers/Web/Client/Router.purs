@@ -34,7 +34,7 @@ import Isomers.Request.Duplex (parse, print) as Request.Duplex
 import Isomers.Request.Encodings (ServerRequest)
 import Isomers.Response.Encodings (ClientResponse(..))
 import Isomers.Spec (Spec(..))
-import Isomers.Spec.Accept (ContentTypes)
+-- import Isomers.Spec.Accept (ContentTypes)
 import Isomers.Web.Client.Render (class FoldRender, ContractRequest, ExpandRequest, contractRequest, expandRequest, foldRender)
 import Isomers.Web.Client.Render (contractRequest, expandRequest) as Isomers.Web.Client.Render
 import Isomers.Web.Types (WebSpec(..))

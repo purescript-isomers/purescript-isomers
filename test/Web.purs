@@ -18,7 +18,6 @@ import Effect.Aff (Aff, Fiber, delay, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Console (log)
 import Effect.Random (random)
-import JS.Unsafe.Stringify (unsafeStringify)
 import Heterogeneous.Folding (class HFoldlWithIndex, hfoldlWithIndex)
 import Heterogeneous.Mapping (hmap, hmapWithIndex)
 import Isomers.Client (RequestBuildersStep(..), requestBuilders)
@@ -27,6 +26,7 @@ import Isomers.Client.Fetch (Scheme(..))
 import Isomers.Client.Fetch (fetch) as Fetch
 import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..))
 import Isomers.Contrib.Heterogeneous.List (HNil(..), (:))
+import Isomers.Contrib.Type.Eval.Foldings (HCons', HList, HListProxy(..), HNil')
 import Isomers.HTTP (Exchange(..))
 import Isomers.HTTP (Exchange(..)) as HTTP
 import Isomers.HTTP.ContentTypes (HtmlMime, _html, _json)
@@ -50,6 +50,7 @@ import Isomers.Response.Types (HtmlString(..))
 import Isomers.Server (router) as Server
 import Isomers.Spec (BuilderStep(..), accumSpec, client, requestBuilders, rootAccumSpec) as Spec
 import Isomers.Spec (Spec(..))
+import Isomers.Spec.Accept (accumSpec, requestAccum) as Accept
 import Isomers.Spec.Builder (WithBody(..), withBody)
 import Isomers.Spec.Builder (insert) as Web.Builder
 import Isomers.Web (requestBuilders) as Web
@@ -60,6 +61,7 @@ import Isomers.Web.Client.Render (ContractRequest(..), RenderStep(..))
 import Isomers.Web.Client.Router (webRouter, webRequest) as Web.Client.Router
 import Isomers.Web.Server (renderToApi)
 import Isomers.Web.Types (WebSpec(..))
+import JS.Unsafe.Stringify (unsafeStringify)
 import Network.HTTP.Types (internalServerError500, ok200)
 import Node.Stream (onClose)
 import Polyform.Batteries.Json.Duals ((:=))
@@ -70,6 +72,7 @@ import Polyform.Reporter (R)
 import Polyform.Validator.Dual (runSerializer, runValidator)
 import Polyform.Validator.Dual.Pure (runSerializer, runValidator) as Dual.Pure
 import React.Basic.Hooks (Component)
+import Type.Eval.Dispatch (KindOf)
 import Type.Prelude (Proxy(..), Proxy(..))
 
 responseDuplex = responseDual d
@@ -128,6 +131,16 @@ z = Accum (pure identity) identity
 
 bodyString = (Request.Duplex.body (Proxy ∷ Proxy "str") (const mempty)) ∷ Request.Duplex (str ∷ Fiber String) Int String
 
+-- type X ∷ HList Symbol
+-- type X = HNil'
+-- 
+-- type X' ∷ Type
+-- type X' = KindOf "test"
+-- 
+-- type X'' ∷ HList Symbol
+-- type X'' = HCons' "test" HNil'
+
+
 shop =
   Spec.rootAccumSpec
     $ Spec.accumSpec Spec.BuilderStep
@@ -164,59 +177,59 @@ x =
 --                           -> Aff (Either Error (RawClient HtmlString))
 --          }
 --  }
-client = Spec.client (Fetch.fetch hostInfo) $ toSpec web
+-- client = Spec.client (Fetch.fetch hostInfo) $ toSpec web
 
--- web :: forall t738 t898.
---    WebSpec t738
---      (HJust
---         { "" :: Tagged "application/json"
---                   (Renderer t898
---                      { productId :: Int
---                      }
---                      (Okayish ()
---                         { a :: Int
---                         , b :: String
---                         , method :: String
---                         }
---                      )
---                      (RawServer HtmlString)
---                   )
---         }
---      )
---      (Variant
---         ( "" :: Variant
---                   ( "application/json" :: { productId :: Int
---                                           }
---                   , "text/html" :: { productId :: Int
---                                    }
---                   )
---         )
---      )
---      (Variant
---         ( "" :: Variant
---                   ( "application/json" :: { productId :: Int
---                                           }
---                   , "text/html" :: { productId :: Int
---                                    }
---                   )
---         )
---      )
---      { "" :: { "application/json" :: Duplex "application/json"
---                                        (Okayish ()
---                                           { a :: Int
---                                           , b :: String
---                                           , method :: String
---                                           }
---                                        )
---                                        (Okayish ()
---                                           { a :: Int
---                                           , b :: String
---                                           , method :: String
---                                           }
---                                        )
---              , "text/html" :: Duplex "text/html" (RawServer HtmlString) (RawClient HtmlString)
---              }
---      }
+-- -- web :: forall t738 t898.
+-- --    WebSpec t738
+-- --      (HJust
+-- --         { "" :: Tagged "application/json"
+-- --                   (Renderer t898
+-- --                      { productId :: Int
+-- --                      }
+-- --                      (Okayish ()
+-- --                         { a :: Int
+-- --                         , b :: String
+-- --                         , method :: String
+-- --                         }
+-- --                      )
+-- --                      (RawServer HtmlString)
+-- --                   )
+-- --         }
+-- --      )
+-- --      (Variant
+-- --         ( "" :: Variant
+-- --                   ( "application/json" :: { productId :: Int
+-- --                                           }
+-- --                   , "text/html" :: { productId :: Int
+-- --                                    }
+-- --                   )
+-- --         )
+-- --      )
+-- --      (Variant
+-- --         ( "" :: Variant
+-- --                   ( "application/json" :: { productId :: Int
+-- --                                           }
+-- --                   , "text/html" :: { productId :: Int
+-- --                                    }
+-- --                   )
+-- --         )
+-- --      )
+-- --      { "" :: { "application/json" :: Duplex "application/json"
+-- --                                        (Okayish ()
+-- --                                           { a :: Int
+-- --                                           , b :: String
+-- --                                           , method :: String
+-- --                                           }
+-- --                                        )
+-- --                                        (Okayish ()
+-- --                                           { a :: Int
+-- --                                           , b :: String
+-- --                                           , method :: String
+-- --                                           }
+-- --                                        )
+-- --              , "text/html" :: Duplex "text/html" (RawServer HtmlString) (RawClient HtmlString)
+-- --              }
+-- --      }
 web = do
   webSpec
     $ Web.Builder.insert (Proxy ∷ Proxy "productId") (Request.Duplex.int Request.Duplex.segment)

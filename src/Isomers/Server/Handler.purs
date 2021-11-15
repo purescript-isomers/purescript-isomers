@@ -12,10 +12,10 @@ import Type.Prelude (class TypeEquals, Proxy)
 type Handler m req res
   = req → m res
 
-foreign import data UnifyMonadStep ∷ Type → TypeExpr → TypeExpr
+foreign import data UnifyMonadStep ∷ ∀ k. Type → TypeExpr k → TypeExpr k
 
 type UnifyMonad m row
-  = (Foldr UnifyMonadStep (Lift (m Unit)) E.<<< FromRow) (Proxy row)
+  = (Foldr UnifyMonadStep (Lift (m Unit)) E.<<< FromRow) row
 
 instance evalUnifyMonadRec ∷
   ( Eval acc (m Unit)

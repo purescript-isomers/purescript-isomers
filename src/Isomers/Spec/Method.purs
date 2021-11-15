@@ -18,7 +18,7 @@ import Isomers.Spec.Record (UnifyBody)
 import Isomers.Spec.Types (AccumSpec(..), GetRequest, GetResponse, _GetRequest, _GetResponse)
 import Prim.Row (class Cons) as Row
 import Type.Eval (class Eval)
-import Type.Prelude (Proxy, Proxy)
+import Type.Prelude (Proxy)
 
 data MethodStep = MethodStep
 
@@ -55,7 +55,7 @@ accumSpec (Method rec) = do
   let
     resDpls = hmap _GetResponse rec
 
-    reqDpl = withMethod $ Method (hmap _GetRequest rec)
+    reqDpl = withMethod (Method ((hmap _GetRequest rec) ∷ reqDpls))
   AccumSpec { request: reqDpl, response: resDpls }
 
 

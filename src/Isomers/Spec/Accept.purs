@@ -18,8 +18,7 @@ import Data.Variant (expand, inj) as Variant
 import Heterogeneous.Folding (class Folding, class HFoldl, hfoldl)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Isomers.Contrib.Data.Variant (tag) as Contrib.Data.Variant
-import Isomers.Contrib.Type.Eval.Foldable (Foldr')
-import Isomers.Contrib.Type.Eval.Foldings (HomogeneousRow)
+import Isomers.Contrib.Type.Eval.Foldings (class LiftHList, FromHListType, HListProxy(..), HomogeneousRow)
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern(..), parse) as Accept
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern)
 import Isomers.HTTP.Request.Headers.Accept.MediaPattern (matchedBy, print) as Accept.MediaPattern
@@ -35,6 +34,8 @@ import Prim.Row (class Cons, class Lacks, class Union) as Row
 import Record (insert) as Record
 import Record.Extra (type (:::), SNil)
 import Type.Eval (class Eval, Lift, TypeExpr)
+import Type.Eval.Function (type (<<<)) as T
+import Type.Eval.Functor (Map)
 import Type.Prelude (class IsSymbol, class TypeEquals, Proxy(..), Proxy, reflectSymbol)
 
 -- | Fold from `Response.Duplex`es a `Record`
@@ -58,13 +59,11 @@ instance foldingResponseContentTypeRecord ∷
 -- | We use it to extract a heterogeneous list of proxies
 -- | from a list of response codecs.
 -- | This is an initial step for `request` fold.
-data ResponseContentType
-  = ResponseContentType
+foreign import data ResponseContentTypeStep ∷ Type → TypeExpr Symbol
 
-instance mappingResponseContentType ∷
-  (TypeEquals f (Response.Duplex ct i o), IsSymbol ct) ⇒
-  Mapping ResponseContentType f (Proxy ct) where
-  mapping _ _ = Proxy ∷ Proxy ct
+instance evalResponseContentTypeStep ∷
+  (TypeEquals dpl (Response.Duplex ct i o), IsSymbol ct) ⇒
+  Eval (ResponseContentTypeStep dpl) ct
 
 -- | Fold over a `HList` of content types encoding `Symbol`s to
 -- | build a media pattern matching parser which outputs an
@@ -125,15 +124,15 @@ parserBuilder mediaType@(MediaType mtStr) prs = do
 -- | and I have to put here `RowSList` too.
 requestAccum ∷
   ∀ body ireq route oreq cts ivReq ovReq ls.
-  Eval (HomogeneousRow Void cts) (Proxy ls) ⇒
+  Eval (HomogeneousRow Void cts) ls ⇒
   ToHomogeneousRow ls ireq ivReq ⇒
   HFoldl
     (RequestMediaPatternParser body route oreq)
     (MediaPattern → Request.Parser body (route → Variant ()))
-    cts
+    (HListProxy cts)
     (MediaPattern → Request.Parser body (route → Variant ovReq)) ⇒
   Request.Accum body route ireq oreq →
-  cts →
+  HListProxy cts →
   Request.Accum body route (Variant ivReq) (Variant ovReq)
 requestAccum (Request.Accum (Request.Duplex prt prs) dst) cts = do
   let
@@ -183,34 +182,35 @@ requestAccum (Request.Accum (Request.Duplex prt prs) dst) cts = do
 responsePrinters :: forall lst rec. HFoldl ResponseContentTypeRecord {} lst rec => lst -> rec
 responsePrinters lst = (hfoldl ResponseContentTypeRecord {} $ lst)
 
-foreign import data DoSCons ∷ Type → TypeExpr → TypeExpr
-
-instance evalDoSCons ∷
-  (Eval t (Proxy t')) ⇒
-  Eval (DoSCons (Proxy h) t) (Proxy (h ::: t'))
-
-type ContentTypes cts
-  = (Foldr' DoSCons (Lift (Proxy SNil))) cts
+-- foreign import data DoSCons ∷ Type → TypeExpr → TypeExpr
+-- 
+-- instance evalDoSCons ∷
+--   (Eval t (Proxy t')) ⇒
+--   Eval (DoSCons (Proxy h) t) (Proxy (h ::: t'))
+-- 
+-- type ContentTypes cts
+--   = (Foldr' DoSCons (Lift (Proxy SNil))) cts
 
 -- | From a pair of request / response duplexes and a hlist of response codecs create a spec which
 -- | labels everything by content types.
 accumSpec ∷
-  ∀ body res resLst route ireq oreq cts sl ivReq ovReq.
-  HFoldl ResponseContentTypeRecord {} resLst res ⇒
-  HMap ResponseContentType resLst cts ⇒
-  Eval (HomogeneousRow Void cts) (Proxy sl) ⇒
+  ∀ body res resList resList' route ireq oreq cts sl ivReq ovReq.
+  HFoldl ResponseContentTypeRecord {} resList res ⇒
+  -- LiftHList resList resList' ⇒
+  Eval ((Map ResponseContentTypeStep T.<<< FromHListType) resList) cts ⇒
+  Eval (HomogeneousRow Void cts) sl ⇒
   ToHomogeneousRow sl ireq ivReq ⇒
   HFoldl
     (RequestMediaPatternParser body route oreq)
     (MediaPattern → Request.Parser body (route → Variant ()))
-    cts
+    (HListProxy cts)
     (MediaPattern → Request.Parser body (route → Variant ovReq)) ⇒
-  (Request.Accum body route ireq oreq /\ resLst) →
+  (Request.Accum body route ireq oreq /\ resList) →
   AccumSpec body route (Variant ivReq) (Variant ovReq) res
 accumSpec (req /\ res) = do
   let
-    cts ∷ cts
-    cts = hmap ResponseContentType res
+    cts ∷ HListProxy cts
+    cts = HListProxy
   AccumSpec
     { request: requestAccum req cts
     , response: responsePrinters res

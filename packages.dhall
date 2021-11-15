@@ -6,6 +6,8 @@ let upstream =
 
 in  upstream
   with
+    exists = upstream.exists // { version = "v5.1.0" }
+  with
     homogeneous = mkPackage
       [ "assert", "console", "effect", "foreign-object", "psci-support"
       , "record-extra", "typelevel-eval", "variant"
@@ -47,8 +49,8 @@ in  upstream
     --   "04e86ce3be5c46a7a13270d4fca183af6de648f5"
     typelevel-eval = mkPackage
       [ "console", "effect", "leibniz", "psci-support", "record" ]
-      "https://github.com/mikesol/purescript-typelevel-eval"
-      "mikesol"
+      "https://github.com/natefaubion/purescript-typelevel-eval"
+      "v0.5.0"
   with
     web-fetch = ../purescript-web-fetch/spago.dhall as Location
     --   { dependencies =

@@ -9,14 +9,15 @@ import Data.Variant (Variant)
 import Heterogeneous.Folding (class HFoldl)
 import Heterogeneous.Mapping (class HMap, class HMapWithIndex, class Mapping, hmap)
 import Isomers.Contrib.Heterogeneous.List (type (:))
-import Isomers.Contrib.Type.Eval.Foldings (HomogeneousRow)
+import Isomers.Contrib.Type.Eval.Foldings (class LiftHList, FromHListType, HListProxy(..), HomogeneousRow)
 import Isomers.HTTP (Method(..))
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern)
 import Isomers.Request (Accum(..), Duplex, Duplex', Parser) as Request
 import Isomers.Request.Accum (insert, insertReq, scalar, unifyRoute) as Request.Accum
 import Isomers.Request.Accum.Generic (class HFoldlAccumVariant)
 import Isomers.Response (Duplex) as Response
-import Isomers.Spec.Accept (RequestMediaPatternParser, ResponseContentType, ResponseContentTypeRecord) as Accept
+import Isomers.Spec.Accept (RequestMediaPatternParser, ResponseContentTypeRecord) as Accept
+import Isomers.Spec.Accept (ResponseContentTypeStep)
 import Isomers.Spec.Accept (accumSpec) as Spec.Accept
 import Isomers.Spec.Method (MethodStep)
 import Isomers.Spec.Method (accumSpec) as Spec.Method
@@ -27,6 +28,8 @@ import Prim.Row (class Cons, class Lacks) as Row
 import Type.Equality (class TypeEquals)
 import Type.Equality (from, to) as Type.Equality
 import Type.Eval (class Eval)
+import Type.Eval.Function (type (<<<)) as T
+import Type.Eval.Functor (Map)
 import Type.Prelude (class IsSymbol, Proxy(..), Proxy)
 
 -- | Used for recursive mapping over a record fields.
@@ -59,13 +62,13 @@ withBody _ dpl = WithBody dpl
 -- | Build an accept spec from request duplex and a hlist of response duplexes.
 instance builderHListToAcceptSpec ∷
   ( HFoldl Accept.ResponseContentTypeRecord {} (h : t) res
-  , HMap Accept.ResponseContentType (h : t) cts
-  , Eval (HomogeneousRow Void cts) (Proxy sl)
+  , Eval ((Map ResponseContentTypeStep T.<<< FromHListType) (h : t)) cts
+  , Eval (HomogeneousRow Void cts) sl
   , ToHomogeneousRow sl ireq ivReq
   , HFoldl
       (Accept.RequestMediaPatternParser body route oreq)
       (MediaPattern → Request.Parser body (route → Variant ()))
-      cts
+      (HListProxy cts)
       (MediaPattern → Request.Parser body (route → Variant ovReq))
   , TypeEquals route_ route
   ) ⇒

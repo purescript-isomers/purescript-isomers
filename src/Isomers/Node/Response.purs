@@ -8,6 +8,7 @@ import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Isomers.Response.Encodings (NodeBody(..), ServerResponse) as Encodings
+import Isomers.Response.Encodings (UseWritable(..))
 import Network.HTTP.Types (Status) as HTTP.Types
 import Node.Buffer.Class (unsafeThaw) as Buffer.Immutable
 import Node.HTTP (Response, responseAsStream, setHeader, setStatusCode, setStatusMessage) as Node.HTTP
@@ -33,7 +34,6 @@ writeNodeResponse sr response = do
       void $ Node.Stream.write res buff' $ end
     Just (Encodings.NodeStream readable) →
       void $ Node.Stream.pipe readable res
-    Just (Encodings.NodeWriter writer) → do
-      writer res
+    Just (Encodings.NodeWriter (UseWritable writer)) → writer res
     Nothing → end
   -- void $ Node.Stream.end stream $ pure unit
