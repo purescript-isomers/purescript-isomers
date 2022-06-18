@@ -51,14 +51,14 @@ newtype Tagged (tag ∷ Symbol) a
 data ResponseRenderer (debugPath ∷ SList) ireq oreq = ResponseRenderer
 
 -- | We unify requests in the case of rendered endpoints
--- | just for simplicity now (we don't need to carry two
--- | sets of renderers in the final spec).
+-- | just for simplicity now (in such a case we don't need
+-- | to carry two sets of renderers in the final spec).
 -- | As a first attempt I'm going to use iso renderers
 -- | in a pure "GET" setup (only for initial renders)
--- | so this limitation is a not real problem for me.
+-- | so this limitation is not really a problem for me.
 -- |
 -- | There is no real rationale for this restriction
--- | though and maybe there are "fully iso" scenarios when
+-- | though and maybe there are scenarios when
 -- | such a case is desired. In such a case... please provide
 -- | a PR :-P
 instance foldingExtractRenderMatch ∷

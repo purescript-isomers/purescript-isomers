@@ -7,7 +7,6 @@ import Heterogeneous.Folding (class Folding, class HFoldl, folding, hfoldl)
 import Isomers.Contrib.Heterogeneous.List (HCons(..), HNil(..))
 import Prim.RowList (Cons) as RL
 import Prim.RowList (RowList)
-import Record.Extra (type (:::), SList, SNil)
 import Type.Eval (class Eval, Lift, TypeExpr)
 import Type.Eval.Dispatch (class Dispatch1, KindOf)
 import Type.Eval.Foldable (Foldr)
@@ -29,6 +28,7 @@ type HomogeneousRowList a
 type HomogeneousRow a
   = ToRow <<< HomogeneousRowList a
 
+-- | Move these to `Contrib.Type.Eval.HList`
 -- | We need a lifted version of `Heterogeneous.HList` which is always just
 -- | a `Type` or `Type → Type → Type`. But we want to lift it to kind
 -- | `HList k` so we can process it using `typelevel-eval`.
@@ -84,29 +84,3 @@ else instance
   hfoldl _ acc _ = acc
 
 
--- | I'm not able to force this wrapping to work
--- | ```
--- | foreign import data HListWrapper ∷ ∀ k. k → Type → HList (KindOf k)
---
--- | class HListWrap ∷ Type → HList Type → Constraint
--- | class HListWrap a b | a → b
--- | ```
--- | ..because here I'm getting:
--- | """Could not match kind HList Type with kind Type
--- | while checking that type HListWrapper k HNil has kind Type...
--- | """
--- | ```
--- | instance HListWrap HNil (∀ k. HListWrapper k HNil)
--- | ```
-
--- instance HListWrap (HCons a t) (HList (HCons a t) (KindOf a))
--- instance
---   ( Eval (f a) a'
---   , Eval (Map f (HAny (HCons b tail))) (HAny (HCons b' tail'))
---   , TypeEquals (KindOf a') (KindOf b')
---   ) =>
---   Dispatch1 (HList t) (Map f (HList (HCons a tail)) ) (HAny (HCons a' (HCons b' tail')))
--- else instance
---   ( Eval (f a) a'
---   ) =>
---   Dispatch1 HList (Map f (HAny a (HCons a nil))) (HAny a' (HCons a' (HCons a' HNil)))
