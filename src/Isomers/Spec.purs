@@ -3,7 +3,7 @@ module Isomers.Spec (client, module Exports, requestBuilders) where
 import Heterogeneous.Folding (class HFoldlWithIndex)
 import Isomers.Client (ClientStep, RequestBuildersStep, client, requestBuilders) as Client
 import Isomers.Client (Fetch)
-import Isomers.Spec.Builder (class Builder, BuilderStep(..), Insert(..), Scalar(..), WithBody(..), accumSpec, spec) as Exports
+import Isomers.Spec.FoldSpec (class FoldSpec, FoldSpecStep(..), Insert(..), Scalar(..), WithBody(..), accumSpec, spec) as Exports
 import Isomers.Spec.Types (AccumSpec(..), Spec(..), rootAccumSpec) as Exports
 import Isomers.Spec.Types (Spec(..))
 import Type.Prelude (Proxy(..))

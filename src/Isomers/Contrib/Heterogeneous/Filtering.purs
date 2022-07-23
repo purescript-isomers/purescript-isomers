@@ -64,7 +64,9 @@ instance hfilterWithIndexRecord ::
 
 class
   FilterRecordWithIndex (xs :: RowList Type) rxs f (as :: Row Type) (bs :: Row Type)
-  | xs -> rxs, xs f -> bs, xs -> as where
+  | xs -> rxs
+  , xs f -> bs
+  , xs -> as where
   filterRecordWithIndexBuilder :: Proxy xs -> { | rxs } -> f -> Record.Builder { | as } { | bs }
 
 instance filterRecordWithIndexCons ::

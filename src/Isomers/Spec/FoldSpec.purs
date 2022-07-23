@@ -1,4 +1,4 @@
-module Isomers.Spec.Builder where
+module Isomers.Spec.FoldSpec where
 
 import Prelude
 
@@ -9,7 +9,7 @@ import Data.Variant (Variant)
 import Heterogeneous.Folding (class HFoldl)
 import Heterogeneous.Mapping (class HMap, class HMapWithIndex, class Mapping, hmap)
 import Isomers.Contrib.Heterogeneous.List (type (:))
-import Isomers.Contrib.Type.Eval.Foldings (class LiftHList, FromHListType, HListProxy(..), HomogeneousRow)
+import Isomers.Contrib.Type.Eval.Foldings (FromHListType, HListProxy, HomogeneousRow)
 import Isomers.HTTP (Method(..))
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern)
 import Isomers.Request (Accum(..), Duplex, Duplex', Parser) as Request
@@ -26,23 +26,24 @@ import Isomers.Spec.Record (accumSpec) as Spec.Record
 import Isomers.Spec.Types (AccumSpec(..), GetRequest, GetResponse, Spec, rootAccumSpec)
 import Prim.Row (class Cons, class Lacks) as Row
 import Type.Equality (class TypeEquals)
-import Type.Equality (from, to) as Type.Equality
+import Type.Equality (to) as Type.Equality
 import Type.Eval (class Eval)
 import Type.Eval.Function (type (<<<)) as T
 import Type.Eval.Functor (Map)
-import Type.Prelude (class IsSymbol, Proxy(..), Proxy)
+import Type.Prelude (class IsSymbol, Proxy(..))
 
 -- | Used for recursive mapping over a record fields.
 -- | `route` variable is carried around because it helps inference.
-data BuilderStep route = BuilderStep
+data FoldSpecStep :: forall k. k -> Type
+data FoldSpecStep route = FoldSpecStep
 
-instance mappingBuilder ::
-  Builder a body route ireq oreq res =>
-  Mapping (BuilderStep route) a (AccumSpec body route ireq oreq res) where
+instance
+  FoldSpec a body route ireq oreq res =>
+  Mapping (FoldSpecStep route) a (AccumSpec body route ireq oreq res) where
   mapping = accumSpec
 
-class Builder a (body :: # Type) route ireq oreq res | a -> body ireq oreq res where
-  accumSpec :: BuilderStep route -> a -> AccumSpec body route ireq oreq res
+class FoldSpec a (body :: Row Type) route ireq oreq res | a -> body ireq oreq res where
+  accumSpec :: FoldSpecStep route -> a -> AccumSpec body route ireq oreq res
 
 unifyRoute
   :: forall route route' t12 t13 t14 t16
@@ -56,13 +57,13 @@ unifyRoute (AccumSpec { request, response }) =
     }
 
 -- | TODO: We probably want to restrict this to segments only
-data WithBody (l :: Symbol) (body :: # Type) i o = WithBody (Request.Duplex body i o)
+data WithBody (l :: Symbol) (body :: Row Type) i o = WithBody (Request.Duplex body i o)
 
 withBody :: forall body i l o. Proxy l -> Request.Duplex body i o -> WithBody l body i o
 withBody _ dpl = WithBody dpl
 
 -- | Build an accept spec from request duplex and a hlist of response duplexes.
-instance builderHListToAcceptSpec ::
+instance
   ( HFoldl Accept.ResponseContentTypeRecord {} (h : t) res
   , Eval ((Map ResponseContentTypeStep T.<<< FromHListType) (h : t)) cts
   , Eval (HomogeneousRow Void cts) sl
@@ -74,26 +75,26 @@ instance builderHListToAcceptSpec ::
       (MediaPattern -> Request.Parser body (route -> Variant ovReq))
   , TypeEquals route_ route
   ) =>
-  Builder (Request.Accum body route_ ireq oreq /\ (h : t)) body route (Variant ivReq) (Variant ovReq) res where
+  FoldSpec (Request.Accum body route_ ireq oreq /\ (h : t)) body route (Variant ivReq) (Variant ovReq) res where
   accumSpec _ = Spec.Accept.accumSpec <<< lmap Request.Accum.unifyRoute
-else instance builderWithBodyEndpoint ::
+else instance
   ( Row.Cons l i route ireq
   , Row.Cons l o route oreq
   , Row.Lacks l route
   , IsSymbol l
-  , Builder (Request.Accum body { | route } { | ireq } { | oreq } /\ res) body { | route } { | ireq } { | oreq } res'
+  , FoldSpec (Request.Accum body { | route } { | ireq } { | oreq } /\ res) body { | route } { | ireq } { | oreq } res'
   ) =>
-  Builder (WithBody l body i o /\ res) body { | route } { | ireq } { | oreq } res' where
+  FoldSpec (WithBody l body i o /\ res) body { | route } { | ireq } { | oreq } res' where
   accumSpec s ((WithBody dpl) /\ res) = do
     let
       req = Request.Accum.insertReq (Proxy :: Proxy l) dpl
     accumSpec s (req /\ res :: Request.Accum body { | route } { | ireq } { | oreq } /\ res)
 -- | An endpoint which doesn't care about accept header.
-else instance builderPlainEndpoint ::
+else instance
   ( TypeEquals req (Request.Accum body route ireq oreq)
   , TypeEquals res (Response.Duplex ct ires ores)
   ) =>
-  Builder (req /\ res) body route ireq oreq (Response.Duplex ct ires ores) where
+  FoldSpec (req /\ res) body route ireq oreq (Response.Duplex ct ires ores) where
   accumSpec _ (request /\ response) =
     AccumSpec
       { request: Type.Equality.to request
@@ -105,27 +106,27 @@ type Pass body route = Request.Accum body route route route
 pass :: forall body route. Pass body route
 pass = Request.Accum (pure identity) identity
 
-instance builderPlainResponseEndpoint ::
-  ( Builder (Pass body route /\ Response.Duplex ct ires ores) body route ireq oreq res
+instance
+  ( FoldSpec (Pass body route /\ Response.Duplex ct ires ores) body route ireq oreq res
   ) =>
-  Builder (Response.Duplex ct ires ores) body route ireq oreq res where
+  FoldSpec (Response.Duplex ct ires ores) body route ireq oreq res where
   accumSpec s response = accumSpec s ((pass /\ response) :: (Pass body route /\ Response.Duplex ct ires ores))
 
-instance builderResponseHListEndpoint ::
-  ( Builder (Pass body route /\ (h : t)) body route ireq oreq res
+instance
+  ( FoldSpec (Pass body route /\ (h : t)) body route ireq oreq res
   ) =>
-  Builder ((h : t)) body route ireq oreq res where
+  FoldSpec ((h : t)) body route ireq oreq res where
   accumSpec s response = accumSpec s ((pass /\ response) :: (Pass body route /\ (h : t)))
 
-instance builderMethodRec ::
-  ( HMap (BuilderStep route) { | rec } { | specs }
+instance
+  ( HMap (FoldSpecStep route) { | rec } { | specs }
   , Eval (UnifyBody specs) (Proxy body)
   , HMap GetResponse { | specs } { | resDpls }
   , HMap GetRequest { | specs } reqDpls
   , HMapWithIndex MethodStep reqDpls reqDpls'
   , HFoldlAccumVariant body route reqDpls' vi vo
   ) =>
-  Builder (Method { | rec }) body route (Variant vi) (Variant vo) { | resDpls } where
+  FoldSpec (Method { | rec }) body route (Variant vi) (Variant vo) { | resDpls } where
   accumSpec s (Method rec) = do
     let
       specs :: { | specs }
@@ -133,20 +134,19 @@ instance builderMethodRec ::
     Spec.Method.accumSpec (Method specs)
 
 -- | Noop - just return given spec. Useful when folding nested specs.
-instance builderPlainSpec ::
-  Builder (AccumSpec body route ireq oreq res) body route ireq oreq res where
+instance FoldSpec (AccumSpec body route ireq oreq res) body route ireq oreq res where
   accumSpec _ s = s
 
 -- | We map over a record so we get record of Specs.
 -- | Next we fold the record to get the final Spec.
-instance recBuilderRecord ::
-  ( HMap (BuilderStep route) { | rec } { | rec' }
+instance
+  ( HMap (FoldSpecStep route) { | rec } { | rec' }
   , Eval (UnifyBody rec') (Proxy body)
   , HMap GetResponse { | rec' } { | res }
   , HMap GetRequest { | rec' } { | reqs }
   , HFoldlAccumVariant body route { | reqs } ivreq ovreq
   ) =>
-  Builder { | rec } body route (Variant ivreq) (Variant ovreq) { | res } where
+  FoldSpec { | rec } body route (Variant ivreq) (Variant ovreq) { | res } where
   accumSpec s r = Spec.Record.accumSpec true r'
     where
     r' = hmap s r
@@ -154,25 +154,25 @@ instance recBuilderRecord ::
 -- | TODO: We probably want to restrict this to segments only
 data Insert (l :: Symbol) a sub = Insert (forall body. Request.Duplex' body a) sub
 
-instance insertSpecBuilderSpec ::
+instance
   ( Row.Cons l a route route'
   , IsSymbol l
   , Row.Lacks l route
   ) =>
-  Builder (Insert l a (AccumSpec body { | route' } ireq oreq res)) body { | route } ireq oreq res where
-  accumSpec s (Insert dpl sub) = insertIntoAccumSpec (Proxy :: Proxy l) dpl sub
-else instance insertSpecBuilder ::
+  FoldSpec (Insert l a (AccumSpec body { | route' } ireq oreq res)) body { | route } ireq oreq res where
+  accumSpec _ (Insert dpl sub) = insertIntoAccumSpec (Proxy :: Proxy l) dpl sub
+else instance
   ( Row.Cons l a route route'
   , IsSymbol l
   , Row.Lacks l route
-  , Builder sub body { | route' } ireq oreq res
+  , FoldSpec sub body { | route' } ireq oreq res
   ) =>
-  Builder (Insert l a sub) body { | route } ireq oreq res where
-  accumSpec s (Insert dpl sub) =
+  FoldSpec (Insert l a sub) body { | route } ireq oreq res where
+  accumSpec _ (Insert dpl sub) =
     insertIntoAccumSpec
       (Proxy :: Proxy l)
       dpl
-      (accumSpec (BuilderStep :: BuilderStep { | route' }) sub)
+      (accumSpec (FoldSpecStep :: FoldSpecStep { | route' }) sub)
 
 insert :: forall a l sub. Proxy l -> (forall body. Request.Duplex' body a) -> sub -> Insert l a sub
 insert _ dpl sub = Insert dpl sub
@@ -196,21 +196,21 @@ data Scalar a sub = Scalar (forall body. Request.Duplex' body a) sub
 
 -- | We are not able to "match" on `{}` directly in the place of `route`.
 -- | I hope that the use of `TypeEquals` is correct in this context.
-instance scalarBuilderSpec ::
+instance
   ( TypeEquals {} route
   ) =>
-  Builder (Scalar a (AccumSpec body a ireq oreq res)) body route ireq oreq res where
-  accumSpec s (Scalar dpl sub) = unifyRoute (setScalarSpec dpl sub)
-else instance scalarBuilder ::
-  ( Builder sub body a ireq oreq res
+  FoldSpec (Scalar a (AccumSpec body a ireq oreq res)) body route ireq oreq res where
+  accumSpec _ (Scalar dpl sub) = unifyRoute (setScalarSpec dpl sub)
+else instance
+  ( FoldSpec sub body a ireq oreq res
   , TypeEquals {} route
   ) =>
-  Builder (Scalar a sub) body route ireq oreq res where
-  accumSpec s (Scalar dpl sub) =
+  FoldSpec (Scalar a sub) body route ireq oreq res where
+  accumSpec _ (Scalar dpl sub) =
     unifyRoute
       $ setScalarSpec
           dpl
-          (accumSpec (BuilderStep :: BuilderStep a) sub)
+          (accumSpec (FoldSpecStep :: FoldSpecStep a) sub)
 
 setScalarSpec
   :: forall t13 t14 t15 t17 t21
@@ -224,5 +224,5 @@ setScalarSpec dpl (AccumSpec { request, response }) =
     }
 
 spec
-  :: forall t102 t103 t104 t105 t106. Builder t106 t105 (Record ()) t104 t103 t102 => t106 -> Spec t105 t104 t103 t102
-spec = rootAccumSpec <<< accumSpec (BuilderStep :: BuilderStep {})
+  :: forall t102 t103 t104 t105 t106. FoldSpec t106 t105 (Record ()) t104 t103 t102 => t106 -> Spec t105 t104 t103 t102
+spec = rootAccumSpec <<< accumSpec (FoldSpecStep :: FoldSpecStep {})

@@ -48,11 +48,11 @@ import Isomers.Response.Okayish.Type (fromEither) as Okayish.Type
 import Isomers.Response.Raw (RawServer(..))
 import Isomers.Response.Types (HtmlString(..))
 import Isomers.Server (router) as Server
-import Isomers.Spec (BuilderStep(..), accumSpec, client, requestBuilders, rootAccumSpec) as Spec
+import Isomers.Spec (FoldSpecStep(..), accumSpec, client, requestBuilders, rootAccumSpec) as Spec
 import Isomers.Spec (Spec(..))
 import Isomers.Spec.Accept (accumSpec, requestAccum) as Accept
-import Isomers.Spec.Builder (WithBody(..), withBody)
-import Isomers.Spec.Builder (insert) as Web.Builder
+import Isomers.Spec.FoldSpec (WithBody(..), withBody)
+import Isomers.Spec.FoldSpec (insert) as Web.Builder
 import Isomers.Web (requestBuilders) as Web
 import Isomers.Web (toSpec)
 import Isomers.Web.Builder (Rendered(..))
@@ -150,13 +150,13 @@ bodyString =
 
 shop =
   Spec.rootAccumSpec
-    $ Spec.accumSpec Spec.BuilderStep
+    $ Spec.accumSpec Spec.FoldSpecStep
         { x: withBody (Proxy :: Proxy "payload") bodyString /\ responseDuplex
         , y: responseDuplex : HNil
         }
 
 x =
-  Spec.accumSpec Spec.BuilderStep
+  Spec.accumSpec Spec.FoldSpecStep
     { shop: z /\ responseDuplex
     , admin: z /\ (responseDuplex : HNil)
     , sub:
