@@ -17,9 +17,9 @@ import Type.Prelude (Proxy)
 -- | Note: any instance will necessarily overlap with
 -- | `refl` below, so instances of this class should
 -- | not be defined in libraries.
-class TypeEquals' a b (hint ∷ SList) | a -> b, b -> a where
-  to' :: Proxy hint → a -> b
-  from' :: Proxy hint → b -> a
+class TypeEquals' a b (hint :: SList) | a -> b, b -> a where
+  to' :: Proxy hint -> a -> b
+  from' :: Proxy hint -> b -> a
 
 instance refl :: TypeEquals' a a hint where
   to' _ a = a

@@ -13,17 +13,16 @@ import Heterogeneous.Mapping (class HMap, class HMapWithIndex, hmap, hmapWithInd
 import Type.Prelude (Proxy(..))
 import Type.Row (type (+))
 
-newtype Method m
-  = Method m
+newtype Method m = Method m
 
-derive instance newtypeMethod ∷ Newtype (Method m) _
+derive instance newtypeMethod :: Newtype (Method m) _
 
-derive instance functorMethod ∷ Functor Method
+derive instance functorMethod :: Functor Method
 
-instance hmapMethod ∷ (HMap f v v') ⇒ HMap f (Method v) (Method v') where
+instance hmapMethod :: (HMap f v v') => HMap f (Method v) (Method v') where
   hmap f (Method v) = Method (hmap f v)
 
-instance hmapWithIndexMethod ∷ (HMapWithIndex f v v') ⇒ HMapWithIndex f (Method v) (Method v') where
+instance hmapWithIndexMethod :: (HMapWithIndex f v v') => HMapWithIndex f (Method v) (Method v') where
   hmapWithIndex f (Method v) = Method (hmapWithIndex f v)
 
 -- instance hmapMethod ∷ (HMap' f v v') ⇒ HMap f (Method v) (Method v') where
@@ -32,10 +31,10 @@ instance hmapWithIndexMethod ∷ (HMapWithIndex f v v') ⇒ HMapWithIndex f (Met
 -- instance hmapWithIndexMethod ∷ (HMapWithIndex' f v v') ⇒ HMapWithIndex f (Method v) (Method v') where
 --   hmapWithIndex f (Method v) = Method (hmapWithIndex' f v)
 -- 
-instance hfoldlMethod ∷ (HFoldl f acc v a) ⇒ HFoldl f acc (Method v) a where
+instance hfoldlMethod :: (HFoldl f acc v a) => HFoldl f acc (Method v) a where
   hfoldl f acc (Method v) = hfoldl f acc v
 
-instance hfoldlWithIndexMethod ∷ (HFoldlWithIndex f acc v a) ⇒ HFoldlWithIndex f acc (Method v) a where
+instance hfoldlWithIndexMethod :: (HFoldlWithIndex f acc v a) => HFoldlWithIndex f acc (Method v) a where
   hfoldlWithIndex f acc (Method v) = hfoldlWithIndex f acc v
 
 instance extendIdentity :: Extend Method where
@@ -44,49 +43,45 @@ instance extendIdentity :: Extend Method where
 instance comonadIdentity :: Comonad Method where
   extract (Method x) = x
 
-type DELETE a methods
-  = ( "DELETE" ∷ a | methods )
+type DELETE a methods = ("DELETE" :: a | methods)
 
-type GET a methods
-  = ( "GET" ∷ a | methods )
+type GET a methods = ("GET" :: a | methods)
 
-type POST a methods
-  = ( "POST" ∷ a | methods )
+type POST a methods = ("POST" :: a | methods)
 
-type PUT a methods
-  = ( "PUT" ∷ a | methods )
+type PUT a methods = ("PUT" :: a | methods)
 
-_delete = Proxy ∷ Proxy "DELETE"
+_delete = Proxy :: Proxy "DELETE"
 
-_get = Proxy ∷ Proxy "GET"
+_get = Proxy :: Proxy "GET"
 
-_post = Proxy ∷ Proxy "POST"
+_post = Proxy :: Proxy "POST"
 
-_put = Proxy ∷ Proxy "PUT"
+_put = Proxy :: Proxy "PUT"
 
-delete ∷ ∀ methods req. req → Method (Variant (DELETE req + methods))
+delete :: forall methods req. req -> Method (Variant (DELETE req + methods))
 delete = Method <<< inj _delete
 
-get ∷ ∀ methods req. req → Method (Variant (GET req + methods))
+get :: forall methods req. req -> Method (Variant (GET req + methods))
 get = Method <<< inj _get
 
-post ∷ ∀ methods req. req → Method (Variant (POST req + methods))
+post :: forall methods req. req -> Method (Variant (POST req + methods))
 post = Method <<< inj _post
 
-put ∷ ∀ methods req. req → Method (Variant (PUT req + methods))
+put :: forall methods req. req -> Method (Variant (PUT req + methods))
 put = Method <<< inj _put
 
-toHTTPMethod ::
-  forall g t103 t85 t94.
-  Method
-    ( Variant
-        ( "DELETE" :: t85
-        , "GET" ∷ g
-        , "POST" :: t103
-        , "PUT" :: t94
-        )
-    ) ->
-  HTTP.Method
+toHTTPMethod
+  :: forall g t103 t85 t94
+   . Method
+       ( Variant
+           ( "DELETE" :: t85
+           , "GET" :: g
+           , "POST" :: t103
+           , "PUT" :: t94
+           )
+       )
+  -> HTTP.Method
 toHTTPMethod (Method v) = convert v
   where
   convert =

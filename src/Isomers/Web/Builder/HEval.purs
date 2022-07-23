@@ -10,20 +10,20 @@ import Type.Prelude (Proxy(..))
 
 data DoNull = DoNull
 
-instance hevalDoNull ∷ (RowToList r rl, Contrib.RowList.Null rl b) ⇒ HEval DoNull ({ | r } → Proxy b) where
-  heval _ _ = Proxy ∷ Proxy b
+instance hevalDoNull :: (RowToList r rl, Contrib.RowList.Null rl b) => HEval DoNull ({ | r } -> Proxy b) where
+  heval _ _ = Proxy :: Proxy b
 
-class IsHJust m (b ∷ Boolean) | m → b
+class IsHJust m (b :: Boolean) | m -> b
 
-instance isHJust ∷ IsHJust (HJust a) True
-else instance isHJustNothing ∷ IsHJust HNothing False
+instance isHJust :: IsHJust (HJust a) True
+else instance isHJustNothing :: IsHJust HNothing False
 
 data DoIsHJust = DoIsHJust
 
-instance hevalDoIsHJust ∷ IsHJust i b ⇒ HEval DoIsHJust (i → Proxy b) where
-  heval _ _ = Proxy ∷ Proxy b
+instance hevalDoIsHJust :: IsHJust i b => HEval DoIsHJust (i -> Proxy b) where
+  heval _ _ = Proxy :: Proxy b
 
 data FromHJust = FromHJust
 
-instance mappingFromHJust ∷ Mapping FromHJust (HJust a) a where
+instance mappingFromHJust :: Mapping FromHJust (HJust a) a where
   mapping _ (HJust a) = a

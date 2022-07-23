@@ -9,16 +9,16 @@ import Data.Newtype (class Newtype)
 import Data.String (joinWith)
 import Data.Tuple (Tuple(..), uncurry)
 import Data.Tuple.Nested (type (/\))
-import JSURI (encodeURIComponent)
 import Isomers.Request.Duplex.Path (Parts) as Path
 import Isomers.Request.Encodings (ClientBody, ClientRequest)
+import JSURI (encodeURIComponent)
 import Network.HTTP.Types (HeaderName)
 import Partial.Unsafe (unsafeCrashWith)
 
 type State =
-  { body ∷ Maybe ClientBody
-  , headers ∷ Array (HeaderName /\ String)
-  , method ∷ HTTP.Method.Method
+  { body :: Maybe ClientBody
+  , headers :: Array (HeaderName /\ String)
+  , method :: HTTP.Method.Method
   , path :: Path.Parts
   }
 
@@ -37,8 +37,7 @@ emptyRequestState =
   , path: emptyUrlParts
   }
 
-newtype Printer
-  = Printer (State -> State)
+newtype Printer = Printer (State -> State)
 
 derive instance newtypePrinter :: Newtype Printer _
 
@@ -77,8 +76,8 @@ printPath { segments, params, hash: hash' } = printSegments segments <> printPar
 
   unsafeEncodeURIComponent s = do
     case encodeURIComponent s of
-      Just s → s
-      Nothing → unsafeCrashWith ("URI encoding failed: " <> s)
+      Just s -> s
+      Nothing -> unsafeCrashWith ("URI encoding failed: " <> s)
 
   printParams [] = ""
 
@@ -95,10 +94,10 @@ printPath { segments, params, hash: hash' } = printSegments segments <> printPar
 prefix :: String -> Printer -> Printer
 prefix s prt = put s <> prt
 
-body ∷ ClientBody → Printer
-body b = Printer _{ body = Just b }
+body :: ClientBody -> Printer
+body b = Printer _ { body = Just b }
 
-run ∷ Printer → ClientRequest
+run :: Printer -> ClientRequest
 run (Printer enc) = do
-  enc emptyRequestState # \st → st { path = printPath st.path }
+  enc emptyRequestState # \st -> st { path = printPath st.path }
 

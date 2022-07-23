@@ -26,13 +26,12 @@ else instance hmapHJust ::
   HMap f (HJust a) (HJust a') where
   hmap f (HJust a) = HJust (mapping f a)
 
-class FromHMaybe b ma c | ma b → c where
-  fromHMaybe ∷ b → ma → c
+class FromHMaybe b ma c | ma b -> c where
+  fromHMaybe :: b -> ma -> c
 
-instance fromMaybeNothing ∷ FromHMaybe a HNothing a where
+instance fromMaybeNothing :: FromHMaybe a HNothing a where
   fromHMaybe a _ = a
 
-instance fromHMaybeJust ∷ FromHMaybe b (HJust a) a where
+instance fromHMaybeJust :: FromHMaybe b (HJust a) a where
   fromHMaybe _ (HJust a) = a
-
 

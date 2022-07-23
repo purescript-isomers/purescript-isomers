@@ -3,8 +3,7 @@ module Isomers.HTTP
   , module ExchangeF
   -- , module Response
   , module Request
-  )
-  where
+  ) where
 
 import Isomers.HTTP.Exchange (Exchange(..)) as Exchange
 import Isomers.HTTP.ExchangeF (ExchangeF(..)) as ExchangeF

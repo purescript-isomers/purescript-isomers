@@ -1,8 +1,5 @@
-
-var JSEngine = require('../Isomers.JSEngine/foreign');
-
 exports.unsafePatch = (function() {
-  if(JSEngine.jsEngine == JSEngine.node) {
+  if(typeof window === 'undefined') {
     var fetch = require('node-fetch');
     global.fetch = fetch;
     global.Headers = fetch.Headers;

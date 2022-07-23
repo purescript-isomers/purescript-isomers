@@ -3,11 +3,9 @@ module Isomers.Contrib.Heterogeneous.List where
 import Heterogeneous.Folding (class Folding, class HFoldl, folding, hfoldl)
 import Heterogeneous.Mapping (class HMap, class Mapping, hmap, mapping)
 
-data HCons a b
-  = HCons a b
+data HCons a b = HCons a b
 
-data HNil
-  = HNil
+data HNil = HNil
 
 infixr 8 HCons as :
 

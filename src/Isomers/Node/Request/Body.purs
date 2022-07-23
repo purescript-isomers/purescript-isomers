@@ -23,51 +23,46 @@ import Type.Prelude (Proxy(..))
 -- | TODO:
 -- | * Catching underlining errors `onError`
 -- | * Hanling errors?
-_buffs ∷ Int → Node.HTTP.Request → Aff (Array Buffer)
-_buffs maxBodySize request = Aff.makeAff \done → do
+_buffs :: Int -> Node.HTTP.Request -> Aff (Array Buffer)
+_buffs maxBodySize request = Aff.makeAff \done -> do
   let
     stream = HTTP.requestAsStream request
-  ref ← Ref.new
+  ref <- Ref.new
     { bufs: []
     , size: 0
     }
-  Stream.onData stream \buf → do
-    accum ← Ref.read ref
-    size ← Buffer.size buf
+  Stream.onData stream \buf -> do
+    accum <- Ref.read ref
+    size <- Buffer.size buf
     let
       size' = accum.size + size
-    if size > maxBodySize
-      then throwError (Effect.Exception.error "Body to large")
-      else
-        Ref.write { bufs: accum.bufs <> [ buf ], size: size' } ref
+    if size > maxBodySize then throwError (Effect.Exception.error "Body to large")
+    else
+      Ref.write { bufs: accum.bufs <> [ buf ], size: size' } ref
   Stream.onEnd stream do
     Ref.read ref >>= _.bufs >>> Right >>> done
   pure nonCanceler
 
-_buff = Proxy ∷ Proxy "buff"
+_buff = Proxy :: Proxy "buff"
 
-type Buff req
-  = ( buff ∷ Fiber Buffer | req )
+type Buff req = (buff :: Fiber Buffer | req)
 
-buff ∷ Int → Node.HTTP.Request → Aff Buffer
+buff :: Int -> Node.HTTP.Request -> Aff Buffer
 buff maxBodySize request =
   _buffs maxBodySize request >>= Buffer.concat >>> liftEffect
 
-_json = Proxy ∷ Proxy "json"
+_json = Proxy :: Proxy "json"
 
-type Json req
-  = ( json ∷ Fiber Argonaut.Json | req )
+type Json req = (json :: Fiber Argonaut.Json | req)
 
+_str = Proxy :: Proxy "str"
 
-_str = Proxy ∷ Proxy "str"
+type Str req = (str :: Fiber String | req)
 
-type Str req
-  = ( str ∷ Fiber String | req )
-
-str ∷ Int → Node.HTTP.Request → Aff String
+str :: Int -> Node.HTTP.Request -> Aff String
 str maxBodySize request =
   buff maxBodySize request >>= Buffer.toString Encoding.UTF8 >>> liftEffect
 
-readers ∷ Int → HTTP.Node.Request → Effect { buff ∷ Fiber Buffer , str ∷ Fiber String }
+readers :: Int -> HTTP.Node.Request -> Effect { buff :: Fiber Buffer, str :: Fiber String }
 readers m r = { buff: _, str: _ } <$> launchSuspendedAff (buff m r) <*> launchSuspendedAff (str m r)
 

@@ -1,7 +1,22 @@
 module Isomers.Request.Accum
   ( module Exports
-  )
-  where
+  ) where
 
-import Isomers.Request.Accum.Type (Accum(..), insert, insertFlipped, insertReq, scalar, hcons, hnil, method, prefix, path, rootDuplex, parse, print, unifyRoute, imapRoute) as Exports
+import Isomers.Request.Accum.Type
+  ( Accum(..)
+  , hcons
+  , hnil
+  , imapRoute
+  , insert
+  , insertFlipped
+  , insertReq
+  , method
+  , parse
+  , path
+  , prefix
+  , print
+  , rootDuplex
+  , scalar
+  , unifyRoute
+  ) as Exports
 

@@ -25,8 +25,8 @@ import Effect.Aff (Aff, Fiber, joinFiber)
 import Effect.Aff.Class (liftAff)
 import Effect.Exception (Error) as Effect.Exception
 import Isomers.Contrib.Data.Variant (tag) as Contrib.Data.Variant
+import Isomers.Response.Encodings (ClientBodyRow, ClientHeaders, ClientResponse) as Encodings
 import Isomers.Response.Encodings (ClientBodyRow, ClientResponse(..))
-import Isomers.Response.Encodings (ClientHeaders, ClientResponse, ClientBodyRow) as Encodings
 import Network.HTTP.Types (HeaderName, hContentType)
 import Network.HTTP.Types (Status) as HTTP.Types
 import Prim.Row (class Cons) as Row
@@ -45,160 +45,158 @@ data ParsingError
 
 -- | We want to be able to alter between body types during parsing
 -- | so it is easier to avoid type level indexing here I think.
-newtype Parser o
-  = Parser
+newtype Parser o = Parser
   (ExceptT ParsingError (StateT (Maybe (Variant Encodings.ClientBodyRow)) (ReaderT Encodings.ClientResponse Aff)) o)
 
-derive instance newtypeParser ∷ Newtype (Parser o) _
+derive instance newtypeParser :: Newtype (Parser o) _
 
-derive newtype instance functorParser ∷ Functor (Parser)
+derive newtype instance functorParser :: Functor (Parser)
 
-derive newtype instance applyParser ∷ Apply (Parser)
+derive newtype instance applyParser :: Apply (Parser)
 
-derive newtype instance applicativeParser ∷ Applicative (Parser)
+derive newtype instance applicativeParser :: Applicative (Parser)
 
-derive newtype instance bindParser ∷ Bind (Parser)
+derive newtype instance bindParser :: Bind (Parser)
 
-derive newtype instance monadParser ∷ Monad (Parser)
+derive newtype instance monadParser :: Monad (Parser)
 
-derive newtype instance monadParserThrow ∷ MonadThrow ParsingError (Parser)
+derive newtype instance monadParserThrow :: MonadThrow ParsingError (Parser)
 
 -- newtype StateT s m a = StateT (s → m (Tuple a s))
-instance lazyParser ∷ Control.Lazy (Parser a) where
-  defer f = Parser $ ExceptT $ StateT \s → do
+instance lazyParser :: Control.Lazy (Parser a) where
+  defer f = Parser $ ExceptT $ StateT \s -> do
     let
       Parser (ExceptT (StateT f')) = f unit
     f' s
 
-_responseParserError = Proxy ∷ Proxy "responseParserError"
+_responseParserError = Proxy :: Proxy "responseParserError"
 
-instance altParser ∷ Alt (Parser) where
+instance altParser :: Alt (Parser) where
   alt (Parser (ExceptT p1)) (Parser (ExceptT p2)) =
     Parser $ ExceptT
       $ do
           p1
             >>= case _ of
-                r@(Right o) → pure r
-                otherwise → p2
+              r@(Right o) -> pure r
+              otherwise -> p2
 
 untouchedResponse :: Parser ClientResponse
 untouchedResponse = unreadBody *> Parser Reader.ask
 
-readBody ∷
-  ∀ a br_ l.
-  Row.Cons l (Fiber a) br_ Encodings.ClientBodyRow ⇒
-  IsSymbol l ⇒
-  Proxy l → Parser a
+readBody
+  :: forall a br_ l
+   . Row.Cons l (Fiber a) br_ Encodings.ClientBodyRow
+  => IsSymbol l
+  => Proxy l
+  -> Parser a
 readBody l =
   Parser
     $ do
-        fb ←
+        fb <-
           State.get
             >>= case _ of
-                Just fb → do
-                  let
-                    Parser err =
-                      throwError
-                        $ Expected (reflectSymbol l)
-                        $ (Contrib.Data.Variant.tag fb)
-                  Variant.on l pure (Variant.default err) fb
-                Nothing →
-                  Reader.ask
-                    >>= \(ClientResponse { body: b }) → do
-                        let
-                          fb = Record.get l b
-                        State.put (Just (Variant.inj l fb))
-                        pure fb
+              Just fb -> do
+                let
+                  Parser err =
+                    throwError
+                      $ Expected (reflectSymbol l)
+                      $ (Contrib.Data.Variant.tag fb)
+                Variant.on l pure (Variant.default err) fb
+              Nothing ->
+                Reader.ask
+                  >>= \(ClientResponse { body: b }) -> do
+                    let
+                      fb = Record.get l b
+                    State.put (Just (Variant.inj l fb))
+                    pure fb
         liftAff $ joinFiber fb
 
-unreadBody ∷ Parser { | ClientBodyRow }
+unreadBody :: Parser { | ClientBodyRow }
 unreadBody = Parser $ do
   State.get >>= case _ of
-    Just fb → throwError $ Expected "unread body" $ (Contrib.Data.Variant.tag fb)
-    Nothing → do
-      Reader.ask >>= \(ClientResponse { body }) → pure body
+    Just fb -> throwError $ Expected "unread body" $ (Contrib.Data.Variant.tag fb)
+    Nothing -> do
+      Reader.ask >>= \(ClientResponse { body }) -> pure body
 
-arrayBuffer ∷ Parser ArrayBuffer
-arrayBuffer = readBody (Proxy ∷ Proxy "arrayBuffer")
+arrayBuffer :: Parser ArrayBuffer
+arrayBuffer = readBody (Proxy :: Proxy "arrayBuffer")
 
-json ∷ Parser Json
-json = readBody (Proxy ∷ Proxy "json")
+json :: Parser Json
+json = readBody (Proxy :: Proxy "json")
 
-blob ∷ Parser Web.File.Blob
-blob = readBody (Proxy ∷ Proxy "blob")
+blob :: Parser Web.File.Blob
+blob = readBody (Proxy :: Proxy "blob")
 
-string ∷ Parser String
-string = readBody (Proxy ∷ Proxy "string")
+string :: Parser String
+string = readBody (Proxy :: Proxy "string")
 
-status ∷ Parser HTTP.Types.Status
+status :: Parser HTTP.Types.Status
 status = Parser $ Reader.asks (_.status <<< un ClientResponse)
 
-redirected ∷ Parser Boolean
+redirected :: Parser Boolean
 redirected = Parser $ Reader.asks (_.redirected <<< un ClientResponse)
 
-url ∷ Parser String
+url :: Parser String
 url = Parser $ Reader.asks (_.url <<< un ClientResponse)
 
-statusEquals ∷ HTTP.Types.Status → Parser Unit
+statusEquals :: HTTP.Types.Status -> Parser Unit
 statusEquals { code: expected } =
   status
-    >>= \{ code: got } →
-        when (expected /= got) do
-          throwError $ Expected ("Status code: " <> show expected) (show got)
+    >>= \{ code: got } ->
+      when (expected /= got) do
+        throwError $ Expected ("Status code: " <> show expected) (show got)
 
-headers ∷ Parser Encodings.ClientHeaders
+headers :: Parser Encodings.ClientHeaders
 headers = Parser $ Reader.asks (_.headers <<< un ClientResponse)
 
-header ∷ HeaderName → Parser (Maybe String)
+header :: HeaderName -> Parser (Maybe String)
 header hn = headers <#> Map.lookup hn
 
-reqHeader ∷ HeaderName → Parser String
+reqHeader :: HeaderName -> Parser String
 reqHeader hn =
   header hn
     >>= case _ of
-        Nothing → throwError (HeaderMissing hn)
-        Just v → pure v
+      Nothing -> throwError (HeaderMissing hn)
+      Just v -> pure v
 
-run ∷ ∀ a. Parser a → Encodings.ClientResponse → Aff (Either ParsingError a)
+run :: forall a. Parser a -> Encodings.ClientResponse -> Aff (Either ParsingError a)
 run (Parser prs) i = go `catchError` (JSError >>> Left >>> pure)
   where
   go = flip runReaderT i <<< flip evalStateT Nothing <<< runExceptT $ prs
 
-fromString ∷ ∀ a b. (a → String) → (a → Either String b) → Parser a → Parser b
+fromString :: forall a b. (a -> String) -> (a -> Either String b) -> Parser a -> Parser b
 fromString print decode p = do
-  a ← p
+  a <- p
   case decode a of
-    Left err → throwError $ Expected err (print a)
-    Right b → pure b
+    Left err -> throwError $ Expected err (print a)
+    Right b -> pure b
 
-fromJson ∷ ∀ b. (Json → Either String b) → Parser b
+fromJson :: forall b. (Json -> Either String b) -> Parser b
 fromJson decode = do
-  json >>= \j → case decode j  of
-    Left err → throwError $ BodyParsingError err
-    Right b → pure b
+  json >>= \j -> case decode j of
+    Left err -> throwError $ BodyParsingError err
+    Right b -> pure b
 
-withContentType ∷ ∀ a. String → Parser a → Parser a
+withContentType :: forall a. String -> Parser a -> Parser a
 withContentType expected prs = do
   ( reqHeader hContentType >>= String.split (String.Pattern ";") >>> Array.uncons >>> case _ of
-      Just { head: got } → do
-        if (expected /= got)
-          then fail got
-          else prs
-      Nothing → fail ""
+      Just { head: got } -> do
+        if (expected /= got) then fail got
+        else prs
+      Nothing -> fail ""
   )
   where
-    fail got = throwError (Expected (printHeaderName hContentType <> ":" <> expected) got)
+  fail got = throwError (Expected (printHeaderName hContentType <> ":" <> expected) got)
 
-printHeaderName ∷ CaseInsensitiveString → String
+printHeaderName :: CaseInsensitiveString -> String
 printHeaderName = un CaseInsensitiveString
 
-withHeaderPassing ∷ ∀ a. HeaderName → (String → Boolean) → String → Parser a → Parser a
+withHeaderPassing :: forall a. HeaderName -> (String -> Boolean) -> String -> Parser a -> Parser a
 withHeaderPassing hn check err prs =
-  reqHeader hn >>= \got → do
-      if check got
-        then throwError (Expected (printHeaderName hn <> ":" <> err) got)
-        else prs
+  reqHeader hn >>= \got -> do
+    if check got then throwError (Expected (printHeaderName hn <> ":" <> err) got)
+    else prs
 
-withHeaderValue ∷ ∀ a. CaseInsensitiveString → String → Parser a → Parser a
+withHeaderValue :: forall a. CaseInsensitiveString -> String -> Parser a -> Parser a
 withHeaderValue hn expected prs = withHeaderPassing hn (eq expected) expected prs
 

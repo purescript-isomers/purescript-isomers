@@ -32,12 +32,12 @@ import Unsafe.Coerce (unsafeCoerce)
 --   in
 --     c \s _ → isJust (String.stripPrefix (String.Pattern $ reflectSymbol p) (reflectSymbol s))
 
-tag ∷ ∀ v. Variant v → String
+tag :: forall v. Variant v -> String
 tag v = do
   let
     Unvariant c = unvariant v
-  c \s _ → reflectSymbol s
+  c \s _ -> reflectSymbol s
 
-append ∷ ∀ a l v v'. Row.Lacks l v ⇒ Row.Cons l a v v' ⇒ Proxy l → Variant v → Variant v'
+append :: forall a l v v'. Row.Lacks l v => Row.Cons l a v v' => Proxy l -> Variant v -> Variant v'
 append _ v = unsafeCoerce v
 

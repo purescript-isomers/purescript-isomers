@@ -16,35 +16,35 @@ import Type.Eval.RowList (FromRow, ToRow)
 import Type.Prelude (class TypeEquals, Proxy(..))
 
 -- | Iterate over symbols a build a row with a give type.
-foreign import data HomogeneousRowListStep ∷ ∀ a. a → Symbol → TypeExpr (RowList a) → TypeExpr (RowList a)
+foreign import data HomogeneousRowListStep :: forall a. a -> Symbol -> TypeExpr (RowList a) -> TypeExpr (RowList a)
 
-instance evalHomogeneousRowListStep ∷
-  (Eval te t) ⇒
+instance evalHomogeneousRowListStep ::
+  ( Eval te t
+  ) =>
   Eval (HomogeneousRowListStep a l te) (RL.Cons l a t)
 
-type HomogeneousRowList a
-  = Foldr (HomogeneousRowListStep a) NilExpr
+type HomogeneousRowList a = Foldr (HomogeneousRowListStep a) NilExpr
 
-type HomogeneousRow a
-  = ToRow <<< HomogeneousRowList a
+type HomogeneousRow a = ToRow <<< HomogeneousRowList a
 
 -- | Move these to `Contrib.Type.Eval.HList`
 -- | We need a lifted version of `Heterogeneous.HList` which is always just
 -- | a `Type` or `Type → Type → Type`. But we want to lift it to kind
 -- | `HList k` so we can process it using `typelevel-eval`.
 data HList a
-foreign import data HCons' ∷ ∀ t. t → HList t → HList t
-foreign import data HNil' ∷ ∀ k. HList k
 
-foreign import data FromHListType ∷ Type → TypeExpr (HList Type)
+foreign import data HCons' :: forall t. t -> HList t -> HList t
+foreign import data HNil' :: forall k. HList k
 
-instance Eval (FromHListType t) t' ⇒ Eval (FromHListType (HCons h t)) (HCons' h t')
+foreign import data FromHListType :: Type -> TypeExpr (HList Type)
+
+instance Eval (FromHListType t) t' => Eval (FromHListType (HCons h t)) (HCons' h t')
 else instance Eval (FromHListType HNil) HNil'
 
-class LiftHList ∷ ∀ k. Type → HList k → Constraint
-class LiftHList hlist hlist' | hlist → hlist'
+class LiftHList :: forall k. Type -> HList k -> Constraint
+class LiftHList hlist hlist' | hlist -> hlist'
 
-instance (LiftHList t t') ⇒ LiftHList (HCons h t) (HCons' h t')
+instance (LiftHList t t') => LiftHList (HCons h t) (HCons' h t')
 instance LiftHList HNil HNil'
 
 instance
@@ -82,5 +82,4 @@ else instance
   HFoldl f acc (HListProxy HNil') acc
   where
   hfoldl _ acc _ = acc
-
 

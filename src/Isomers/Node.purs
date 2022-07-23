@@ -1,7 +1,6 @@
 module Isomers.Node
   ( module Exports
-  )
-  where
+  ) where
 
 import Isomers.Node.Types (SimpleBody) as Exports
 

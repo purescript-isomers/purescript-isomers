@@ -1,7 +1,6 @@
 module Isomers.Request
   ( module Exports
-  )
-  where
+  ) where
 
 import Isomers.Request.Accum.Type (Accum(..)) as Exports
 import Isomers.Request.Duplex (body) as Exports

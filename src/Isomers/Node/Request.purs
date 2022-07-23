@@ -16,16 +16,18 @@ import Isomers.Node.Types (SimpleBody)
 import Isomers.Request.Encodings (ServerRequest) as Request.Encodings
 import Node.HTTP (Request, httpVersion, requestHeaders, requestMethod, requestURL) as Node.HTTP
 
-fromNodeRequest ∷ Int → Node.HTTP.Request → Request.Encodings.ServerRequest SimpleBody
+fromNodeRequest :: Int -> Node.HTTP.Request -> Request.Encodings.ServerRequest SimpleBody
 fromNodeRequest maxBodySize request = do
   let
     body =
       { buff: _
       , str: _
       }
-      <$> Aff.launchSuspendedAff (Body.buff maxBodySize request)
-      <*> Aff.launchSuspendedAff (Body.str maxBodySize request)
-    headers = defer \_ → Map.fromFoldable <<< map (lmap CaseInsensitiveString) <<< (Object.toUnfoldable ∷ Object String → Array (String /\ String)) $ Node.HTTP.requestHeaders request
+        <$> Aff.launchSuspendedAff (Body.buff maxBodySize request)
+        <*> Aff.launchSuspendedAff (Body.str maxBodySize request)
+    headers = defer \_ ->
+      Map.fromFoldable <<< map (lmap CaseInsensitiveString) <<<
+        (Object.toUnfoldable :: Object String -> Array (String /\ String)) $ Node.HTTP.requestHeaders request
 
   { body: Left body
   , headers
@@ -33,5 +35,4 @@ fromNodeRequest maxBodySize request = do
   , method: Node.HTTP.requestMethod request
   , path: Node.HTTP.requestURL request
   }
-
 

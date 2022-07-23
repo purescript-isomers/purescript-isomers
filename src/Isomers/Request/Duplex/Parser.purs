@@ -39,13 +39,13 @@ import Type.Prelude (class IsSymbol, Proxy, reflectSymbol)
 -- | This quick and dirty `body` representation which was
 -- | done to simplify generic spec processing is going to change.
 -- | Please read some suggestions / details in `Isomers/Request/Encodings.purs`.
-type State (body ∷ Row Type)
-  = { body ∷ Either (Effect { | body }) (Maybe (Variant body))
-    , headers ∷ Lazy (Map HeaderName String)
-    , httpVersion ∷ String
-    , method :: String
-    , path :: Path.Parts
-    }
+type State (body :: Row Type) =
+  { body :: Either (Effect { | body }) (Maybe (Variant body))
+  , headers :: Lazy (Map HeaderName String)
+  , httpVersion :: String
+  , method :: String
+  , path :: Path.Parts
+  }
 
 data Result body a
   = Fail ParsingError
@@ -88,8 +88,8 @@ instance applyParser :: Apply (Parser body) where
     Chomp \state ->
       runParser state fx
         >>= case _ of
-            Fail err -> pure $ Fail err
-            Success state' f -> map f <$> runParser state' x
+          Fail err -> pure $ Fail err
+          Success state' f -> map f <$> runParser state' x
 
 instance applicativeParser :: Applicative (Parser body) where
   pure a = Chomp $ pure <<< flip Success a
@@ -111,37 +111,37 @@ instance lazyParser :: Lazy (Parser body a) where
     where
     parser = Z.defer k
 
-altAppend ::
-  forall a body.
-  NonEmptyArray (Parser body a) ->
-  NonEmptyArray (Parser body a) ->
-  NonEmptyArray (Parser body a)
+altAppend
+  :: forall a body
+   . NonEmptyArray (Parser body a)
+  -> NonEmptyArray (Parser body a)
+  -> NonEmptyArray (Parser body a)
 altAppend ls rs
   | Prefix pre a <- NEA.last ls
   , Prefix pre' b <- NEA.head rs
   , pre == pre' =
-    let
-      rs' = NEA.cons' (Prefix pre (a <|> b)) (NEA.tail rs)
-    in
-      case NEA.fromArray (NEA.init ls) of
-        Just ls' -> ls' `altAppend` rs'
-        Nothing -> rs'
+      let
+        rs' = NEA.cons' (Prefix pre (a <|> b)) (NEA.tail rs)
+      in
+        case NEA.fromArray (NEA.init ls) of
+          Just ls' -> ls' `altAppend` rs'
+          Nothing -> rs'
   | Method m a <- NEA.last ls
   , Method m' b <- NEA.head rs
   , m == m' =
-    let
-      rs' = NEA.cons' (Method m (a <|> b)) (NEA.tail rs)
-    in
-      case NEA.fromArray (NEA.init ls) of
-        Just ls' -> ls' `altAppend` rs'
-        Nothing -> rs'
+      let
+        rs' = NEA.cons' (Method m (a <|> b)) (NEA.tail rs)
+      in
+        case NEA.fromArray (NEA.init ls) of
+          Just ls' -> ls' `altAppend` rs'
+          Nothing -> rs'
   | otherwise = ls <> rs
 
-altCons ::
-  forall a body.
-  Parser body a ->
-  NonEmptyArray (Parser body a) ->
-  NonEmptyArray (Parser body a)
+altCons
+  :: forall a body
+   . Parser body a
+  -> NonEmptyArray (Parser body a)
+  -> NonEmptyArray (Parser body a)
 altCons (Prefix pre a) rs
   | Prefix pre' b <- NEA.head rs
   , pre == pre' = NEA.cons' (Prefix pre (a <|> b)) (NEA.tail rs)
@@ -152,11 +152,11 @@ altCons (Method m a) rs
 
 altCons a rs = NEA.cons a rs
 
-altSnoc ::
-  forall a body.
-  NonEmptyArray (Parser body a) ->
-  Parser body a ->
-  NonEmptyArray (Parser body a)
+altSnoc
+  :: forall a body
+   . NonEmptyArray (Parser body a)
+  -> Parser body a
+  -> NonEmptyArray (Parser body a)
 altSnoc ls (Prefix pre b)
   | Prefix pre' a <- NEA.last ls
   , pre == pre' = NEA.snoc' (NEA.init ls) (Prefix pre (a <|> b))
@@ -167,7 +167,7 @@ altSnoc ls (Method m b)
 
 altSnoc ls b = NEA.snoc ls b
 
-chompPrefix :: ∀ body. String -> State body -> Result body Unit
+chompPrefix :: forall body. String -> State body -> Result body Unit
 chompPrefix pre state = case Array.head state.path.segments of
   Just pre'
     | pre == pre' -> Success (state { path { segments = Array.drop 1 state.path.segments } }) unit
@@ -183,30 +183,30 @@ method = Method <<< HTTP.Method.print <<< Left
 body :: forall a body body_ l. IsSymbol l => Row.Cons l (Fiber a) body_ body => Proxy l -> Parser body a
 body l =
   Chomp \state -> case state.body of
-    Left lbr → do
-      br ← liftEffect lbr
+    Left lbr -> do
+      br <- liftEffect lbr
       let
         fb = Record.get l br
-      b ← joinFiber fb
+      b <- joinFiber fb
       let
         vb = Variant.inj l fb
 
         state' = state { body = Right (Just vb) }
       pure $ Success state' b
-    Right (Just b) →
+    Right (Just b) ->
       Variant.on
         l
         (map (Success state) <<< joinFiber)
         (Variant.default (pure $ Fail $ Expected (reflectSymbol l) (Contrib.Data.Variant.tag b)))
         b
-    Right Nothing → pure $ Fail $ Expected (reflectSymbol l) ("Empty body")
+    Right Nothing -> pure $ Fail $ Expected (reflectSymbol l) ("Empty body")
 
 -- | TODO: We should be able to constraint the value of the body
 -- | to empty when we provide some common layer for body parsing
 -- | which can be considered portable like `String` ;-)
 -- | Then we can provide this helper.
 -- emptyBody = ...
-take :: ∀ m. Parser m String
+take :: forall m. Parser m String
 take =
   Chomp \state ->
     pure
@@ -214,7 +214,7 @@ take =
           Just { head, tail } -> Success (state { path { segments = tail } }) head
           _ -> Fail EndOfPath
 
-param :: ∀ m. String -> Parser m String
+param :: forall m. String -> Parser m String
 param key =
   Chomp \state ->
     pure
@@ -222,7 +222,7 @@ param key =
           Just a -> Success state a
           _ -> Fail $ MissingParam key
 
-header :: ∀ body. HeaderName -> Parser body String
+header :: forall body. HeaderName -> Parser body String
 header name =
   Chomp \state ->
     pure
@@ -230,7 +230,7 @@ header name =
           Just a -> Success state a
           _ -> Fail $ MissingHeader name
 
-flag :: ∀ m. String -> Parser m Boolean
+flag :: forall m. String -> Parser m Boolean
 flag = default false <<< map (const true) <<< param
 
 many1 :: forall body t a. Alt t => Applicative t => Parser body a -> Parser body (t a)
@@ -240,23 +240,23 @@ many1 p = Chomp go
   go state =
     runParser state p
       >>= case _ of
-          Fail err -> pure $ Fail err
-          Success state' a -> go' state' (pure a)
+        Fail err -> pure $ Fail err
+        Success state' a -> go' state' (pure a)
 
   go' :: State body -> t a -> Aff (Result body (t a))
   go' state xs =
     runParser state p
       >>= case _ of
-          Fail _ -> pure $ Success state xs
-          Success state' a -> go' state' (xs <|> pure a)
+        Fail _ -> pure $ Success state xs
+        Success state' a -> go' state' (xs <|> pure a)
 
 many :: forall t a body. Alternative t => Parser body a -> Parser body (t a)
 many p = many1 p <|> pure empty
 
-rest :: ∀ b. Parser b (Array String)
+rest :: forall b. Parser b (Array String)
 rest = Chomp \state -> pure $ Success (state { path { segments = [] } }) state.path.segments
 
-params :: ∀ b. Parser b Params
+params :: forall b. Parser b Params
 params = Chomp \state -> pure $ Success state state.path.params
 
 default :: forall a body. a -> Parser body a -> Parser body a
@@ -265,25 +265,25 @@ default = flip (<|>) <<< pure
 optional :: forall a body. Parser body a -> Parser body (Maybe a)
 optional = default Nothing <<< map Just
 
-as :: forall a b body. { show ∷ a -> String, parse ∷ a -> Either String b } -> Parser body a -> Parser body b
+as :: forall a b body. { show :: a -> String, parse :: a -> Either String b } -> Parser body a -> Parser body b
 as { parse, show } p =
   Chomp \state ->
     runParser state p
-      >>= \r →
-          pure
-            $ case r of
-                Fail err -> Fail err
-                Success state' a -> case parse a of
-                  Left err -> Fail $ Expected err (show a)
-                  Right b -> Success state' b
+      >>= \r ->
+        pure
+          $ case r of
+              Fail err -> Fail err
+              Success state' a -> case parse a of
+                Left err -> Fail $ Expected err (show a)
+                Right b -> Success state' b
 
 int :: String -> Either String Int
 int = maybe (Left "Int") Right <<< Int.fromString
 
-hash :: ∀ body. Parser body String
+hash :: forall body. Parser body String
 hash = Chomp \state -> pure $ Success state state.path.hash
 
-end :: ∀ body. Parser body Unit
+end :: forall body. Parser body Unit
 end =
   Chomp \state ->
     pure
@@ -301,7 +301,7 @@ runParser :: forall a body. State body -> Parser body a -> Aff (Result body a)
 runParser = go
   where
   go state = case _ of
-    Alt xs -> foldl (\acc p → acc >>= goAlt state p) (pure $ Fail EndOfPath) xs
+    Alt xs -> foldl (\acc p -> acc >>= goAlt state p) (pure $ Fail EndOfPath) xs
     Chomp f -> f state
     Method m p ->
       if state.method /= m then
@@ -320,7 +320,8 @@ run :: forall a body. Parser body a -> ServerRequest body -> Aff (Either Parsing
 run p = do
   parsePath' >>> flip runParser p
     <#> map case _ of
-        Fail err -> Left err
-        Success _ res -> Right res
+      Fail err -> Left err
+      Success _ res -> Right res
   where
-  parsePath' { body: b, headers, httpVersion, method: m, path } = { body: b, headers, httpVersion, method: m, path: _ } $ Path.parse path
+  parsePath' { body: b, headers, httpVersion, method: m, path } = { body: b, headers, httpVersion, method: m, path: _ }
+    $ Path.parse path

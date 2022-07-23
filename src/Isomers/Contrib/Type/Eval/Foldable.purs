@@ -4,11 +4,12 @@ import Isomers.Contrib.Heterogeneous.List (HCons, HNil)
 import Isomers.Contrib.Type.Data.Maybe (Just', MProxy, Nothing')
 import Prim.RowList (Cons, Nil) as RL
 import Type.Eval (class Eval, TypeExpr)
-import Type.Eval.Boolean (Bool, TrueExpr, FalseExpr)
+import Type.Eval.Boolean (Bool, FalseExpr, TrueExpr)
 import Type.Eval.Foldable (Foldr, FoldrWithIndex)
 import Type.Prelude (Proxy)
 
-foreign import data SomeWithIndexStep ∷ ∀ a i. (i → a → TypeExpr Boolean) → i → a → TypeExpr Boolean → TypeExpr Boolean
+foreign import data SomeWithIndexStep
+  :: forall a i. (i -> a -> TypeExpr Boolean) -> i -> a -> TypeExpr Boolean -> TypeExpr Boolean
 
 instance someWithIndexFold ::
   ( Eval (fn idx a) a'
@@ -21,9 +22,6 @@ type SomeWithIndex f =
   FoldrWithIndex (SomeWithIndexStep f) FalseExpr
 
 -- data HList a
-
-
-
 
 -- -- | Local Foldr' which fallsback to the original one
 -- -- | but allows us to add more instances.
@@ -64,7 +62,7 @@ type SomeWithIndex f =
 -- | A strict version of foldl...
 -- | Just a quick signature reminder ;-)
 -- | foldl' ∷ (acc → b → acc) → acc → f b → acc
-foreign import data Foldl' ∷ ∀ a acc f. (acc → a → TypeExpr acc) → acc → f a → TypeExpr acc
+foreign import data Foldl' :: forall a acc f. (acc -> a -> TypeExpr acc) -> acc -> f a -> TypeExpr acc
 
 instance foldlRowListCons' ::
   ( Eval (fn acc a) acc'

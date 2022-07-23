@@ -17,36 +17,34 @@ import Type.Prelude (class IsSymbol, Proxy(..), reflectSymbol)
 type RawDuplex ct i o = Duplex ct (RawServer i) (RawClient o)
 type RawDuplex' ct a = RawDuplex ct a a
 
-withContentType ∷ ∀ ct i o. IsSymbol ct ⇒ RawDuplex ct i o → RawDuplex ct i o
+withContentType :: forall ct i o. IsSymbol ct => RawDuplex ct i o -> RawDuplex ct i o
 withContentType (Duplex prt prs) = Duplex prt' prs'
   where
-  ct = reflectSymbol (Proxy ∷ Proxy ct)
+  ct = reflectSymbol (Proxy :: Proxy ct)
   prt' i = Printer.reqHeader hContentType ct <> prt i
   prs' = Parser.withContentType ct prs
-
 
 string :: RawDuplex' TextMime String
 string = withContentType $ Duplex prt prs
   where
-    prs = do
-      status ← Parser.status
-      body ← Parser.readBody _string
-      headers ← Parser.headers
-      pure $ RawClient { body, headers, status }
+  prs = do
+    status <- Parser.status
+    body <- Parser.readBody _string
+    headers <- Parser.headers
+    pure $ RawClient { body, headers, status }
 
-    prt (RawServer { body, headers, status }) =
-        foldMap (uncurry Printer.reqHeader) headers <> Printer.status status <> Printer.string body
-
+  prt (RawServer { body, headers, status }) =
+    foldMap (uncurry Printer.reqHeader) headers <> Printer.status status <> Printer.string body
 
 html :: RawDuplex' HtmlMime HtmlString
 html = withContentType $ Duplex prt prs
   where
-    prs = do
-      status ← Parser.status
-      body ← Parser.readBody _string
-      headers ← Parser.headers
-      pure $ RawClient { body: HtmlString body, headers, status }
+  prs = do
+    status <- Parser.status
+    body <- Parser.readBody _string
+    headers <- Parser.headers
+    pure $ RawClient { body: HtmlString body, headers, status }
 
-    prt (RawServer { body: HtmlString body, headers, status }) =
-        foldMap (uncurry Printer.reqHeader) headers <> Printer.status status <> Printer.string body
+  prt (RawServer { body: HtmlString body, headers, status }) =
+    foldMap (uncurry Printer.reqHeader) headers <> Printer.status status <> Printer.string body
 

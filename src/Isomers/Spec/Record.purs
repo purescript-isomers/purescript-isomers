@@ -7,22 +7,22 @@ import Heterogeneous.Mapping (class HMap, hmap)
 import Isomers.Contrib.Type.Eval.Foldable (Foldl')
 import Isomers.Request.Accum.Generic (class HFoldlAccumVariant)
 import Isomers.Request.Accum.Generic (variant) as Request.Accum.Generic
-import Isomers.Spec.Types (AccumSpec(..), GetResponse, GetRequest, _GetRequest, _GetResponse)
+import Isomers.Spec.Types (AccumSpec(..), GetRequest, GetResponse, _GetRequest, _GetResponse)
 import Type.Eval (class Eval, TypeExpr)
 import Type.Eval.Function (type (<<<))
 import Type.Eval.RowList (FromRow)
 import Type.Prelude (class TypeEquals, Proxy)
 
-foreign import data UnifyBodyStep ∷ Type → Type → TypeExpr Type
+foreign import data UnifyBodyStep :: Type -> Type -> TypeExpr Type
 
-instance evalSubspecBodyUnit ∷
+instance evalSubspecBodyUnit ::
   Eval (UnifyBodyStep Unit (AccumSpec body route ireq oreq res)) (Proxy body)
-else instance evalSubspecBodyStep ∷
-  (TypeEquals (Proxy body) (Proxy body')) ⇒
+else instance evalSubspecBodyStep ::
+  ( TypeEquals (Proxy body) (Proxy body')
+  ) =>
   Eval (UnifyBodyStep (Proxy body) (AccumSpec body' route ireq oreq res)) (Proxy body)
 
-type UnifyBody row
-  = (Foldl' UnifyBodyStep Unit <<< FromRow) row
+type UnifyBody row = (Foldl' UnifyBodyStep Unit <<< FromRow) row
 
 type PrefixRoutes = Boolean
 
@@ -39,18 +39,18 @@ type PrefixRoutes = Boolean
 -- |
 -- | * Map over an original record to extract only response duplexes
 -- | which is a value which we want to pass to the final spec record.
-accumSpec ∷
-  ∀ rb rec reqs res route ivreq ovreq.
-  Eval (UnifyBody rec) (Proxy rb) ⇒
-  HMap GetResponse { | rec } { | res } ⇒
-  HMap GetRequest { | rec } { | reqs } ⇒
-  HFoldlAccumVariant rb route { | reqs } ivreq ovreq ⇒
-  PrefixRoutes →
-  { | rec } →
-  AccumSpec rb route (Variant ivreq) (Variant ovreq) { | res }
+accumSpec
+  :: forall rb rec reqs res route ivreq ovreq
+   . Eval (UnifyBody rec) (Proxy rb)
+  => HMap GetResponse { | rec } { | res }
+  => HMap GetRequest { | rec } { | reqs }
+  => HFoldlAccumVariant rb route { | reqs } ivreq ovreq
+  => PrefixRoutes
+  -> { | rec }
+  -> AccumSpec rb route (Variant ivreq) (Variant ovreq) { | res }
 accumSpec b r = do
   let
-    reqs ∷ { | reqs }
+    reqs :: { | reqs }
     reqs = hmap _GetRequest r
   AccumSpec
     { response: hmap _GetResponse r

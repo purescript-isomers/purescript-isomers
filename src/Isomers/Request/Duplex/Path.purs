@@ -1,6 +1,7 @@
 module Isomers.Request.Duplex.Path where
 
 import Prelude
+
 import Data.Bifunctor (bimap, lmap)
 import Data.Maybe (Maybe(..))
 import Data.String (Pattern(..), drop, indexOf, length, split, take) as String
@@ -9,14 +10,13 @@ import Data.Tuple.Nested (type (/\))
 import JSURI (decodeURIComponent)
 import Partial.Unsafe (unsafeCrashWith)
 
-type Params
-  = Array (String /\ String)
+type Params = Array (String /\ String)
 
-type Parts
-  = { segments :: Array String
-    , params :: Params
-    , hash :: String
-    }
+type Parts =
+  { segments :: Array String
+  , params :: Params
+  , hash :: String
+  }
 
 parse :: String -> Parts
 parse =
@@ -31,13 +31,13 @@ parse =
   splitSegments =
     splitNonEmpty (String.Pattern "/")
       >>> case _ of
-          [ "", "" ] -> [ "" ]
-          xs -> map unsafeDecodeURIComponent xs
+        [ "", "" ] -> [ "" ]
+        xs -> map unsafeDecodeURIComponent xs
 
   unsafeDecodeURIComponent s = do
     case decodeURIComponent s of
-      Just s → s
-      Nothing → unsafeCrashWith ("URI decoding failed: " <> s)
+      Just s -> s
+      Nothing -> unsafeCrashWith ("URI decoding failed: " <> s)
 
   splitParams = splitNonEmpty (String.Pattern "&") >>> map splitKeyValue
 

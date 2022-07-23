@@ -58,14 +58,14 @@ import Isomers.Web (toSpec)
 import Isomers.Web.Builder (Rendered(..))
 import Isomers.Web.Builder (webSpec)
 import Isomers.Web.Client.Render (ContractRequest(..), RenderStep(..))
-import Isomers.Web.Client.Router (webRouter, webRequest) as Web.Client.Router
+import Isomers.Web.Client.Router (webRequest, webRouter) as Web.Client.Router
 import Isomers.Web.Server (renderToApi)
 import Isomers.Web.Types (WebSpec(..))
 import JS.Unsafe.Stringify (unsafeStringify)
 import Network.HTTP.Types (internalServerError500, ok200)
 import Node.Stream (onClose)
-import Polyform.Batteries.Json.Duals ((:=))
 import Polyform.Batteries.Json.Duals (Pure, arrayOf, int, number, object, string) as Json.Duals
+import Polyform.Batteries.Json.Duals ((:=))
 import Polyform.Dual (Dual(..))
 import Polyform.Dual.Record (build) as Dual.Record
 import Polyform.Reporter (R)
@@ -77,17 +77,18 @@ import Type.Prelude (Proxy(..), Proxy(..))
 
 responseDuplex = responseDual d
   where
-  d ∷ Json.Duals.Pure _ { a ∷ Int, b ∷ String, method ∷ String }
+  d :: Json.Duals.Pure _ { a :: Int, b :: String, method :: String }
   d = Json.Duals.object >>> rec
     where
     rec =
       Dual.Record.build
-        $ (Proxy ∷ Proxy "a")
-        := Json.Duals.int
-        <<< (Proxy ∷ Proxy "b")
-        := Json.Duals.string
-        <<< (Proxy ∷ Proxy "method")
-        := Json.Duals.string
+        $
+          (Proxy :: Proxy "a")
+            := Json.Duals.int
+            <<< (Proxy :: Proxy "b")
+              := Json.Duals.string
+            <<< (Proxy :: Proxy "method")
+              := Json.Duals.string
 
 responseDual d = Response.Okayish.Duplexes.asJson ser prs
   where
@@ -95,21 +96,27 @@ responseDual d = Response.Okayish.Duplexes.asJson ser prs
 
   prs = lmap unsafeStringify <<< un V <<< Dual.Pure.runValidator d
 
-newtype HTML
-  = HTML String
+newtype HTML = HTML String
 
 get view = Method { "GET": view }
 
 htmlResponse (_ /\ (Exchange _ (Just (Right res)))) =
   ( Variant.on _ok
-      ( \r →
+      ( \r ->
           RawServer
             { status: ok200
             , headers: mempty
             , body: HtmlString $ "<h1>" <> unsafeStringify r <> "</h1>"
             }
       )
-      (Variant.default (RawServer { status: internalServerError500, headers: mempty, body: HtmlString $ "<h1> I wasn't able to handle the resposnse.. </h1>" }))
+      ( Variant.default
+          ( RawServer
+              { status: internalServerError500
+              , headers: mempty
+              , body: HtmlString $ "<h1> I wasn't able to handle the resposnse.. </h1>"
+              }
+          )
+      )
   )
     <<< Okayish.toVariant
     $ res
@@ -123,13 +130,14 @@ htmlResponse _ =
 
 render = htmlResponse
 
-testString = Web.Builder.insert (Proxy ∷ Proxy "test") (Request.Duplex.string Request.Duplex.segment)
+testString = Web.Builder.insert (Proxy :: Proxy "test") (Request.Duplex.string Request.Duplex.segment)
 
 ---------------------------------------------
 z :: forall t1 t4. Accum t4 t1 t1 t1
 z = Accum (pure identity) identity
 
-bodyString = (Request.Duplex.body (Proxy ∷ Proxy "str") (const mempty)) ∷ Request.Duplex (str ∷ Fiber String) Int String
+bodyString =
+  (Request.Duplex.body (Proxy :: Proxy "str") (const mempty)) :: Request.Duplex (str :: Fiber String) Int String
 
 -- type X ∷ HList Symbol
 -- type X = HNil'
@@ -140,11 +148,10 @@ bodyString = (Request.Duplex.body (Proxy ∷ Proxy "str") (const mempty)) ∷ Re
 -- type X'' ∷ HList Symbol
 -- type X'' = HCons' "test" HNil'
 
-
 shop =
   Spec.rootAccumSpec
     $ Spec.accumSpec Spec.BuilderStep
-        { x: withBody (Proxy ∷ Proxy "payload") bodyString /\ responseDuplex
+        { x: withBody (Proxy :: Proxy "payload") bodyString /\ responseDuplex
         , y: responseDuplex : HNil
         }
 
@@ -232,7 +239,7 @@ x =
 -- --      }
 web = do
   webSpec
-    $ Web.Builder.insert (Proxy ∷ Proxy "productId") (Request.Duplex.int Request.Duplex.segment)
+    $ Web.Builder.insert (Proxy :: Proxy "productId") (Request.Duplex.int Request.Duplex.segment)
         { "": z /\ (Rendered responseDuplex htmlResponse : HNil) --responseDuplex
         , shop: z /\ (responseDuplex : HNil)
         , admin: z /\ (responseDuplex : HNil)
@@ -254,23 +261,25 @@ handlers =
       }
   , admin:
       { "application/json":
-          ( \r → do
-              i ← liftEffect random
+          ( \r -> do
+              i <- liftEffect random
               -- | TODO: Why this doesn't work??
               -- pure $ (Okayish.Type.fromEither $ Right { a: r.productId, b: show i, method: "LJL" }) ∷ Aff (Okayish (fail ∷ Number) _))}
-              pure $ (Okayish.Type.fromEither $ Right { a: r.productId, b: show i, method: "LJL" }) ∷ Aff (Okayish () _)
+              pure $ (Okayish.Type.fromEither $ Right { a: r.productId, b: show i, method: "LJL" })
+                :: Aff (Okayish () _)
           )
       }
   , sub:
       { shop:
           { "GET":
               { "application/json":
-                  \r → do
+                  \r -> do
                     liftEffect $ log "REQUEST"
                     liftEffect $ log $ unsafeStringify r
-                    pure $ Okayish.fromEither $ Right { a: r.productId, b: "sub-test:" <> r.test, method: "received GET" }
+                    pure $ Okayish.fromEither $ Right
+                      { a: r.productId, b: "sub-test:" <> r.test, method: "received GET" }
               }
-          , "POST": { "application/json": \r → pure $ Okayish.fromEither $ Right 8.0 }
+          , "POST": { "application/json": \r -> pure $ Okayish.fromEither $ Right 8.0 }
           }
       }
   }
@@ -294,7 +303,8 @@ main = do
     handlers' = renderToApi web handlers pure unit
 
     WebSpec { spec } = web
-  onClose ← Node.Server.serve spec handlers' identity { hostname: "127.0.0.1", port: 9000, backlog: Nothing } (log "127.0.0.1:9000")
+  onClose <- Node.Server.serve spec handlers' identity { hostname: "127.0.0.1", port: 9000, backlog: Nothing }
+    (log "127.0.0.1:9000")
   onClose (log "Closed")
   log $ _.path <<< printRoute web $ req.""."application/json" { productId: 130 }
   launchAff_

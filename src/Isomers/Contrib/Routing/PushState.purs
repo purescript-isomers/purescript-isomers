@@ -12,45 +12,45 @@ import Routing.PushState (LocationState) as PushState
 import Routing.PushState (PushStateInterface)
 
 foldLocationsAff
-  ∷ ∀ a
-   . (a → PushState.LocationState → Aff a)
-  → a
-  → PushStateInterface
-  → Effect (Effect Unit)
+  :: forall a
+   . (a -> PushState.LocationState -> Aff a)
+  -> a
+  -> PushStateInterface
+  -> Effect (Effect Unit)
 foldLocationsAff cb init psi = do
-  ref ← Ref.new init
+  ref <- Ref.new init
   let
     handle loc = launchAff_ do
-      prev ← liftEffect $ Ref.read ref
-      new ← cb prev loc
+      prev <- liftEffect $ Ref.read ref
+      new <- cb prev loc
       liftEffect $ Ref.write new ref
   handle =<< psi.locationState
   psi.listen handle
 
 foldPathsAff
-  ∷ ∀ a
-   . (a → String → Aff a)
-  → a
-  → PushStateInterface
-  → Effect (Effect Unit)
-foldPathsAff cb init = foldLocationsAff (\a → cb a <<< _.path) init
+  :: forall a
+   . (a -> String -> Aff a)
+  -> a
+  -> PushStateInterface
+  -> Effect (Effect Unit)
+foldPathsAff cb init = foldLocationsAff (\a -> cb a <<< _.path) init
 
 matchesWithAff
-  ∷ ∀ f a
+  :: forall f a
    . Foldable f
-  ⇒ (String → Aff (f a))
-  → (Maybe a → a → Effect Unit)
-  → PushStateInterface
-  → Effect (Effect Unit)
+  => (String -> Aff (f a))
+  -> (Maybe a -> a -> Effect Unit)
+  -> PushStateInterface
+  -> Effect (Effect Unit)
 matchesWithAff parser cb = foldPathsAff go Nothing
   where
   cb' a = case _ of
-    Just b → do
+    Just b -> do
       liftEffect $ cb a b
       pure $ Just b
-    Nothing → pure a
+    Nothing -> pure a
   go a =
-      cb' a
+    cb' a
       <=< pure <<< indexl 0
       <=< parser
 

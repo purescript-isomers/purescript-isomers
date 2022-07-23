@@ -15,11 +15,10 @@ import JS.Unsafe.Stringify (unsafeStringify)
 import Prim.Row (class Cons, class Union) as Row
 import Type.Prelude (class IsSymbol, Proxy)
 
-empty ∷ ∀ ct. Duplex ct (Variant ()) (Variant ())
-empty = Duplex Variant.case_ $ Control.Lazy.defer \_ → Parser $ do
-  state ← ask
+empty :: forall ct. Duplex ct (Variant ()) (Variant ())
+empty = Duplex Variant.case_ $ Control.Lazy.defer \_ -> Parser $ do
+  state <- ask
   throwError (Parser.Expected "Isomers.Response.Duplex.Variant.empty" (unsafeStringify state))
-
 
 -- | You can use this `inj` in a similar "style" as `Variant.on` can be used.
 -- |
@@ -30,20 +29,19 @@ empty = Duplex Variant.case_ $ Control.Lazy.defer \_ → Parser $ do
 -- |
 -- | I'm not able to split this into subfunctions (like `inj` and `extend`) because
 -- | theses would have partial printers.
-injInto ∷
-  ∀ ct l i o li lo vi vi' vo vo'.
-  IsSymbol l ⇒
-  Row.Cons l o () lo ⇒
-  Row.Cons l o vo vo' ⇒
-  Row.Union vo lo vo' ⇒
-
-  Row.Cons l i () li ⇒
-  Row.Cons l i vi vi' ⇒
-  Row.Union vi li vi' ⇒
-  Proxy l →
-  Duplex ct i o →
-  Duplex ct (Variant vi) (Variant vo) →
-  Duplex ct (Variant vi') (Variant vo')
+injInto
+  :: forall ct l i o li lo vi vi' vo vo'
+   . IsSymbol l
+  => Row.Cons l o () lo
+  => Row.Cons l o vo vo'
+  => Row.Union vo lo vo'
+  => Row.Cons l i () li
+  => Row.Cons l i vi vi'
+  => Row.Union vi li vi'
+  => Proxy l
+  -> Duplex ct i o
+  -> Duplex ct (Variant vi) (Variant vo)
+  -> Duplex ct (Variant vi') (Variant vo')
 injInto l (Duplex prt prs) (Duplex vPrt vPrs) = Duplex vPrt' vPrs'
   where
   vPrt' = vPrt # Variant.on l prt

@@ -1,8 +1,14 @@
 module Isomers.Contrib.Heterogeneous where
 
-
 import Data.Variant (Variant)
-import Heterogeneous.Mapping (class HMap, class HMapWithIndex, class MappingWithIndex, ConstMapping, hmap, hmapWithIndex)
+import Heterogeneous.Mapping
+  ( class HMap
+  , class HMapWithIndex
+  , class MappingWithIndex
+  , ConstMapping
+  , hmap
+  , hmapWithIndex
+  )
 import Type.Eval (class Eval, TypeExpr)
 import Type.Eval.Function (type (<<<))
 import Type.Eval.Functor (MapWithIndex)

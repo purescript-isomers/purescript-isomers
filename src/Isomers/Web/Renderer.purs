@@ -1,6 +1,6 @@
 module Isomers.Web.Renderer
   ( -- module Builder
-   module Types
+    module Types
   ) where
 
 -- import Isomers.Web.Renderer.Builder (builder, endpoint, Builder) as Builder

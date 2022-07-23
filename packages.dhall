@@ -36,12 +36,19 @@ in  upstream
   --   request-duplex = ../request-duplex/spago.dhall as Location
   -- with
   --   request-duplex-variant = ../request-duplex-variant/spago.dhall as Location
-  with
-    record-prefix = ../../external/purescript-record-prefix/spago.dhall as Location
-    -- record-prefix = mkPackage
-    --   [ "avar", "console", "prelude", "react-basic-hooks" ]
-    --   "https://github.com/paluh/purescript-record-prefix"
-    --   "master"
+  with record-prefix =
+      mkPackage
+        [ "assert"
+        , "effect"
+        , "heterogeneous"
+        , "prelude"
+        , "record"
+        , "typelevel-eval"
+        , "typelevel-prelude"
+        , "variant"
+        ]
+        "https://github.com/dariooddenino/purescript-record-prefix.git"
+        "3dc89e61245872b726ba6f4ed7843d4126a290bb"
   with
     -- typelevel-eval = mkPackage
     --   [ "console", "effect", "leibniz", "psci-support", "record" ]
@@ -52,21 +59,21 @@ in  upstream
       "https://github.com/natefaubion/purescript-typelevel-eval"
       "v0.5.0"
   with
-    web-fetch = ../purescript-web-fetch/spago.dhall as Location
-    --   { dependencies =
-    --     [ "effect"
-    --     , "foreign-object"
-    --     , "http-methods"
-    --     , "prelude"
-    --     , "record"
-    --     , "typelevel-prelude"
-    --     , "web-file"
-    --     , "web-promise"
-    --     , "web-streams"
-    --     ]
-    --   , repo = "https://github.com/purescript-web/purescript-web-fetch.git"
-    --   , version = "v1.0.1"
-    --   }
+    web-fetch =
+      { dependencies =
+        [ "effect"
+        , "foreign-object"
+        , "http-methods"
+        , "prelude"
+        , "record"
+        , "typelevel-prelude"
+        , "web-file"
+        , "web-promise"
+        , "web-streams"
+        ]
+      , repo = "https://github.com/paluh/purescript-web-fetch.git"
+      , version = "22a1dc41938c4fd76d992b1dc2d2c9ae04ece947"
+      }
   with
     web-file =
     { dependencies = [ "foreign", "media-types", "web-dom" ]

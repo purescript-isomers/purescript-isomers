@@ -18,10 +18,10 @@ data ClientBody
   | StringBody String
 
 type ClientRequest =
-  { body ∷ Maybe ClientBody
-  , headers ∷ Array (HeaderName /\ String)
-  , method ∷ HTTP.Method.Method
-  , path ∷ String
+  { body :: Maybe ClientBody
+  , headers :: Array (HeaderName /\ String)
+  , method :: HTTP.Method.Method
+  , path :: String
   }
 
 -- | TODO:
@@ -49,11 +49,11 @@ type ClientRequest =
 -- | on the client (in the router)... we can probably do this too by using
 -- | `pure ""`... so it is not definitive how it would end up.
 -- |
-type ServerRequest (body ∷ # Type) =
-  { body ∷ Either (Effect { | body }) (Maybe (Variant body))
-  , headers ∷ Lazy (Map HeaderName String)
-  , httpVersion ∷ String
-  , method ∷ String
-  , path ∷ String
+type ServerRequest (body :: # Type) =
+  { body :: Either (Effect { | body }) (Maybe (Variant body))
+  , headers :: Lazy (Map HeaderName String)
+  , httpVersion :: String
+  , method :: String
+  , path :: String
   }
 

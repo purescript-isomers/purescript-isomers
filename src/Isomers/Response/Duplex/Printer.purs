@@ -21,61 +21,61 @@ import Node.Buffer.Immutable (fromString) as Buffer.Immutable
 import Node.Encoding (Encoding(..))
 import Node.Stream (Readable, Writable) as Node.Stream
 
-newtype Printer = Printer (Encodings.ServerResponse → Encodings.ServerResponse)
+newtype Printer = Printer (Encodings.ServerResponse -> Encodings.ServerResponse)
 
-derive instance newtypePrinter ∷ Newtype Printer _
+derive instance newtypePrinter :: Newtype Printer _
 
-instance semigroupPrinter ∷ Semigroup Printer where
+instance semigroupPrinter :: Semigroup Printer where
   append (Printer f) (Printer g) = Printer (f >>> g)
 
-instance monoidPrinter ∷ Monoid Printer where
+instance monoidPrinter :: Monoid Printer where
   mempty = Printer identity
 
-header ∷ HeaderName → Maybe String → Printer
+header :: HeaderName -> Maybe String -> Printer
 header name = case _ of
-  Just val → Printer \state → state { headers = Array.cons (name /\ val) state.headers }
-  Nothing → mempty
+  Just val -> Printer \state -> state { headers = Array.cons (name /\ val) state.headers }
+  Nothing -> mempty
 
-reqHeader ∷ HeaderName → String → Printer
+reqHeader :: HeaderName -> String -> Printer
 reqHeader name val = header name (Just val)
 
-status ∷ Status → Printer
-status s = Printer \state → state { status = s }
+status :: Status -> Printer
+status s = Printer \state -> state { status = s }
 
-body ∷ Encodings.NodeBody → Printer
+body :: Encodings.NodeBody -> Printer
 body b = Printer _ { body = Just b }
 
-json ∷ Json → Printer
+json :: Json -> Printer
 json = Argonaut.stringify >>> string
 
-stream ∷ (∀ r. Node.Stream.Readable r) → Printer
+stream :: (forall r. Node.Stream.Readable r) -> Printer
 stream s = body (Encodings.NodeStream s)
 
-writer ∷ ∀ r. (Node.Stream.Writable r → Effect Unit) → Printer
+writer :: forall r. (Node.Stream.Writable r -> Effect Unit) -> Printer
 writer w = body $ nodeWriter w
 
-immutableBuffer ∷ Buffer.ImmutableBuffer → Printer
+immutableBuffer :: Buffer.ImmutableBuffer -> Printer
 immutableBuffer buff = body (Encodings.NodeBuffer buff)
 
-buffer ∷ Buffer → Effect Printer
+buffer :: Buffer -> Effect Printer
 buffer buff = do
-  buff' ← Buffer.freeze buff
+  buff' <- Buffer.freeze buff
   pure $ body (Encodings.NodeBuffer $ buff')
 
-unsafeBuffer ∷ Buffer → Printer
+unsafeBuffer :: Buffer -> Printer
 unsafeBuffer buff = unsafePerformEffect $ do
-  buff' ← Buffer.unsafeFreeze buff
+  buff' <- Buffer.unsafeFreeze buff
   pure $ body (Encodings.NodeBuffer $ buff')
 
-string ∷ String → Printer
+string :: String -> Printer
 string str = body $ Encodings.NodeBuffer $ Buffer.Immutable.fromString str UTF8
 
-defaultResponse ∷ Encodings.ServerResponse
+defaultResponse :: Encodings.ServerResponse
 defaultResponse =
   { body: Nothing
   , headers: []
   , status: Status.ok200
   }
 
-run ∷ Printer → Encodings.ServerResponse
+run :: Printer -> Encodings.ServerResponse
 run (Printer prt) = prt defaultResponse

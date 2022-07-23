@@ -8,7 +8,7 @@ import Effect.Aff (Aff)
 import Unsafe.Coerce (unsafeCoerce)
 import Web.Promise (Promise) as Web.Promise
 
-toAffPromise ∷ ∀ a. Web.Promise.Promise a → Control.Promise.Promise a
+toAffPromise :: forall a. Web.Promise.Promise a -> Control.Promise.Promise a
 toAffPromise = unsafeCoerce
 
 toAff :: forall t17. Web.Promise.Promise t17 -> Aff t17

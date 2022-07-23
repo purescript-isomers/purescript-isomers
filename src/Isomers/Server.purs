@@ -4,8 +4,7 @@ module Isomers.Server
   , RouterStep(..)
   , ServerResponseWrapper(..)
   , RoutingError(..)
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -20,7 +19,7 @@ import Isomers.Request.Encodings (ServerRequest) as Request.Encodings
 import Isomers.Response (Duplex, print) as Response
 import Isomers.Response.Encodings (ServerResponse) as Response.Encodings
 import Isomers.Server.Handler (Handler)
-import Isomers.Server.Handler (unifyMonad, Handler) as Exports
+import Isomers.Server.Handler (Handler, unifyMonad) as Exports
 import Isomers.Spec (Spec(..))
 import Prim.Row (class Cons) as Row
 import Record (get) as Record
@@ -31,10 +30,9 @@ import Type.Prelude (Proxy)
 -- | `ServerResponse` raw `Record`.
 newtype ServerResponseWrapper = ServerResponseWrapper Response.Encodings.ServerResponse
 
-derive instance newtypeServerResponseWrapper ∷ Newtype ServerResponseWrapper _
+derive instance newtypeServerResponseWrapper :: Newtype ServerResponseWrapper _
 
-data RouterStep handlers resDuplexes
-  = RouterStep { | handlers } { | resDuplexes }
+data RouterStep handlers resDuplexes = RouterStep { | handlers } { | resDuplexes }
 
 instance routerFoldingRec ::
   ( IsSymbol sym
@@ -96,24 +94,24 @@ else instance routerFoldingFun ::
       handler = Record.get prop handlers
 
       resDpl = Record.get prop resDuplexes
-    res ← handler req
+    res <- handler req
     pure $ ServerResponseWrapper (Response.print resDpl res)
 
 data RoutingError = NotFound
 
-router ∷
-  ∀ body handlers ireq oreq m resCodecs.
-  HFoldlWithIndex (RouterStep handlers resCodecs) Unit oreq (m ServerResponseWrapper) ⇒
-  MonadAff m ⇒
-  Spec body ireq oreq { | resCodecs } →
-  { | handlers } →
-  Request.Encodings.ServerRequest body →
-  m (Either RoutingError Response.Encodings.ServerResponse)
+router
+  :: forall body handlers ireq oreq m resCodecs
+   . HFoldlWithIndex (RouterStep handlers resCodecs) Unit oreq (m ServerResponseWrapper)
+  => MonadAff m
+  => Spec body ireq oreq { | resCodecs }
+  -> { | handlers }
+  -> Request.Encodings.ServerRequest body
+  -> m (Either RoutingError Response.Encodings.ServerResponse)
 router spec@(Spec { request, response }) handlers = do
   let
     handle = hfoldlWithIndex (RouterStep handlers response) unit
 
-  \raw → liftAff (Request.Duplex.parse request raw) >>= case _ of
-    Right req → (Right <<< un ServerResponseWrapper) <$> handle req
-    Left err → pure $ Left NotFound
+  \raw -> liftAff (Request.Duplex.parse request raw) >>= case _ of
+    Right req -> (Right <<< un ServerResponseWrapper) <$> handle req
+    Left err -> pure $ Left NotFound
 
