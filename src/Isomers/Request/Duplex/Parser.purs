@@ -22,44 +22,38 @@ import Data.Map (Map)
 import Data.Map (lookup) as Map
 import Data.Maybe (Maybe(..), maybe)
 import Data.Show.Generic (genericShow)
-import Data.Variant (Variant)
-import Data.Variant (default, inj, on) as Variant
-import Effect (Effect)
-import Effect.Aff (Aff, Fiber, joinFiber)
-import Effect.Class (liftEffect)
-import Isomers.Contrib.Data.Variant (tag) as Contrib.Data.Variant
+import Effect.Aff (Aff)
 import Isomers.Request.Duplex.Path (Params)
 import Isomers.Request.Duplex.Path (Parts, parse) as Path
-import Isomers.Request.Encodings (ServerRequest)
+import Isomers.Request.Encodings (ServerRequest, ServerRequestBody)
 import Network.HTTP.Types (HeaderName)
-import Prim.Row (class Cons) as Row
-import Record (get) as Record
-import Type.Prelude (class IsSymbol, Proxy, reflectSymbol)
 
 -- | This quick and dirty `body` representation which was
 -- | done to simplify generic spec processing is going to change.
 -- | Please read some suggestions / details in `Isomers/Request/Encodings.purs`.
-type State (body :: Row Type) =
-  { body :: Either (Effect { | body }) (Maybe (Variant body))
+type State =
+  { body :: Maybe ServerRequestBody
   , headers :: Lazy (Map HeaderName String)
   , httpVersion :: String
   , method :: String
   , path :: Path.Parts
   }
 
-data Result body a
+data Result a
   = Fail ParsingError
-  | Success (State body) a
+  | Success (State) a
 
-derive instance functorResult :: Functor (Result b)
+derive instance functorResult :: Functor Result
 
-derive instance genericResult :: Generic (Result b a) _
+derive instance genericResult :: Generic (Result a) _
 
 -- derive instance eqResult :: Eq a => Eq (Result b a)
 -- instance showResult :: Show a => Show (Result b a) where
 --   show = genericShow
 data ParsingError
-  = Expected String String
+  = BodyAlreadyConsumed
+  | BodyParsingError String
+  | Expected String String
   | ExpectedEndOfPath String
   | ExpectedMethod String String
   | ExpectedHeaderValue HeaderName String
@@ -75,15 +69,15 @@ instance showRouteError :: Show ParsingError where
   show = genericShow
 
 -- | TODO: try to parametrize this by any monad
-data Parser body a
-  = Alt (NonEmptyArray (Parser body a))
-  | Chomp (State body -> Aff (Result body a))
-  | Prefix String (Parser body a)
-  | Method String (Parser body a)
+data Parser a
+  = Alt (NonEmptyArray (Parser a))
+  | Chomp (State -> Aff (Result a))
+  | Prefix String (Parser a)
+  | Method String (Parser a)
 
-derive instance functorParser :: Functor (Parser body)
+derive instance functorParser :: Functor Parser
 
-instance applyParser :: Apply (Parser body) where
+instance applyParser :: Apply Parser where
   apply fx x =
     Chomp \state ->
       runParser state fx
@@ -91,10 +85,10 @@ instance applyParser :: Apply (Parser body) where
           Fail err -> pure $ Fail err
           Success state' f -> map f <$> runParser state' x
 
-instance applicativeParser :: Applicative (Parser body) where
+instance applicativeParser :: Applicative Parser where
   pure a = Chomp $ pure <<< flip Success a
 
-instance altParser :: Alt (Parser body) where
+instance altParser :: Alt Parser where
   alt (Alt ls) (Alt rs) = Alt (ls `altAppend` rs)
   alt (Alt ls) b = Alt (ls `altSnoc` b)
   alt a (Alt rs) = Alt (a `altCons` rs)
@@ -104,7 +98,7 @@ instance altParser :: Alt (Parser body) where
     | m == m' = Method m (a <|> b)
   alt a b = Alt (NEA.cons a (NEA.singleton b))
 
-instance lazyParser :: Lazy (Parser body a) where
+instance lazyParser :: Lazy (Parser a) where
   defer k =
     Chomp \state ->
       runParser state (Z.force parser)
@@ -112,10 +106,10 @@ instance lazyParser :: Lazy (Parser body a) where
     parser = Z.defer k
 
 altAppend
-  :: forall a body
-   . NonEmptyArray (Parser body a)
-  -> NonEmptyArray (Parser body a)
-  -> NonEmptyArray (Parser body a)
+  :: forall a
+   . NonEmptyArray (Parser a)
+  -> NonEmptyArray (Parser a)
+  -> NonEmptyArray (Parser a)
 altAppend ls rs
   | Prefix pre a <- NEA.last ls
   , Prefix pre' b <- NEA.head rs
@@ -138,10 +132,10 @@ altAppend ls rs
   | otherwise = ls <> rs
 
 altCons
-  :: forall a body
-   . Parser body a
-  -> NonEmptyArray (Parser body a)
-  -> NonEmptyArray (Parser body a)
+  :: forall a
+   . Parser a
+  -> NonEmptyArray (Parser a)
+  -> NonEmptyArray (Parser a)
 altCons (Prefix pre a) rs
   | Prefix pre' b <- NEA.head rs
   , pre == pre' = NEA.cons' (Prefix pre (a <|> b)) (NEA.tail rs)
@@ -153,10 +147,10 @@ altCons (Method m a) rs
 altCons a rs = NEA.cons a rs
 
 altSnoc
-  :: forall a body
-   . NonEmptyArray (Parser body a)
-  -> Parser body a
-  -> NonEmptyArray (Parser body a)
+  :: forall a
+   . NonEmptyArray (Parser a)
+  -> Parser a
+  -> NonEmptyArray (Parser a)
 altSnoc ls (Prefix pre b)
   | Prefix pre' a <- NEA.last ls
   , pre == pre' = NEA.snoc' (NEA.init ls) (Prefix pre (a <|> b))
@@ -167,46 +161,36 @@ altSnoc ls (Method m b)
 
 altSnoc ls b = NEA.snoc ls b
 
-chompPrefix :: forall body. String -> State body -> Result body Unit
+chompPrefix :: String -> State -> Result Unit
 chompPrefix pre state = case Array.head state.path.segments of
   Just pre'
     | pre == pre' -> Success (state { path { segments = Array.drop 1 state.path.segments } }) unit
   Just pre' -> Fail $ Expected pre pre'
   _ -> Fail $ EndOfPath
 
-prefix :: forall a body. String -> Parser body a -> Parser body a
+prefix :: forall a. String -> Parser a -> Parser a
 prefix = Prefix
 
-method :: forall a body. HTTP.Method -> Parser body a -> Parser body a
+method :: forall a. HTTP.Method -> Parser a -> Parser a
 method = Method <<< HTTP.Method.print <<< Left
 
-body :: forall a body body_ l. IsSymbol l => Row.Cons l (Fiber a) body_ body => Proxy l -> Parser body a
-body l =
+body :: forall a. (ServerRequestBody -> Aff (Either String a)) -> Parser a
+body f =
   Chomp \state -> case state.body of
-    Left lbr -> do
-      br <- liftEffect lbr
-      let
-        fb = Record.get l br
-      b <- joinFiber fb
-      let
-        vb = Variant.inj l fb
+    Just b -> do
+      let state' = state { body = Nothing }
+      f b >>= case _ of
+        Right a -> pure $ Success state' a
+        Left err -> pure $ Fail $ BodyParsingError err
+    Nothing ->
+      pure $ Fail $ BodyAlreadyConsumed
 
-        state' = state { body = Right (Just vb) }
-      pure $ Success state' b
-    Right (Just b) ->
-      Variant.on
-        l
-        (map (Success state) <<< joinFiber)
-        (Variant.default (pure $ Fail $ Expected (reflectSymbol l) (Contrib.Data.Variant.tag b)))
-        b
-    Right Nothing -> pure $ Fail $ Expected (reflectSymbol l) ("Empty body")
-
--- | TODO: We should be able to constraint the value of the body
--- | to empty when we provide some common layer for body parsing
+-- | TODO: We should be able to constraint the value of the
+-- | to empty when we provide some common layer for parsing
 -- | which can be considered portable like `String` ;-)
 -- | Then we can provide this helper.
 -- emptyBody = ...
-take :: forall m. Parser m String
+take :: Parser String
 take =
   Chomp \state ->
     pure
@@ -214,7 +198,7 @@ take =
           Just { head, tail } -> Success (state { path { segments = tail } }) head
           _ -> Fail EndOfPath
 
-param :: forall m. String -> Parser m String
+param :: String -> Parser String
 param key =
   Chomp \state ->
     pure
@@ -222,7 +206,7 @@ param key =
           Just a -> Success state a
           _ -> Fail $ MissingParam key
 
-header :: forall body. HeaderName -> Parser body String
+header :: HeaderName -> Parser String
 header name =
   Chomp \state ->
     pure
@@ -230,42 +214,42 @@ header name =
           Just a -> Success state a
           _ -> Fail $ MissingHeader name
 
-flag :: forall m. String -> Parser m Boolean
+flag :: String -> Parser Boolean
 flag = default false <<< map (const true) <<< param
 
-many1 :: forall body t a. Alt t => Applicative t => Parser body a -> Parser body (t a)
+many1 :: forall t a. Alt t => Applicative t => Parser a -> Parser (t a)
 many1 p = Chomp go
   where
-  go :: State body -> Aff (Result body (t a))
+  go :: State -> Aff (Result (t a))
   go state =
     runParser state p
       >>= case _ of
         Fail err -> pure $ Fail err
         Success state' a -> go' state' (pure a)
 
-  go' :: State body -> t a -> Aff (Result body (t a))
+  go' :: State -> t a -> Aff (Result (t a))
   go' state xs =
     runParser state p
       >>= case _ of
         Fail _ -> pure $ Success state xs
         Success state' a -> go' state' (xs <|> pure a)
 
-many :: forall t a body. Alternative t => Parser body a -> Parser body (t a)
+many :: forall t a. Alternative t => Parser a -> Parser (t a)
 many p = many1 p <|> pure empty
 
-rest :: forall b. Parser b (Array String)
+rest :: Parser (Array String)
 rest = Chomp \state -> pure $ Success (state { path { segments = [] } }) state.path.segments
 
-params :: forall b. Parser b Params
+params :: Parser Params
 params = Chomp \state -> pure $ Success state state.path.params
 
-default :: forall a body. a -> Parser body a -> Parser body a
+default :: forall a. a -> Parser a -> Parser a
 default = flip (<|>) <<< pure
 
-optional :: forall a body. Parser body a -> Parser body (Maybe a)
+optional :: forall a. Parser a -> Parser (Maybe a)
 optional = default Nothing <<< map Just
 
-as :: forall a b body. { show :: a -> String, parse :: a -> Either String b } -> Parser body a -> Parser body b
+as :: forall a b. { show :: a -> String, parse :: a -> Either String b } -> Parser a -> Parser b
 as { parse, show } p =
   Chomp \state ->
     runParser state p
@@ -280,10 +264,10 @@ as { parse, show } p =
 int :: String -> Either String Int
 int = maybe (Left "Int") Right <<< Int.fromString
 
-hash :: forall body. Parser body String
+hash :: Parser String
 hash = Chomp \state -> pure $ Success state state.path.hash
 
-end :: forall body. Parser body Unit
+end :: Parser Unit
 end =
   Chomp \state ->
     pure
@@ -297,7 +281,7 @@ boolean = case _ of
   "false" -> Right false
   _ -> Left "Boolean"
 
-runParser :: forall a body. State body -> Parser body a -> Aff (Result body a)
+runParser :: forall a. State -> Parser a -> Aff (Result a)
 runParser = go
   where
   go state = case _ of
@@ -316,12 +300,12 @@ runParser = go
 
   goAlt _ _ res = pure res
 
-run :: forall a body. Parser body a -> ServerRequest body -> Aff (Either ParsingError a)
+run :: forall a. Parser a -> ServerRequest -> Aff (Either ParsingError a)
 run p = do
   parsePath' >>> flip runParser p
     <#> map case _ of
       Fail err -> Left err
       Success _ res -> Right res
   where
-  parsePath' { body: b, headers, httpVersion, method: m, path } = { body: b, headers, httpVersion, method: m, path: _ }
+  parsePath' {body: b, headers, httpVersion, method: m, path } = {body: b, headers, httpVersion, method: m, path: _ }
     $ Path.parse path

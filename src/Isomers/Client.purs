@@ -9,18 +9,17 @@ import Data.Variant (Variant)
 import Data.Variant (inj) as Variant
 import Effect.Aff (Aff)
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, foldingWithIndex, hfoldlWithIndex)
--- import Isomers.Client.Fetch (HostInfo, fetch)
 import Isomers.HTTP.Exchange (Error(..)) as HTTP.Exchange
 import Isomers.Request (Duplex(..), Printer) as Request
 import Isomers.Request.Duplex.Printer (run) as Request.Duplex.Printer
 import Isomers.Request.Encodings (ClientRequest) as Request.Encodings
-import Isomers.Response (Duplex, parse) as Response
+import Isomers.Response (Duplex, Okayish, parse) as Response
 import Isomers.Response.Encodings (ClientResponse) as Response.Encodings
 import JS.Unsafe.Stringify (unsafeStringify)
 import Prim.Row (class Cons, class Lacks) as Row
 import Prim.RowList (class RowToList)
 import Record (get, insert) as Record
-import Type.Prelude (class IsSymbol, Proxy(..), Proxy(..), Proxy)
+import Type.Prelude (class IsSymbol, Proxy(..))
 
 -- | This folding creates a request builder:
 -- | a record which contains functions which put a
@@ -65,7 +64,7 @@ else instance requestFoldingData ::
     { | requestBuilders }
     (Proxy d)
     { | requestBuilders' } where
-  foldingWithIndex (RequestBuildersStep inj) prop rb d = do
+  foldingWithIndex (RequestBuildersStep inj) prop rb _ = do
     let
       inj' = inj <<< Variant.inj prop
     Record.insert prop inj' rb
@@ -80,14 +79,14 @@ instance hfoldlWithIndexRequestBuildersStepVariantWrapper ::
   , RowToList v vl
   ) =>
   HFoldlWithIndex (RequestBuildersStep (f (Variant v)) request) unit (Proxy (f (Variant v))) { | requestBuilders } where
-  hfoldlWithIndex (RequestBuildersStep f) init _ = hfoldlWithIndex (RequestBuildersStep (f <<< wrap)) {}
+  hfoldlWithIndex (RequestBuildersStep f) _ _ = hfoldlWithIndex (RequestBuildersStep (f <<< wrap)) {}
     (Proxy :: Proxy vl)
 else instance hfoldlWithIndexRequestBuildersStepVariant ::
   ( HFoldlWithIndex (RequestBuildersStep (Variant v) request) {} (Proxy vl) { | requestBuilders }
   , RowToList v vl
   ) =>
   HFoldlWithIndex (RequestBuildersStep (Variant v) request) unit (Proxy (Variant v)) { | requestBuilders } where
-  hfoldlWithIndex cf init _ = hfoldlWithIndex cf {} (Proxy :: Proxy vl)
+  hfoldlWithIndex cf _ _ = hfoldlWithIndex cf {} (Proxy :: Proxy vl)
 
 type Fetch = Request.Encodings.ClientRequest -> Aff (Either String Response.Encodings.ClientResponse)
 
@@ -95,13 +94,17 @@ type Fetch = Request.Encodings.ClientRequest -> Aff (Either String Response.Enco
 -- | network requests etc.
 data ClientStep request responseDuplexes = ClientStep Fetch (request -> Request.Printer) responseDuplexes
 
+newtype ClientResponse res = ClientResponse (Aff (Either HTTP.Exchange.Error res))
+
+type ClientResponse' r res = ClientResponse (Response.Okayish r res)
+
 -- | TODO: parameterize the client by fetching function
 -- | so the whole exchange can be performed "purely".
 instance clientFoldingResponseConstructor ::
   ( IsSymbol sym
   , Row.Lacks sym client
   , Row.Cons sym (Response.Duplex ct i res) resDpls_ resDpls
-  , Row.Cons sym (d -> Aff (Either HTTP.Exchange.Error res)) client client'
+  , Row.Cons sym (d -> ClientResponse res) client client'
   ) =>
   FoldingWithIndex
     (ClientStep request { | resDpls })
@@ -112,7 +115,7 @@ instance clientFoldingResponseConstructor ::
   foldingWithIndex (ClientStep fetch reqPrt resDpls) prop c reqBld = do
     let
       resDpl = Record.get prop resDpls
-      f d = do
+      f d = ClientResponse do
         let r = reqBld d
         res <- fetch (Request.Duplex.Printer.run (reqPrt r)) >>= case _ of
           Right res -> lmap (HTTP.Exchange.Error <<< unsafeStringify) <$> Response.parse resDpl res
@@ -168,11 +171,11 @@ requestBuilders = hfoldlWithIndex (RequestBuildersStep (identity :: t -> t)) {}
 -- | Perform a recursive heterogeneous map which extracts only parsers and use this cleaner
 -- | value for `ClientStep` folding.
 client
-  :: forall body client requestBuilders responseDuplexes ireq oreq
+  :: forall client requestBuilders responseDuplexes ireq oreq
    . HFoldlWithIndex (RequestBuildersStep ireq ireq) {} (Proxy ireq) { | requestBuilders }
   => HFoldlWithIndex (ClientStep ireq responseDuplexes) {} { | requestBuilders } client
   => Fetch
-  -> Request.Duplex body ireq oreq
+  -> Request.Duplex ireq oreq
   -> responseDuplexes
   -> client
 client fetch (Request.Duplex reqPrt _) resDpl = do

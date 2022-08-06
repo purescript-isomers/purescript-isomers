@@ -1,82 +1,160 @@
 module Test.Spec where
 
--- 
--- import Prelude
--- import Data.Bifunctor (lmap)
--- import Data.Either (Either(..))
--- import Data.HTTP.Method (Method)
--- import Data.Maybe (Maybe(..))
--- import Data.Newtype (un)
--- import Data.String.CaseInsensitive (CaseInsensitiveString(..))
--- import Data.Tuple.Nested ((/\))
--- import Data.Validation.Semigroup (V(..))
--- import Effect (Effect)
--- import Effect.Console (log)
--- import JS.Unsafe.Stringify (unsafeStringify)
--- import Heterogeneous.Folding (class HFoldlWithIndex)
--- import Isomers.Client (RequestBuildersStep(..), ResponseM(..), requestBuilders, runResponseM)
--- import Isomers.Client (client) as Client
--- import Isomers.Contrib.Heterogeneous.List (HNil(..), (:))
--- import Isomers.HTTP.ContentTypes (TextMime, _json)
--- import Isomers.HTTP.Request (Method(..))
--- import Isomers.Node.Server (serve) as Node.Server
--- import Isomers.Request (Duplex(..), Duplex', print) as Request
--- import Isomers.Request.Duplex.Parser (int) as Parser
--- import Isomers.Request.Accum.Record (empty) as Request.Accum.Record
--- import Isomers.Request.Duplex (empty, int, segment) as Request.Duplex.Record
--- import Isomers.Response (Okayish, OkayishDuplex') as Response
--- import Isomers.Response.Duplex (header, withHeaderValue) as Response.Duplex
--- import Isomers.Response.Okayish.Duplexes (asJson) as Response.Okayish.Duplexes
--- import Isomers.Response.Okayish.Type (fromEither) as Response.Okayish
--- import Isomers.Server (router) as Server
--- import Isomers.Spec (Spec(..), root, spec) as Spec
--- import Isomers.Spec (spec) as Spec.Builder
--- import Node.Stream (onClose)
--- import Polyform.Batteries.Json.Duals ((:=))
--- import Polyform.Batteries.Json.Duals (Pure, int, object, string) as Json.Duals
--- import Polyform.Dual (Dual(..))
--- import Polyform.Dual.Record (build) as Dual.Record
--- import Polyform.Validator.Dual (runSerializer, runValidator)
--- import Polyform.Validator.Dual.Pure (runSerializer, runValidator) as Dual.Pure
--- import Type.Prelude (Proxy(..), SProxy(..))
--- 
--- responseDuplex = Response.Duplex.withHeaderValue (CaseInsensitiveString "X-TEST") "TEST value" $ Response.Okayish.Duplexes.asJson (Dual.Pure.runSerializer d) (lmap unsafeStringify <<< un V <<< Dual.Pure.runValidator d)
---   where
---   d ∷ Json.Duals.Pure _ { a ∷ Int, b ∷ String, method ∷ String }
---   d = Json.Duals.object >>> rec
---     where
---     rec =
---       Dual.Record.build
---         $ (SProxy ∷ SProxy "a")
---         := Json.Duals.int
---         <<< (SProxy ∷ SProxy "b")
---         := Json.Duals.string
---         <<< (SProxy ∷ SProxy "method")
---         := Json.Duals.string
--- 
--- requestDuplex ::
---   ∀ reqBody res.
---   Request.Duplex.Record.Root reqBody ( productId ∷ Int )
--- requestDuplex = Request.Duplex.Record.intSegment (SProxy ∷ SProxy "productId")
--- 
--- api =
---   Spec.root
---     { shop: requestDuplex /\ (responseDuplex : HNil)
---     , admin: Request.Duplex.Record.empty /\ ((pure $ pure unit) ∷ Response.OkayishDuplex' TextMime () Unit)
---     , sub:
---         { shop:
---             Method
---               { "GET": requestDuplex /\ responseDuplex
---               , "POST": requestDuplex /\ responseDuplex
---               }
---         }
---     }
--- 
--- client = do
---   let
---     Spec.Spec { request: reqDpl, response: resDpls } = api
---   Client.client reqDpl resDpls
--- 
+import Prelude
+
+import Data.Bifunctor (lmap)
+import Data.Either (Either(..))
+import Data.HTTP.Method (Method)
+import Data.Maybe (Maybe(..))
+import Data.Newtype (un)
+import Data.String.CaseInsensitive (CaseInsensitiveString(..))
+import Data.Tuple.Nested ((/\))
+import Data.Validation.Semigroup (V(..))
+import Data.Variant (Variant)
+import Effect (Effect)
+import Effect.Aff (Aff)
+import Effect.Console (log)
+import Heterogeneous.Folding (class HFoldlWithIndex)
+import Isomers.Client (ClientResponse')
+import Isomers.Client (client) as Client
+import Isomers.Client.Fetch (Scheme(..))
+import Isomers.Client.Fetch as Fetch
+import Isomers.Contrib.Heterogeneous.List (HNil(..), (:))
+import Isomers.HTTP.ContentTypes (TextMime, _json)
+import Isomers.HTTP.Exchange as HTTP.Exchange
+import Isomers.HTTP.Request (Method(..))
+import Isomers.Node as Node
+import Isomers.Node.Server (serve) as Node.Server
+import Isomers.Request.Accum as Request.Duplex.Accum
+import Isomers.Request.Accum.Type (pass)
+import Isomers.Request.Duplex as Request.Duplex
+import Isomers.Request.Duplex.Parser (int) as Parser
+import Isomers.Response (Duplex, Duplex', Okayish, OkayishDuplex') as Response
+import Isomers.Response.Duplex (header, withHeaderValue) as Response.Duplex
+import Isomers.Response.Okayish.Duplexes (asJson) as Response.Okayish.Duplexes
+import Isomers.Response.Okayish.Type (fromEither) as Response.Okayish
+import Isomers.Runtime as Runtime
+import Isomers.Server (router) as Server
+import Isomers.Spec (Spec)
+import Isomers.Spec (foldSpec) as Spec.Builder
+import Isomers.Spec as Spec
+import Isomers.Spec.Flatten as Spec.Flatten
+import Isomers.Spec.Types (Spec')
+import JS.Unsafe.Stringify (unsafeStringify)
+import Node.Stream (onClose)
+import Polyform.Batteries.Json.Duals ((:=))
+import Polyform.Batteries.Json.Duals (Pure, int, object, string) as Json.Duals
+import Polyform.Dual (Dual(..))
+import Polyform.Dual.Record (build) as Dual.Record
+import Polyform.Validator.Dual (runSerializer, runValidator)
+import Polyform.Validator.Dual.Pure (runSerializer, runValidator) as Dual.Pure
+import Type.Prelude (Proxy(..), SProxy(..))
+import Unsafe.Coerce (unsafeCoerce)
+
+type Payload = { a :: Int, b :: String, method :: String }
+
+-- x = 8
+responseDuplex
+  :: Response.Duplex'
+       "application/json"
+       ( Response.Okayish ()
+           { a :: Int
+           , b :: String
+           , method :: String
+           }
+       )
+responseDuplex = do
+
+  Response.Duplex.withHeaderValue
+    (CaseInsensitiveString "X-TEST")
+    "TEST value"
+    $ Response.Okayish.Duplexes.asJson bodySer bodyVld
+
+bodyDual = Json.Duals.object >>> rec
+  where
+  rec =
+    Dual.Record.build
+      $
+        (Proxy :: Proxy "a")
+          := Json.Duals.int
+          <<< (Proxy :: Proxy "b")
+            := Json.Duals.string
+          <<< (Proxy :: Proxy "method")
+            := Json.Duals.string
+bodyVld = lmap unsafeStringify <<< un V <<< Dual.Pure.runValidator bodyDual
+
+bodySer = Dual.Pure.runSerializer bodyDual
+
+node :: Runtime.Node
+node = unsafeCoerce "node"
+
+nodeRequest = Node.request node
+
+requestDuplex =
+  Request.Duplex.Accum.insert (Proxy :: Proxy "productId") (Request.Duplex.int Request.Duplex.segment)
+    $ Request.Duplex.Accum.insert (Proxy :: Proxy "payload") (nodeRequest.jsonBody bodySer bodyVld)
+    pass
+
+--api
+--  :: forall t127
+--   . Spec' t127
+--       ( Variant
+--           ( "shop.application/json" :: { productId :: Int }
+--           , "sub.shop.GET" :: { productId :: Int }
+--           , "sub.shop.POST" :: { productId :: Int }
+--           )
+--       )
+--       { "shop.application/json" ::
+--           Response.Duplex' "application/json"
+--             ( Response.Okayish ()
+--                 { a :: Int
+--                 , b :: String
+--                 , method :: String
+--                 }
+--             )
+--       , "sub.shop.GET" ::
+--           Response.Duplex' "application/json"
+--             ( Response.Okayish ()
+--                 { a :: Int
+--                 , b :: String
+--                 , method :: String
+--                 }
+--             )
+--       , "sub.shop.POST" ::
+--           Response.Duplex' "application/json"
+--             ( Response.Okayish ()
+--                 { a :: Int
+--                 , b :: String
+--                 , method :: String
+--                 }
+--             )
+--       }
+api =
+  Spec.Flatten.flatten $ Spec.foldSpec
+    { shop: requestDuplex /\ (responseDuplex : HNil)
+    -- , admin: Request.Duplex.Record.empty /\ ((pure $ pure unit) ∷ Response.OkayishDuplex' TextMime () Unit)
+    , sub:
+        { shop:
+            Method
+              { "GET": requestDuplex /\ responseDuplex
+              , "POST": requestDuplex /\ responseDuplex
+              }
+        }
+    }
+
+
+type Req = { productId :: Int, payload :: Payload }
+client ::
+  { "shop.application/json" :: Req -> ClientResponse' () { a :: Int, b :: String, method :: String }
+  , "sub.shop.GET" :: Req -> ClientResponse' () { a :: Int , b :: String , method :: String }
+  , "sub.shop.POST" :: Req -> ClientResponse' () { a :: Int, b :: String, method :: String }
+  }
+client = do
+  let
+    fetch = Fetch.fetch { hostName: "127.0.0.1", port: 8000, scheme: HTTP }
+    Spec.Spec { request: reqDpl, response: resDpls } = api
+  Client.client fetch reqDpl resDpls
+
 -- handlers =
 --   { shop: { "application/json": const $ pure $ Response.Okayish.fromEither $ Right { a: 8, b: "test", method: "ANY" } }
 --   , admin: const $ pure (pure unit)
@@ -114,3 +192,8 @@ module Test.Spec where
 --   log $ unsafeStringify <<< print api $ req.shop."application/json" { productId: 8 }
 -- 
 -- -- launchAff_ $ runResponseM z
+
+-- NodeJS -> Image -> URL
+-- NodeJS -> Image -> Path
+-- 
+-- BrowserJS -> Image -> BlobURL

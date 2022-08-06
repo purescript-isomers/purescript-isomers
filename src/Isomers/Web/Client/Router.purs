@@ -2,10 +2,7 @@ module Isomers.Web.Client.Router where
 
 import Prelude
 
-import Control.Bind.Indexed (ibind)
-import Control.Monad.Free.Trans (liftFreeT)
 import Data.Either (Either(..), hush, note)
-import Data.Identity (Identity(..))
 import Data.Lazy (defer) as Lazy
 import Data.Map (fromFoldable) as Map
 import Data.Maybe (Maybe(..))
@@ -14,27 +11,24 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Data.Variant (Variant)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
-import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
 import Effect.Ref (new, read, write) as Ref
-import Halogen.Subscription (Emitter, Subscription)
+import Halogen.Subscription (Emitter)
 import Halogen.Subscription (create, notify) as Subscription
 import Heterogeneous.Folding (class HFoldlWithIndex)
-import Isomers.Client (ClientStep(..), Fetch, RequestBuildersStep)
+import Isomers.Client (ClientStep, Fetch, RequestBuildersStep)
 import Isomers.Client (client, requestBuilders) as Client
-import Isomers.Client.Fetch (HostInfo, fetch)
+import Isomers.Client.Fetch (HostInfo)
 import Isomers.Client.Fetch (fetch) as Fetch
 import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..))
-import Isomers.Contrib.Routing.PushState (foldPathsAff) as Contrib.Routing.PushState
 import Isomers.Contrib.Web.Router.Driver.PushState (makeDriverAff)
 import Isomers.HTTP.ContentTypes (_html, _json) as ContentTypes
 import Isomers.Request (Duplex, ParsingError) as Request
 import Isomers.Request.Duplex (as) as Isomers.Request.Duplex
 import Isomers.Request.Duplex (parse, print) as Request.Duplex
 import Isomers.Request.Encodings (ServerRequest)
-import Isomers.Response.Encodings (ClientResponse(..))
+import Isomers.Response.Encodings (ClientResponse)
 import Isomers.Spec (Spec(..))
-import Isomers.Web (requestBuilders)
 import Isomers.Web.Client.Render
   ( class FoldRender
   , ContractRequest
@@ -47,15 +41,8 @@ import Isomers.Web.Client.Render (contractRequest, expandRequest) as Isomers.Web
 import Isomers.Web.Types (WebSpec(..))
 import JS.Unsafe.Stringify (unsafeStringify)
 import Network.HTTP.Types (hAccept)
-import React.Basic (JSX)
-import Routing.PushState (LocationState, makeInterface) as PushState
-import Routing.PushState (LocationState, makeInterface) as PushStateInterface
-import Routing.PushState (PushStateInterface)
 import Type.Prelude (Proxy(..))
-import Web.Router (Router, RouterState(..), Transitioning) as Router
 import Web.Router (Router, RouterState(..), continue, makeRouter) as Web.Router
-import Web.Router (Transition, continue, makeRouter)
-import Web.Router.Types (Command(..), Resolved, Transition(..)) as Router
 
 -- import Wire.React.Router.Control (Command(..), Router(..), Transition(..), Transitioning, Resolved) as Router
 -- import Wire.Signal (Signal)
@@ -71,14 +58,14 @@ import Web.Router.Types (Command(..), Resolved, Transition(..)) as Router
 -- | ```
 -- | so we can be sure that a give request can be safely dumped into just an URL
 -- |
-unsafePrint :: forall body ireq oreq. Request.Duplex body ireq oreq -> ireq -> String
+unsafePrint :: forall ireq oreq. Request.Duplex ireq oreq -> ireq -> String
 unsafePrint requestDuplex request = _.path $ Request.Duplex.print requestDuplex request
 
 parseWebURL
-  :: forall body ireq oreq rnd rndReq
+  :: forall ireq oreq rnd rndReq
    . HFoldlWithIndex (ContractRequest oreq) (Variant oreq -> Maybe (Variant ())) rnd
        (Variant oreq -> Maybe (Variant rndReq))
-  => Request.Duplex body (Variant ireq) (Variant oreq)
+  => Request.Duplex (Variant ireq) (Variant oreq)
   -> rnd
   -> String
   -> Aff (Maybe (Variant rndReq))
@@ -88,30 +75,30 @@ parseWebURL requestDuplex renderers path = do
     parsePath = Request.Duplex.parse requestDuplex <<< webServerRequest
   map (contractRequest (Proxy :: Proxy (Variant oreq)) renderers <=< hush) <<< parsePath $ path
 
-serverRequest :: forall body. String -> String -> ServerRequest body
+serverRequest :: String -> String -> ServerRequest
 serverRequest accept path =
   { path
-  , body: Right Nothing
+  , body: Nothing
   , headers: Lazy.defer \_ -> Map.fromFoldable [ hAccept /\ accept ]
   , httpVersion: "HTTP/1.1"
   , method: "GET"
   }
 
-apiServerRequest :: forall body. String -> ServerRequest body
+apiServerRequest :: String -> ServerRequest
 apiServerRequest = serverRequest (reflectSymbol $ ContentTypes._json)
 
-webServerRequest :: forall body. String -> ServerRequest body
+webServerRequest :: String -> ServerRequest
 webServerRequest = serverRequest (reflectSymbol $ ContentTypes._html)
 
 webRequest
-  :: forall body rnd ireq oreq rndReq rndReqBuilders res
+  :: forall rnd ireq oreq rndReq rndReqBuilders res
    . HFoldlWithIndex (ContractRequest oreq) (Variant oreq -> Maybe (Variant ())) rnd
        (Variant oreq -> Maybe (Variant rndReq))
   => HFoldlWithIndex (RequestBuildersStep (Variant rndReq) (Variant rndReq)) {} (Proxy (Variant rndReq))
        { | rndReqBuilders }
-  => WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res
+  => WebSpec (HJust rnd) (Variant ireq) (Variant oreq) res
   -> { | rndReqBuilders }
-webRequest webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, response }), render: HJust render }) =
+webRequest _ =
   Client.requestBuilders (Proxy :: Proxy (Variant rndReq))
 
 type Defaults doc = { doc :: doc }
@@ -146,7 +133,7 @@ type NavigationInterface client inSpecReq outSpecReq webReq rndReqBuilders =
 type NavigationInterface' client specReq webSpec reqBuilders = NavigationInterface client specReq specReq webSpec
   reqBuilders
 
-parseSpecReq :: forall t165 t166 t167. Request.Duplex t165 t166 t167 -> String -> Aff (Either Request.ParsingError t167)
+parseSpecReq :: forall t166 t167. Request.Duplex t166 t167 -> String -> Aff (Either Request.ParsingError t167)
 parseSpecReq specReqDpl = Request.Duplex.parse specReqDpl <<< apiServerRequest
 
 -- parseWebReq :: forall t179 t181 t191 t192 t193 t206. HFoldlWithIndex (ExpandRequest t179) (Variant () -> Variant t179) t192 (Variant t181 -> Variant t179) => HFoldlWithIndex (ContractRequest t191) (Variant t191 -> Maybe (Variant ())) t192 (Variant t191 -> Maybe (Variant t193)) => Request.Duplex t206 (Variant t179) (Variant t191) -> t192 -> String -> Aff (Either Request.ParsingError (Variant t193))
@@ -156,7 +143,8 @@ parseWebReq specReqDpl render = do
       Isomers.Request.Duplex.as
         { print: Isomers.Web.Client.Render.expandRequest Proxy render
         , parse: note "Given URL is not a web route but a spec route." <<< Isomers.Web.Client.Render.contractRequest
-            (Proxy :: Proxy (Variant _))
+            (Proxy :: Proxy (Variant _
+))
             render
         , show: unsafeStringify
         }
@@ -164,8 +152,8 @@ parseWebReq specReqDpl render = do
   Request.Duplex.parse dpl <<< apiServerRequest
 
 webRouter
-  :: forall client clientRouter ireq oreq body requestBuilders rnd rndReq rndReqBuilders doc res
-   . FoldRender (WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res) clientRouter (Variant rndReq) (Aff doc)
+  :: forall client clientRouter ireq oreq requestBuilders rnd rndReq rndReqBuilders doc res
+   . FoldRender (WebSpec (HJust rnd) (Variant ireq) (Variant oreq) res) clientRouter (Variant rndReq) (Aff doc)
   => HFoldlWithIndex (ContractRequest oreq) (Variant oreq -> Maybe (Variant ())) rnd
        (Variant oreq -> Maybe (Variant rndReq))
   => HFoldlWithIndex (ExpandRequest ireq) (Variant () -> Variant ireq) rnd (Variant rndReq -> Variant ireq)
@@ -176,7 +164,7 @@ webRouter
   HFoldlWithIndex (RequestBuildersStep (Variant ireq) (Variant ireq)) {} (Proxy (Variant ireq)) { | requestBuilders }
   => HFoldlWithIndex (ClientStep (Variant ireq) res) {} { | requestBuilders } client
   => Defaults doc
-  -> WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res
+  -> WebSpec (HJust rnd) (Variant ireq) (Variant oreq) res
   -> HostInfo
   ->
   -- (NavigationInterface (Variant ireq) (Variant rndReq) rndReqBuilders → clientRouter) →
@@ -191,8 +179,8 @@ webRouter
            }
        )
 webRouter
-  defaults
-  webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, response }), render: HJust renderers })
+  _ -- defaults
+  webSpec@(WebSpec { spec: Spec { request: reqDpl, response }, render: HJust renderers })
   hostInfo
   toClientRouter = do
   let
@@ -283,7 +271,7 @@ webRouter
 
 -- | We pass here `WebSpec` only to somehow generate `Variant rndReq` type.
 fakeWebRouter
-  :: forall client ireq oreq body rnd rndReq requestBuilders rndReqBuilders doc res
+  :: forall client ireq oreq rnd rndReq requestBuilders rndReqBuilders doc res
    . HFoldlWithIndex (ContractRequest oreq) (Variant oreq -> Maybe (Variant ())) rnd
        (Variant oreq -> Maybe (Variant rndReq))
   => HFoldlWithIndex (ExpandRequest ireq) (Variant () -> Variant ireq) rnd (Variant rndReq -> Variant ireq)
@@ -297,12 +285,12 @@ fakeWebRouter
   => HFoldlWithIndex (ClientStep (Variant ireq) res) {} { | requestBuilders } client
   => Fetch
   -> doc
-  -> WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res
+  -> WebSpec (HJust rnd) (Variant ireq) (Variant oreq) res
   -> NavigationInterface client (Variant ireq) (Variant oreq) (Variant rndReq) { | rndReqBuilders }
 fakeWebRouter
   fetch
   doc
-  web@(WebSpec { spec: Spec spec@{ request: reqDpl, response: responseDpls }, render: HJust renderers }) =
+  web@(WebSpec { spec: Spec { request: reqDpl, response: responseDpls }, render: HJust renderers }) =
   { client: Client.client fetch reqDpl responseDpls
   , navigate: const $ pure unit
   , parse:

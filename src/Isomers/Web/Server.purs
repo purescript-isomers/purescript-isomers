@@ -2,10 +2,8 @@ module Isomers.Web.Server where
 
 import Prelude
 
-import Data.Bifunctor (bimap)
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
-import Data.Profunctor (dimap)
 import Data.Traversable (for)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested (type (/\))
@@ -21,7 +19,7 @@ import Isomers.Web.Types (WebSpec(..))
 import Prim.Row (class Cons, class Lacks) as Row
 import Record (get, insert, set) as Record
 import Type.Equality (class TypeEquals)
-import Type.Equality (from, to) as Type.Equality
+import Type.Equality (to) as Type.Equality
 import Type.Prelude (class IsSymbol, Proxy(..))
 
 -- | We are passing frontent router so components
@@ -104,12 +102,12 @@ instance foldingRenderHandlerStepLeaf ::
 -- | * we end up with `RawServer HtmlString`
 -- |
 renderToApi
-  :: forall doc clientRouter body handlers handlers' m render ireq oreq res
+  :: forall doc clientRouter handlers handlers' m render ireq oreq res
    . HFoldlWithIndex (RenderHandlerStep m doc clientRouter) handlers render handlers'
-  => WebSpec body (HJust render) ireq oreq res
+  => WebSpec (HJust render) ireq oreq res
   -> handlers
   -> (doc -> m HtmlString)
   -> clientRouter
   -> handlers'
-renderToApi (WebSpec { render: HJust render, spec }) handlers renderToHtml router = do
+renderToApi (WebSpec { render: HJust render }) handlers renderToHtml router = do
   hfoldlWithIndex (RenderHandlerStep renderToHtml router) handlers render

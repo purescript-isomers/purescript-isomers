@@ -76,7 +76,7 @@ printPath { segments, params, hash: hash' } = printSegments segments <> printPar
 
   unsafeEncodeURIComponent s = do
     case encodeURIComponent s of
-      Just s -> s
+      Just s' -> s'
       Nothing -> unsafeCrashWith ("URI encoding failed: " <> s)
 
   printParams [] = ""

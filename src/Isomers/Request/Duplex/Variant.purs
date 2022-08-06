@@ -14,27 +14,27 @@ import Prim.Row (class Cons, class Union) as Row
 import Type.Prelude (class IsSymbol, Proxy)
 
 injInto
-  :: forall body i l o lo vi vi' vo vo'
+  :: forall i l o lo vi vi' vo vo'
    . IsSymbol l
   => Row.Cons l o vo vo'
   => Row.Cons l i vi vi'
   => Row.Union vo lo vo'
   => Proxy l
-  -> Duplex body i o
-  -> Duplex body (Variant vi) (Variant vo)
-  -> Duplex body (Variant vi') (Variant vo')
+  -> Duplex i o
+  -> Duplex (Variant vi) (Variant vo)
+  -> Duplex (Variant vi') (Variant vo')
 injInto l (Duplex prt prs) (Duplex vPrt vPrs) = Duplex vPrt' vPrs'
   where
   vPrt' = vPrt # Variant.on l prt
 
   vPrs' = Variant.expand <$> vPrs <|> Variant.inj l <$> prs
 
-empty :: forall body. Duplex body (Variant ()) (Variant ())
+empty :: Duplex (Variant ()) (Variant ())
 empty = Duplex prt prs
   where
   prt :: Variant () -> Printer
   prt = const mempty
 
-  prs :: Parser body (Variant ())
+  prs :: Parser (Variant ())
   prs = Parser.Chomp \state -> pure $ Parser.Fail $ Parser.Expected "Variant" (unsafeStringify state)
 

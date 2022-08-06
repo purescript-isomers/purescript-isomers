@@ -16,7 +16,7 @@ import Isomers.Request.Duplex.Variant (injInto)
 import Prim.Row (class Cons, class Union) as Row
 import Type.Prelude (Proxy, reflectSymbol)
 
-newtype VariantStep = VariantStep (forall body i o s. IsSymbol s => Proxy s -> Duplex body i o -> Duplex body i o)
+newtype VariantStep = VariantStep (forall i o s. IsSymbol s => Proxy s -> Duplex i o -> Duplex i o)
 
 -- | Fold over a record with duplexes and build duplex
 -- | for a variant.
@@ -29,9 +29,9 @@ instance foldingVariantStepDuplex ::
   ) =>
   FoldingWithIndex VariantStep
     (Proxy l)
-    (Duplex body (Variant vi) (Variant vo))
-    (Duplex body i o)
-    (Duplex body (Variant vi') (Variant vo')) where
+    (Duplex (Variant vi) (Variant vo))
+    (Duplex i o)
+    (Duplex (Variant vi') (Variant vo')) where
   foldingWithIndex (VariantStep step) l vd d = do
     let
       f = injInto l <<< step l
@@ -39,26 +39,26 @@ instance foldingVariantStepDuplex ::
 
 -- | Just an alias
 class
-  HFoldlWithIndex VariantStep (Duplex body (Variant ()) (Variant ())) rec (Duplex body (Variant i) (Variant o)) <=
-  HFoldlVariantStep body rec (i :: # Type) (o :: # Type)
+  HFoldlWithIndex VariantStep (Duplex (Variant ()) (Variant ())) rec (Duplex (Variant i) (Variant o)) <=
+  HFoldlVariantStep rec (i :: Row Type) (o :: Row Type)
 
 instance hfoldlVariantStep ::
-  ( HFoldlWithIndex VariantStep (Duplex body (Variant ()) (Variant ())) rec (Duplex body (Variant i) (Variant o))
+  ( HFoldlWithIndex VariantStep (Duplex (Variant ()) (Variant ())) rec (Duplex (Variant i) (Variant o))
   ) =>
-  HFoldlVariantStep body rec i o
+  HFoldlVariantStep rec i o
 
 type PrefixRoutes = Boolean
 
 variant
-  :: forall body vi vo rec
-   . HFoldlVariantStep body rec vi vo
+  :: forall vi vo rec
+   . HFoldlVariantStep rec vi vo
   => PrefixRoutes
   -> rec
-  -> Duplex body (Variant vi) (Variant vo)
+  -> Duplex (Variant vi) (Variant vo)
 variant prefixRoutes rec = do
-  hfoldlWithIndex (VariantStep step) (Request.Duplex.Variant.empty :: Duplex body _ _) rec
+  hfoldlWithIndex (VariantStep step) (Request.Duplex.Variant.empty :: Duplex _ _) rec
   where
-  step :: forall si so sb ss. IsSymbol ss => Proxy ss -> Duplex sb si so -> Duplex sb si so
+  step :: forall si so ss. IsSymbol ss => Proxy ss -> Duplex si so -> Duplex si so
   step l =
     if prefixRoutes then
       prefix (reflectSymbol l)
@@ -77,20 +77,20 @@ instance mappingMethodStep ::
   ( IsSymbol l
   , Row.Cons l Unit ms ("DELETE" :: Unit, "POST" :: Unit, "PUT" :: Unit, "GET" :: Unit)
   ) =>
-  MappingWithIndex MethodStep (Proxy l) (Duplex body i o) (Duplex body i o) where
+  MappingWithIndex MethodStep (Proxy l) (Duplex i o) (Duplex i o) where
   mappingWithIndex _ l v = Type.withMethod (toHTTPMethod m) v
     where
     m :: Request.Method (Variant ("DELETE" :: Unit, "POST" :: Unit, "PUT" :: Unit, "GET" :: Unit))
     m = Request.Method (Variant.inj l unit)
 
 byMethod
-  :: forall body vi vo rec rec'
+  :: forall vi vo rec rec'
    . HMapWithIndex MethodStep rec rec'
-  => HFoldlVariantStep body rec' vi vo
+  => HFoldlVariantStep rec' vi vo
   => rec
-  -> Duplex body (Variant vi) (Variant vo)
+  -> Duplex (Variant vi) (Variant vo)
 byMethod rec = do
   let
     rec' = hmapWithIndex MethodStep rec
-  hfoldlWithIndex (VariantStep (const $ identity)) (Request.Duplex.Variant.empty :: Duplex body _ _) rec'
+  hfoldlWithIndex (VariantStep (const $ identity)) (Request.Duplex.Variant.empty :: Duplex _ _) rec'
 

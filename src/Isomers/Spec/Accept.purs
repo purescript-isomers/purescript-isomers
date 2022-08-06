@@ -16,9 +16,8 @@ import Data.Tuple.Nested (type (/\), (/\))
 import Data.Variant (Variant)
 import Data.Variant (expand, inj) as Variant
 import Heterogeneous.Folding (class Folding, class HFoldl, hfoldl)
-import Heterogeneous.Mapping (class HMap, class Mapping, hmap)
 import Isomers.Contrib.Data.Variant (tag) as Contrib.Data.Variant
-import Isomers.Contrib.Type.Eval.Foldings (class LiftHList, FromHListType, HListProxy(..), HomogeneousRow)
+import Isomers.Contrib.Type.Eval.Foldings (FromHListType, HListProxy(..), HomogeneousRow)
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern(..), parse) as Accept
 import Isomers.HTTP.Request.Headers.Accept (MediaPattern)
 import Isomers.HTTP.Request.Headers.Accept.MediaPattern (matchedBy, print) as Accept.MediaPattern
@@ -32,11 +31,10 @@ import JS.Unsafe.Stringify (unsafeStringify)
 import Network.HTTP.Types (hAccept)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
 import Record (insert) as Record
-import Record.Extra (type (:::), SNil)
-import Type.Eval (class Eval, Lift, TypeExpr)
+import Type.Eval (class Eval, TypeExpr)
 import Type.Eval.Function (type (<<<)) as T
 import Type.Eval.Functor (Map)
-import Type.Prelude (class IsSymbol, class TypeEquals, Proxy(..), Proxy, reflectSymbol)
+import Type.Prelude (class IsSymbol, class TypeEquals, Proxy(..), reflectSymbol)
 
 -- | Fold from `Response.Duplex`es a `Record`
 -- | with according content types as labels.
@@ -74,7 +72,7 @@ instance evalResponseContentTypeStep ::
 -- | We don't return a `Variant` value directly from here
 -- | because it should be faster to use constructed function
 -- | then to do `hfold` on every request.
-data RequestMediaPatternParser body r o = RequestMediaPatternParser (Request.Parser body (r -> o))
+data RequestMediaPatternParser r o = RequestMediaPatternParser (Request.Parser (r -> o))
 
 instance foldingRequestMediaPatternParser ::
   ( IsSymbol contentType
@@ -83,23 +81,23 @@ instance foldingRequestMediaPatternParser ::
   , Row.Cons contentType req vReq vReq'
   ) =>
   Folding
-    (RequestMediaPatternParser body r req)
-    (MediaPattern -> Request.Parser body (r -> Variant vReq))
+    (RequestMediaPatternParser r req)
+    (MediaPattern -> Request.Parser (r -> Variant vReq))
     (Proxy contentType)
-    (MediaPattern -> Request.Parser body (r -> Variant vReq')) where
+    (MediaPattern -> Request.Parser (r -> Variant vReq')) where
   folding (RequestMediaPatternParser prs) vprs ct = do
     let
       mt = MediaType (reflectSymbol ct)
 
-      prs' :: Request.Parser body (r -> Variant vReq')
+      prs' :: Request.Parser (r -> Variant vReq')
       prs' = map (Variant.inj ct) <$> prs
 
-      vprs' :: MediaPattern -> Request.Parser body (r -> Variant vReq')
+      vprs' :: MediaPattern -> Request.Parser (r -> Variant vReq')
       vprs' mp = map Variant.expand <$> vprs mp
     \mp ->
       vprs' mp <|> parserBuilder mt prs' mp
 
-parserBuilder :: forall a body. MediaType -> Request.Parser body a -> MediaPattern -> Request.Parser body a
+parserBuilder :: forall a. MediaType -> Request.Parser a -> MediaPattern -> Request.Parser a
 parserBuilder mediaType@(MediaType mtStr) prs = do
   let
     match p = mediaType `Accept.MediaPattern.matchedBy` p
@@ -123,24 +121,24 @@ parserBuilder mediaType@(MediaType mtStr) prs = do
 -- | XXX: I'm not sure why "`class` alias" is not fully working
 -- | and I have to put here `RowSList` too.
 requestAccum
-  :: forall body ireq route oreq cts ivReq ovReq ls
+  :: forall ireq route oreq cts ivReq ovReq ls
    . Eval (HomogeneousRow Void cts) ls
   => ToHomogeneousRow ls ireq ivReq
   => HFoldl
-       (RequestMediaPatternParser body route oreq)
-       (MediaPattern -> Request.Parser body (route -> Variant ()))
+       (RequestMediaPatternParser route oreq)
+       (MediaPattern -> Request.Parser (route -> Variant ()))
        (HListProxy cts)
-       (MediaPattern -> Request.Parser body (route -> Variant ovReq))
-  => Request.Accum body route ireq oreq
+       (MediaPattern -> Request.Parser (route -> Variant ovReq))
+  => Request.Accum route ireq oreq
   -> HListProxy cts
-  -> Request.Accum body route (Variant ivReq) (Variant ovReq)
+  -> Request.Accum route (Variant ivReq) (Variant ovReq)
 requestAccum (Request.Accum (Request.Duplex prt prs) dst) cts = do
   let
-    buildParser :: MediaPattern -> Request.Parser body (route -> (Variant ovReq))
+    buildParser :: MediaPattern -> Request.Parser (route -> (Variant ovReq))
     buildParser = do
       let
         -- | TODO: Improve reporting - replace `unsafeStringify` with something sane ;-)
-        noMatch :: MediaPattern -> Request.Parser body (route -> Variant ())
+        noMatch :: MediaPattern -> Request.Parser (route -> Variant ())
         noMatch mp =
           Request.Duplex.Parser.Chomp \_ ->
             pure
@@ -148,8 +146,8 @@ requestAccum (Request.Accum (Request.Duplex prt prs) dst) cts = do
               $ Request.Duplex.Parser.Expected (unsafeStringify cts)
               $ unsafeStringify mp
       hfoldl
-        (RequestMediaPatternParser prs :: RequestMediaPatternParser body route oreq)
-        (noMatch :: MediaPattern -> Request.Parser body (route -> Variant ()))
+        (RequestMediaPatternParser prs :: RequestMediaPatternParser route oreq)
+        (noMatch :: MediaPattern -> Request.Parser (route -> Variant ()))
         cts
 
     prs' = Request.Duplex.Parser.Chomp chomp
@@ -194,7 +192,7 @@ responsePrinters lst = (hfoldl ResponseContentTypeRecord {} $ lst)
 -- | From a pair of request / response duplexes and a hlist of response codecs create a spec which
 -- | labels everything by content types.
 accumSpec
-  :: forall body res resList resList' route ireq oreq cts sl ivReq ovReq
+  :: forall res resList route ireq oreq cts sl ivReq ovReq
    . HFoldl ResponseContentTypeRecord {} resList res
   =>
   -- LiftHList resList resList' ⇒
@@ -202,12 +200,12 @@ accumSpec
   => Eval (HomogeneousRow Void cts) sl
   => ToHomogeneousRow sl ireq ivReq
   => HFoldl
-       (RequestMediaPatternParser body route oreq)
-       (MediaPattern -> Request.Parser body (route -> Variant ()))
+       (RequestMediaPatternParser route oreq)
+       (MediaPattern -> Request.Parser (route -> Variant ()))
        (HListProxy cts)
-       (MediaPattern -> Request.Parser body (route -> Variant ovReq))
-  => (Request.Accum body route ireq oreq /\ resList)
-  -> AccumSpec body route (Variant ivReq) (Variant ovReq) res
+       (MediaPattern -> Request.Parser (route -> Variant ovReq))
+  => (Request.Accum route ireq oreq /\ resList)
+  -> AccumSpec route (Variant ivReq) (Variant ovReq) res
 accumSpec (req /\ res) = do
   let
     cts :: HListProxy cts

@@ -101,7 +101,9 @@ fromFetchResponse res = do
     , url
     }
 
-fetch :: HostInfo -> Request.Encodings.ClientRequest -> Aff (Either String Response.Encodings.ClientResponse)
+type Fetch = Request.Encodings.ClientRequest -> Aff (Either String Response.Encodings.ClientResponse)
+
+fetch :: HostInfo -> Fetch
 fetch hostInfo req = do
   req' <- liftEffect $ toFetchRequest hostInfo req
   traceM req'
@@ -114,6 +116,4 @@ fetch hostInfo req = do
     traceM $ unsafeStringify err
     traceM "EXCEPTION?"
     pure $ Left $ unsafeStringify err
-
--- ) >>= traverse liftEffect
 

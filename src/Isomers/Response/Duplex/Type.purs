@@ -15,14 +15,12 @@ import Isomers.Response.Encodings (ClientResponse, ServerResponse) as Encodings
 -- | for different response types but one invariant
 -- | should be preserved:
 -- |
--- | If a given response has an OK response it
+-- | If a given response has an `200 OK` case it
 -- | has to be encoded using declared `contentType`
 -- |
 -- | The content type information is used to
 -- | provide appropriate options for `Accept` header
 -- | based routing.
--- |
--- |
 data Duplex (contentType :: Symbol) i o = Duplex
   (i -> Printer)
   (Parser o)

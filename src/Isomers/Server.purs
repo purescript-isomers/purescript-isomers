@@ -100,12 +100,12 @@ else instance routerFoldingFun ::
 data RoutingError = NotFound
 
 router
-  :: forall body handlers ireq oreq m resCodecs
+  :: forall handlers ireq oreq m resCodecs
    . HFoldlWithIndex (RouterStep handlers resCodecs) Unit oreq (m ServerResponseWrapper)
   => MonadAff m
-  => Spec body ireq oreq { | resCodecs }
+  => Spec ireq oreq { | resCodecs }
   -> { | handlers }
-  -> Request.Encodings.ServerRequest body
+  -> Request.Encodings.ServerRequest
   -> m (Either RoutingError Response.Encodings.ServerResponse)
 router spec@(Spec { request, response }) handlers = do
   let

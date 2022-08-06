@@ -4,9 +4,11 @@ module Isomers.Request.Duplex
 
 import Isomers.Request.Duplex.Type
   ( as
+  , as'
   , body
   , flag
   , int
+  , json
   , optional
   , param
   , parse

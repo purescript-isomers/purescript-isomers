@@ -4,33 +4,22 @@ import Prelude
 
 import Control.Monad.Except (catchError)
 import Data.Either (Either(..))
+import Data.Maybe (Maybe(..))
 import Data.Variant (Variant)
-import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Aff (message) as Aff
-import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Effect.Console (error) as Console
 import Heterogeneous.Folding (class HFoldlWithIndex)
 import Isomers.Node.Request (fromNodeRequest)
 import Isomers.Node.Response (writeNodeResponse)
-import Isomers.Node.Types (NodeSimpleRequest)
+import Isomers.Runtime (caseRuntime)
 import Isomers.Server (RouterStep, ServerResponseWrapper)
 import Isomers.Server (router) as Server
 import Isomers.Spec (Spec)
-import Node.HTTP
-  ( ListenOptions
-  , Request
-  , Response
-  , close
-  , createServer
-  , listen
-  , responseAsStream
-  , setStatusCode
-  , setStatusMessage
-  ) as Node.HTTP
-import Node.HTTP (requestHeaders, requestURL)
+import Node.HTTP (ListenOptions, Request, Response, close, createServer, listen, responseAsStream, setStatusCode, setStatusMessage) as Node.HTTP
 import Node.Stream (end) as Node.Stream
 
 -- | TODO: this is just an ugly prototype.
@@ -40,7 +29,7 @@ router
   :: forall handlers ireq m oreq resCodecs
    . MonadAff m
   => HFoldlWithIndex (RouterStep handlers resCodecs) Unit oreq (m ServerResponseWrapper)
-  => Spec NodeSimpleRequest ireq oreq { | resCodecs }
+  => Spec ireq oreq { | resCodecs }
   -> { | handlers }
   -> Node.HTTP.Request
   -> Node.HTTP.Response
@@ -54,7 +43,7 @@ router spec handlers nreq nres = do
     >>= case _ of
       Right res -> do
         liftEffect $ writeNodeResponse res nres
-      Left err ->
+      Left _ ->
         liftEffect
           $ do
               Node.HTTP.setStatusCode nres 404
@@ -73,7 +62,7 @@ serve
   :: forall handlers ireq m oreq resCodecs
    . MonadAff m
   => HFoldlWithIndex (RouterStep handlers resCodecs) Unit (Variant oreq) (m ServerResponseWrapper)
-  => Spec NodeSimpleRequest ireq (Variant oreq) { | resCodecs }
+  => Spec ireq (Variant oreq) { | resCodecs }
   -> { | handlers }
   -> (m ~> Aff)
   -> Node.HTTP.ListenOptions
@@ -84,13 +73,10 @@ serve spec handlers interpret options onStarted = do
     r = router spec handlers
 
     handleRequest nreq nres = do
-      traceM (requestURL nreq)
-      -- traceM (requestHeaders nreq)
       launchAff_ do
         interpret (r nreq nres)
           `catchError`
             \err -> do
-              traceM "ERROR?"
               liftEffect
                 $ do
                     Console.error $ Aff.message err
@@ -99,3 +85,11 @@ serve spec handlers interpret options onStarted = do
   server <- Node.HTTP.createServer handleRequest
   Node.HTTP.listen server options onStarted
   pure $ Node.HTTP.close server
+
+onNode :: Maybe Node
+onNode = caseRuntime Just (const Nothing) (const Nothing) Nothing
+
+api :: Node -> _
+api _ =
+  { request :: parseJson
+

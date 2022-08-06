@@ -63,7 +63,7 @@ To fulfill this "dispatch" requirement we use "compatible" `Variant`s and `Recor
 type RealWorldApi req res = RequestCodec (Variant req) /\ { | res }
 ```
 
-What we have above is a codec which encodes / decodes requests into a `Variant` on the first position of our tuple. The `{ | res }` type represents a record of response codecs which we use to turn results into a `HTTPResponse`s. In this record we have codecs which should be used to encode / decode responses for particular requests. We are able to pick appropriate response codec or handler on the server based on the label included in the `Variant` label from the request. These labels don't carry any HTTP semantic meaning by themselves - they are only a dispatch layer. On the application layer you work with data directly and use these labels / paths only to pick endpoints which you want to use or to create URLs.
+What we have above is a codec which encodes / decodes requests into a `Variant` on the first position of our tuple. The `{ | res }` type represents a record of response codecs which we use to turn results into a `HTTPResponse`s. In this record we have codecs which should be used to encode / decode responses for particular requests. We are able to pick appropriate response codec or handler on the server using the label included in the `Variant` from the request. These labels don't carry any HTTP semantic meaning by themselves - they are only a dispatch layer. On the application layer you work with data directly and use these labels / paths only to pick endpoints which you want to use or to create URLs.
 
 So the simple client can be sketched as:
 
@@ -81,7 +81,6 @@ client ((reqEnc /\ _) /\ resCodecs) endpoint i = do
   let
     httpReq = reqEnc (Variant.inj endpoint i)
     resDec = snd (Record.get endpoint resCodecs)
-
   httpRes <- httpFetch httpReq
   pure $ resDec httpRes
 ```

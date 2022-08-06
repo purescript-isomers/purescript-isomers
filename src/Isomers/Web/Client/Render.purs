@@ -16,7 +16,6 @@ import Isomers.Contrib.Heterogeneous.HMaybe (HJust(..))
 import Isomers.HTTP.ContentTypes (_html)
 import Isomers.HTTP.Exchange (Error) as HTTP.Exchange
 import Isomers.HTTP.Exchange (Exchange(..)) as HTTP
-import Isomers.Spec (Spec(..))
 import Isomers.Spec (client) as Spec
 import Isomers.Web.Builder (Tagged(..))
 import Isomers.Web.Renderer (Renderer(..))
@@ -25,7 +24,7 @@ import Prim.Row (class Cons, class Union) as Row
 import Prim.RowList (class RowToList)
 import Record (get) as Record
 import Type.Equality (from, to) as Type.Equality
-import Type.Prelude (class IsSymbol, class TypeEquals, Proxy(..), Proxy)
+import Type.Prelude (class IsSymbol, class TypeEquals, Proxy(..))
 
 -- | * We map the renderers `Record` (which is in some sens a subtree of
 -- | the spec request `Variant` tree) recursively.
@@ -51,6 +50,7 @@ import Type.Prelude (class IsSymbol, class TypeEquals, Proxy(..), Proxy)
 -- | layer. The final match is done in the `foldRender` function. I've put
 -- | this in a `class` to accumulate the intermediate constraints and
 -- | simplify signatures.
+data RenderStep :: forall k. k -> Type -> Type
 data RenderStep clientRouter client = RenderStep client
 
 instance mappingRenderLeaf ::
@@ -111,8 +111,8 @@ instance instanceFoldRender ::
   , VariantMatchCases rndrl' rndReq (clientRouter -> Aff doc)
   , Row.Union rndReq () rndReq
   ) =>
-  FoldRender (WebSpec body (HJust rnd) (Variant ireq) (Variant oreq) res) clientRouter (Variant rndReq) (Aff doc) where
-  foldRender _ webSpec@(WebSpec { spec: spec@(Spec { request: reqDpl, response }), render: HJust render }) fetch = do
+  FoldRender (WebSpec (HJust rnd) (Variant ireq) (Variant oreq) res) clientRouter (Variant rndReq) (Aff doc) where
+  foldRender _ (WebSpec { spec: spec, render: HJust render }) fetch = do
     let
       client :: { | client }
       client = Spec.client fetch spec
@@ -123,7 +123,7 @@ instance instanceFoldRender ::
 -- | We contracting here route `Variant` but also
 -- | a render request `Variant` into data source
 -- | request.
-data ContractRequest (specReq :: # Type) = ContractRequest
+data ContractRequest (specReq :: Row Type) = ContractRequest
 
 instance foldingContractRequest ::
   ( IsSymbol sym
@@ -197,7 +197,7 @@ contractRequest _ renderers = hfoldlWithIndex (ContractRequest :: ContractReques
   (const Nothing :: Variant oreq -> Maybe (Variant ()))
   renderers
 
-data ExpandRequest (specReq :: # Type) = ExpandRequest
+data ExpandRequest (specReq :: Row Type) = ExpandRequest
 
 instance foldingExpandRequest ::
   ( IsSymbol sym
@@ -211,7 +211,7 @@ instance foldingExpandRequest ::
     (Variant rndReq -> Variant specReq)
     (Tagged ct rnd)
     (Variant rndReq' -> Variant specReq) where
-  foldingWithIndex _ prop expandRndReq tagged = do
+  foldingWithIndex _ prop expandRndReq _ = do
     let
       ct = Proxy :: Proxy ct
     Variant.on prop (Variant.inj prop <<< Variant.inj ct) expandRndReq

@@ -16,15 +16,15 @@ import Prim.Row (class Cons, class Union) as Row
 import Type.Prelude (class IsSymbol, Proxy)
 
 injInto
-  :: forall body route i l o lo vi vi' vo vo'
+  :: forall route i l o lo vi vi' vo vo'
    . IsSymbol l
   => Row.Cons l o vo vo'
   => Row.Cons l i vi vi'
   => Row.Union vo lo vo'
   => Proxy l
-  -> Accum body route i o
-  -> Accum body route (Variant vi) (Variant vo)
-  -> Accum body route (Variant vi') (Variant vo')
+  -> Accum route i o
+  -> Accum route (Variant vi) (Variant vo)
+  -> Accum route (Variant vi') (Variant vo')
 injInto l (Accum (Duplex prt prs) dst) (Accum (Duplex vPrt vPrs) vDst) = Accum (Duplex vPrt' vPrs') vDst'
   where
   vPrt' = vPrt # Variant.on l prt
@@ -34,13 +34,13 @@ injInto l (Accum (Duplex prt prs) dst) (Accum (Duplex vPrt vPrs) vDst) = Accum (
   vDst' = vDst
     # Variant.on l dst
 
-empty :: forall body route. Accum body route (Variant ()) (Variant ())
+empty :: forall route. Accum route (Variant ()) (Variant ())
 empty = Accum (Duplex prt prs) dst
   where
   prt :: Variant () -> Printer
   prt = const mempty
 
-  prs :: Parser body (route -> Variant ())
+  prs :: Parser (route -> Variant ())
   prs = Parser.Chomp \state -> pure $ Parser.Fail $ Parser.Expected "Empty Variant match" (unsafeStringify state)
 
   dst _ = unsafeCrashWith $ "Accum.Variant.emtpy"

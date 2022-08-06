@@ -17,16 +17,15 @@ import Node.Encoding (Encoding(..)) as Encoding
 import Node.HTTP (Request) as HTTP.Node
 import Node.HTTP (Request) as Node.HTTP
 import Node.HTTP (requestAsStream) as HTTP
+import Node.Stream (Readable)
 import Node.Stream (onData, onEnd) as Stream
 import Type.Prelude (Proxy(..))
 
 -- | TODO:
 -- | * Catching underlining errors `onError`
 -- | * Hanling errors?
-_buffs :: Int -> Node.HTTP.Request -> Aff (Array Buffer)
-_buffs maxBodySize request = Aff.makeAff \done -> do
-  let
-    stream = HTTP.requestAsStream request
+_buffs :: Int -> Readable () -> Aff (Array Buffer)
+_buffs maxBodySize stream = Aff.makeAff \done -> do
   ref <- Ref.new
     { bufs: []
     , size: 0
@@ -43,26 +42,11 @@ _buffs maxBodySize request = Aff.makeAff \done -> do
     Ref.read ref >>= _.bufs >>> Right >>> done
   pure nonCanceler
 
-_buff = Proxy :: Proxy "buff"
+buff :: Int -> Readable () -> Aff Buffer
+buff maxBodySize stream =
+  _buffs maxBodySize stream >>= Buffer.concat >>> liftEffect
 
-type Buff req = (buff :: Fiber Buffer | req)
-
-buff :: Int -> Node.HTTP.Request -> Aff Buffer
-buff maxBodySize request =
-  _buffs maxBodySize request >>= Buffer.concat >>> liftEffect
-
-_json = Proxy :: Proxy "json"
-
-type Json req = (json :: Fiber Argonaut.Json | req)
-
-_str = Proxy :: Proxy "str"
-
-type Str req = (str :: Fiber String | req)
-
-str :: Int -> Node.HTTP.Request -> Aff String
-str maxBodySize request =
-  buff maxBodySize request >>= Buffer.toString Encoding.UTF8 >>> liftEffect
-
-readers :: Int -> HTTP.Node.Request -> Effect { buff :: Fiber Buffer, str :: Fiber String }
-readers m r = { buff: _, str: _ } <$> launchSuspendedAff (buff m r) <*> launchSuspendedAff (str m r)
+str :: Int -> Readable () -> Aff String
+str maxBodySize stream =
+  buff maxBodySize stream >>= Buffer.toString Encoding.UTF8 >>> liftEffect
 

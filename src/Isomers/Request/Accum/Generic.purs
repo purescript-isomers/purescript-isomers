@@ -12,7 +12,7 @@ import Prim.Row (class Cons, class Union) as Row
 import Type.Prelude (Proxy, reflectSymbol)
 
 newtype VariantStep = VariantStep
-  (forall body route i o s. IsSymbol s => Proxy s -> Accum body route i o -> Accum body route i o)
+  (forall route i o s. IsSymbol s => Proxy s -> Accum route i o -> Accum route i o)
 
 -- | Fold over a record with duplexes and build duplex
 -- | for a variant.
@@ -25,9 +25,9 @@ instance foldingVariantStepAccum ::
   FoldingWithIndex
     VariantStep
     (Proxy l)
-    (Accum body route (Variant vi) (Variant vo))
-    (Accum body route i o)
-    (Accum body route (Variant vi') (Variant vo')) where
+    (Accum route (Variant vi) (Variant vo))
+    (Accum route i o)
+    (Accum route (Variant vi') (Variant vo')) where
   foldingWithIndex (VariantStep step) l vd d = do
     let
       f = injInto l <<< step l
@@ -37,32 +37,32 @@ instance foldingVariantStepAccum ::
 class
   HFoldlWithIndex
     VariantStep
-    (Accum body route (Variant ()) (Variant ()))
+    (Accum route (Variant ()) (Variant ()))
     rec
-    (Accum body route (Variant i) (Variant o)) <=
-  HFoldlAccumVariant body route rec (i :: # Type) (o :: # Type)
+    (Accum route (Variant i) (Variant o)) <=
+  HFoldlAccumVariant route rec (i :: Row Type) (o :: Row Type)
 
 instance hfoldlVariantStep ::
   ( HFoldlWithIndex
       VariantStep
-      (Accum body route (Variant ()) (Variant ()))
+      (Accum route (Variant ()) (Variant ()))
       rec
-      (Accum body route (Variant i) (Variant o))
+      (Accum route (Variant i) (Variant o))
   ) =>
-  HFoldlAccumVariant body route rec i o
+  HFoldlAccumVariant route rec i o
 
 type PrefixRoutes = Boolean
 
 variant
-  :: forall body vi vo route rec
-   . HFoldlAccumVariant body route rec vi vo
+  :: forall vi vo route rec
+   . HFoldlAccumVariant route rec vi vo
   => PrefixRoutes
   -> rec
-  -> Accum body route (Variant vi) (Variant vo)
+  -> Accum route (Variant vi) (Variant vo)
 variant prefixRoutes rec = do
-  hfoldlWithIndex (VariantStep step) (Request.Accum.Variant.empty :: Accum body route _ _) rec
+  hfoldlWithIndex (VariantStep step) (Request.Accum.Variant.empty :: Accum route _ _) rec
   where
-  step :: forall sr si sb so ss. IsSymbol ss => Proxy ss -> Accum sb sr si so -> Accum sb sr si so
+  step :: forall sr si so ss. IsSymbol ss => Proxy ss -> Accum sr si so -> Accum sr si so
   step l =
     if prefixRoutes then
       prefix (reflectSymbol l)

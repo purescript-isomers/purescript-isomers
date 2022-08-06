@@ -14,10 +14,9 @@ import Isomers.Request.Accum.Generic (class HFoldlAccumVariant, VariantStep(..))
 import Isomers.Request.Accum.Type (Accum)
 import Isomers.Request.Accum.Type (method) as Request.Accum.Type
 import Isomers.Request.Accum.Variant (empty) as Request.Accum.Variant
-import Isomers.Spec.Record (UnifyBody)
-import Isomers.Spec.Types (AccumSpec(..), GetRequest, GetResponse, _GetRequest, _GetResponse)
+import Isomers.Spec.Types (AccumSpec(..))
+import Isomers.Spec.Types.Mappings (GetRequest, GetResponse, _GetRequest, _GetResponse)
 import Prim.Row (class Cons) as Row
-import Type.Eval (class Eval)
 import Type.Prelude (Proxy)
 
 data MethodStep = MethodStep
@@ -26,34 +25,33 @@ instance mappingMethodStep ::
   ( IsSymbol l
   , Row.Cons l Unit ms ("DELETE" :: Unit, "POST" :: Unit, "PUT" :: Unit, "GET" :: Unit)
   ) =>
-  MappingWithIndex MethodStep (Proxy l) (Accum body acc i o) (Accum body acc i o) where
+  MappingWithIndex MethodStep (Proxy l) (Accum acc i o) (Accum acc i o) where
   mappingWithIndex _ l v = Request.Accum.Type.method (toHTTPMethod m) v
     where
     m :: Request.Method (Variant ("DELETE" :: Unit, "POST" :: Unit, "PUT" :: Unit, "GET" :: Unit))
     m = Request.Method (Variant.inj l unit)
 
 withMethod
-  :: forall body vi vo route rec rec'
+  :: forall vi vo route rec rec'
    . HMapWithIndex MethodStep rec rec'
-  => HFoldlAccumVariant body route rec' vi vo
+  => HFoldlAccumVariant route rec' vi vo
   => rec
-  -> Accum body route (Variant vi) (Variant vo)
+  -> Accum route (Variant vi) (Variant vo)
 withMethod rec = do
   let
     rec' = hmapWithIndex MethodStep rec
-  hfoldlWithIndex (VariantStep (const $ identity)) (Request.Accum.Variant.empty :: Accum body route _ _) rec'
+  hfoldlWithIndex (VariantStep (const $ identity)) (Request.Accum.Variant.empty :: Accum route _ _) rec'
 
 -- | Given a `Method` with a record of specs
 -- | we fold it by prefixing with method duplex.
 accumSpec
-  :: forall body specs resDpls reqDpls reqDpls' route vi vo
-   . Eval (UnifyBody specs) (Proxy body)
-  => HMap GetResponse { | specs } resDpls
+  :: forall specs resDpls reqDpls reqDpls' route vi vo
+   . HMap GetResponse { | specs } resDpls
   => HMap GetRequest { | specs } reqDpls
   => HMapWithIndex MethodStep reqDpls reqDpls'
-  => HFoldlAccumVariant body route reqDpls' vi vo
+  => HFoldlAccumVariant route reqDpls' vi vo
   => Method { | specs }
-  -> AccumSpec body route (Variant vi) (Variant vo) resDpls
+  -> AccumSpec route (Variant vi) (Variant vo) resDpls
 accumSpec (Method rec) = do
   let
     resDpls = hmap _GetResponse rec

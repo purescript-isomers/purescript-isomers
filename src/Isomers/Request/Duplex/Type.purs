@@ -2,6 +2,7 @@ module Isomers.Request.Duplex.Type where
 
 import Prelude
 
+import Data.Argonaut (Json, jsonParser, stringify)
 import Data.Either (Either)
 import Data.Foldable (foldMap, foldr)
 import Data.HTTP.Method (Method) as Data.HTTP
@@ -9,92 +10,94 @@ import Data.Maybe (Maybe)
 import Data.Profunctor (class Profunctor)
 import Data.String (Pattern(..), split) as String
 import Data.Tuple (uncurry)
-import Effect.Aff (Aff, Fiber)
+import Effect.Aff (Aff)
 import Isomers.Request.Duplex.Parser (Parser, ParsingError)
 import Isomers.Request.Duplex.Parser (as, body, flag, int, method, optional, param, params, prefix, rest, run, take) as Parser
 import Isomers.Request.Duplex.Path (Params)
 import Isomers.Request.Duplex.Printer (Printer)
-import Isomers.Request.Duplex.Printer (flag, method, param, prefix, put, run) as Printer
-import Isomers.Request.Encodings (ClientRequest, ServerRequest)
-import Prim.Row (class Cons) as Row
-import Type.Prelude (class IsSymbol, Proxy)
+import Isomers.Request.Duplex.Printer (body, flag, method, param, prefix, put, run) as Printer
+import Isomers.Request.Encodings (ClientBody, ClientRequest, ServerRequest, ServerRequestBody)
 
-data Duplex body i o = Duplex (i -> Printer) (Parser body o)
+data Duplex i o = Duplex (i -> Printer) (Parser o)
 
-type Duplex' body a = Duplex body a a
+type Duplex' a = Duplex a a
 
-derive instance functorRequestDuplex :: Functor (Duplex body i)
+derive instance functorRequestDuplex :: Functor (Duplex i)
 
-instance applyRequestDuplex :: Apply (Duplex body i) where
+instance applyRequestDuplex :: Apply (Duplex i) where
   apply (Duplex encl decl) (Duplex encr decr) =
     Duplex
       (append <$> encl <*> encr)
       (decl <*> decr)
 
-instance applicativeRequestDuplex :: Applicative (Duplex body i) where
+instance applicativeRequestDuplex :: Applicative (Duplex i) where
   pure = Duplex (const mempty) <<< pure
 
-instance profunctorRequestDuplex :: Profunctor (Duplex body) where
+instance profunctorRequestDuplex :: Profunctor Duplex where
   dimap f g (Duplex enc dec) = Duplex (f >>> enc) (g <$> dec)
 
-parse :: forall body i o. Duplex body i o -> ServerRequest body -> Aff (Either ParsingError o)
+parse :: forall i o. Duplex i o -> ServerRequest -> Aff (Either ParsingError o)
 parse (Duplex _ dec) req = Parser.run dec req
 
-print :: forall body i o. Duplex body i o -> i -> ClientRequest
+print :: forall i o. Duplex i o -> i -> ClientRequest
 print (Duplex enc _) = Printer.run <<< enc
 
 body
-  :: forall b body body_ i o
-   . IsSymbol b
-  => Row.Cons b (Fiber o) body_ body
-  => Proxy b
-  -> (i -> Printer)
-  -> Duplex body i o
-body l prt = Duplex prt (Parser.body l)
+  :: forall i o
+   . (i -> ClientBody)
+  -> (ServerRequestBody -> Aff (Either String o))
+  -> Duplex i o
+body prtBody prsBody = do
+  Duplex
+    (Printer.body <<< prtBody)
+    (Parser.body prsBody)
 
-root :: forall body i o. Duplex body i o -> Duplex body i o
+root :: forall i o. Duplex i o -> Duplex i o
 root = path ""
 
-path :: forall i body o. String -> Duplex body i o -> Duplex body i o
+path :: forall i o. String -> Duplex i o -> Duplex i o
 path = flip (foldr prefix) <<< String.split (String.Pattern "/")
 
 -- | `show` is a function used to construct parsing error message.
 as
-  :: forall body i i' o o'
+  :: forall i i' o o'
    . { print :: i' -> i, parse :: o -> Either String o', show :: o -> String }
-  -> Duplex body i o
-  -> Duplex body i' o'
+  -> Duplex i o
+  -> Duplex i' o'
 as { print: prt, parse: prs, show } (Duplex enc dec) = Duplex (enc <<< prt) (Parser.as { show, parse: prs } dec)
 
-as' :: forall body i i' o o'. Show o => (i' -> i) -> (o -> Either String o') -> Duplex body i o -> Duplex body i' o'
+as' :: forall i i' o o'. Show o => (i' -> i) -> (o -> Either String o') -> Duplex i o -> Duplex i' o'
 as' prt prs = as { print: prt, parse: prs, show: show }
 
-int :: forall body. Duplex' body String -> Duplex' body Int
+int :: Duplex' String -> Duplex' Int
 int = as' show Parser.int
 
-prefix :: forall body i o. String -> Duplex body i o -> Duplex body i o
+json :: Duplex' String -> Duplex' Json
+json = as' stringify jsonParser
+
+prefix :: forall i o. String -> Duplex i o -> Duplex i o
 prefix s (Duplex enc dec) = Duplex (Printer.prefix s <<< enc) (Parser.prefix s dec)
 
-flag :: forall body. String -> Duplex body Boolean Boolean
+flag :: String -> Duplex Boolean Boolean
 flag n = Duplex (Printer.flag n) (Parser.flag n)
 
-string :: forall body. Duplex' body String -> Duplex' body String
-string = as' show pure
+string :: Duplex' String -> Duplex' String
+string = as' identity pure
 
-segment :: forall body. Duplex' body String
+segment :: Duplex' String
 segment = Duplex Printer.put Parser.take
 
-param :: forall body. String -> Duplex' body String
+param :: String -> Duplex' String
 param p = Duplex (Printer.param p) (Parser.param p)
 
-withMethod :: forall body i o. Data.HTTP.Method -> Duplex body i o -> Duplex body i o
+withMethod :: forall i o. Data.HTTP.Method -> Duplex i o -> Duplex i o
 withMethod m (Duplex enc dec) = Duplex (append (Printer.method m) <<< enc) (Parser.method m dec)
 
-rest :: forall body. Duplex' body (Array String)
+rest :: Duplex' (Array String)
 rest = Duplex (foldMap Printer.put) Parser.rest
 
-params :: forall body. Duplex body Params Params
+params :: Duplex Params Params
 params = Duplex (foldMap (uncurry Printer.param)) Parser.params
 
-optional :: forall body i o. Duplex body i o -> Duplex body (Maybe i) (Maybe o)
+optional :: forall i o. Duplex i o -> Duplex (Maybe i) (Maybe o)
 optional (Duplex enc dec) = Duplex (foldMap enc) (Parser.optional dec)

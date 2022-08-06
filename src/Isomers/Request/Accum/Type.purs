@@ -21,50 +21,48 @@ import Record (delete, get, insert) as Record
 import Type.Equality (from, to) as Type.Equality
 import Type.Prelude (class IsSymbol, class TypeEquals, Proxy)
 
--- | TODO: Would there be any gain when we have something like
--- | "builder yoneda" here instead of a plain `route → oreq` function:
+-- | The Problem
 -- |
--- | ```newtype BuilderYoneda bld i a = BuilderYoneda (∀ b. bld a b → bld i b)```
+-- |  * Let's imagine that we have a `Duplex` which transforms a
+-- |    path segment into / from `Integer`.
 -- |
--- | with some form of a "functor":
+-- |  * Let's imagine that we have a `Duplex` which transforms next
+-- |    path segment into a `Variant` which should be filled with previously
+-- |    parsed value.
+-- |    ```
+-- |    { id: Integer } ->
+-- |      Variant ("profile" :: { id: Integer }, "edit-profile" :: { id: Integer })
+-- |    ```
 -- |
--- | ```bldMap bA2B (BuilderYoneda f) = BuilderYoneda $ \bld → f (bld <<< bA2B)```
+-- |  * We want to provide DSL which allows user to express this flow in natural
+-- |    manner - from left to right.
 -- |
--- |
--- | In the case of a record build up there is a quite significant difference between
--- | possible performance of these two on the JS backend:
--- |
--- | * `Record.insert` - which is `unsafeSet` with a loop etc. under the hood:
--- | https://github.com/purescript/purescript-prelude/blob/v5.0.0/src/Record/Unsafe.js#L15
--- |
--- | * `Record.Builder.insert` - which is `unsafeInsert` underneath - nearly a plain record setter:
--- | https://github.com/purescript/purescript-record/blob/v3.0.0/src/Record/Builder.js#L13
--- |
--- | Another scenario for benchmarking could be this kind of crazy codegen based
--- | optimization of insert through js eval:
--- | ```
--- | insert l = eval """function(a, r) { return { x: r.x , y: r.y,.., l': a } """
--- | ```
--- | then cache the insert on the prs' level:
--- | ```
--- | prs' = let insert' = insert l in....
--- | ```
-data Accum body route ireq oreq = Accum (Duplex body ireq (route -> oreq)) (ireq -> route)
+data Accum route ireq oreq = Accum (Duplex ireq (route -> oreq)) (ireq -> route)
 
-derive instance functorAccum :: Functor (Accum body route ireq)
+derive instance functorAccum :: Functor (Accum route ireq)
 
-instance applyAccum :: Apply (Accum body route ireq) where
+instance applyAccum :: Apply (Accum route ireq) where
   apply (Accum d1 dst) (Accum d2 _) = Accum (map apply d1 <*> d2) dst
 
-instance profunctorAccum :: Profunctor (Accum body route) where
+instance profunctorAccum :: Profunctor (Accum route) where
   dimap f g (Accum d dst) = Accum (dimap f (map g) d) (dst <<< f)
+
+pass :: forall route. Accum route route route
+pass = Accum (pure identity) identity
 
 -- | When we have same request type we can provide a categorical
 -- | composition and nicely chain accumulation of our final value
--- | as well as their Printer.
-newtype RouteAccum body route req = RouteAccum (Accum body route req req)
+-- | as well as its printer a la `Boomerang` it boils down to
+-- | just composition over pairs of functions:
+-- |
+-- | ```
+-- |    (b -> c) /\ (c -> b)
+-- | -> (a -> b) /\ (b -> a)
+-- | -> (a -> c) /\ (c -> a)
+-- | ```
+newtype RouteAccum route req = RouteAccum (Accum route req req)
 
-instance semigroupoidRouteAccum :: Semigroupoid (RouteAccum body) where
+instance semigroupoidRouteAccum :: Semigroupoid (RouteAccum) where
   compose (RouteAccum (Accum (Duplex ser1 prs1) ext1)) (RouteAccum (Accum (Duplex ser2 prs2) ext2)) = RouteAccum $ Accum
     dpl
     ext
@@ -80,18 +78,18 @@ instance semigroupoidRouteAccum :: Semigroupoid (RouteAccum body) where
 
     ext = ext2 <<< ext1
 
-instance categoryRouteAccum :: Category (RouteAccum body) where
+instance categoryRouteAccum :: Category (RouteAccum) where
   identity = RouteAccum (Accum (pure identity) identity)
 
 insert
-  :: forall a route route' body l ireq oreq
+  :: forall a route route' l ireq oreq
    . IsSymbol l
   => Row.Cons l a route route'
   => Row.Lacks l route
   => Proxy l
-  -> Duplex' body a
-  -> Accum body { | route' } ireq oreq
-  -> Accum body { | route } ireq oreq
+  -> Duplex' a
+  -> Accum { | route' } ireq oreq
+  -> Accum { | route } ireq oreq
 insert l (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs') dst'
   where
   prt' ireq = prt (Record.get l $ dst ireq) <> dprt ireq
@@ -108,14 +106,14 @@ insert l (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' pr
 -- | Like `insert` but actual "`a` parsing / printing"
 -- | is put on the front.
 insertFlipped
-  :: forall a route route' body l ireq oreq
+  :: forall a route route' l ireq oreq
    . IsSymbol l
   => Row.Cons l a route route'
   => Row.Lacks l route
   => Proxy l
-  -> Duplex' body a
-  -> Accum body { | route' } ireq oreq
-  -> Accum body { | route } ireq oreq
+  -> Duplex' a
+  -> Accum { | route' } ireq oreq
+  -> Accum { | route } ireq oreq
 insertFlipped l (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs') dst'
   where
   prt' ireq = dprt ireq <> prt (Record.get l $ dst ireq)
@@ -134,14 +132,14 @@ insertFlipped l (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex 
 -- | because we want to be able to "split"
 -- | server / client request types.
 insertReq
-  :: forall a b route body l ireq oreq
+  :: forall a b route l ireq oreq
    . IsSymbol l
   => Row.Cons l a route ireq
   => Row.Cons l b route oreq
   => Row.Lacks l route
   => Proxy l
-  -> Duplex body a b
-  -> Accum body { | route } { | ireq } { | oreq }
+  -> Duplex a b
+  -> Accum { | route } { | ireq } { | oreq }
 insertReq l (Duplex prt prs) = Accum (Duplex prt' prs') dst'
   where
   prt' ireq = prt (Record.get l ireq)
@@ -155,10 +153,10 @@ insertReq l (Duplex prt prs) = Accum (Duplex prt' prs') dst'
 -- | This can be useful when you want to move into `Tuple` or `HList` accumlation or
 -- | just have to lift a single request `Duplex` into an `Accum`.
 scalar
-  :: forall a body ireq oreq
-   . Duplex' body a
-  -> Accum body a ireq oreq
-  -> Accum body {} ireq oreq
+  :: forall a ireq oreq
+   . Duplex' a
+  -> Accum a ireq oreq
+  -> Accum {} ireq oreq
 scalar (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs') (const {})
   where
   prt' ireq = prt (dst ireq) <> dprt ireq
@@ -169,10 +167,10 @@ scalar (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs'
     in const $ f a
 
 scalarFlipped
-  :: forall a body ireq oreq
-   . Duplex' body a
-  -> Accum body a ireq oreq
-  -> Accum body {} ireq oreq
+  :: forall a ireq oreq
+   . Duplex' a
+  -> Accum a ireq oreq
+  -> Accum {} ireq oreq
 scalarFlipped (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs') (const {})
   where
   prt' ireq = dprt ireq <> prt (dst ireq)
@@ -183,22 +181,22 @@ scalarFlipped (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex pr
     in const $ f a
 
 -- | Switch from `Record` accumlator into `HList` one.
-hnil :: forall body ireq oreq. Accum body HNil ireq oreq -> Accum body {} ireq oreq
+hnil :: forall ireq oreq. Accum HNil ireq oreq -> Accum {} ireq oreq
 hnil accum = scalar (pure HNil) accum
 
 hcons
-  :: forall h body t ireq oreq
-   . Duplex' body h
-  -> Accum body (h : t) ireq oreq
-  -> Accum body t ireq oreq
+  :: forall h t ireq oreq
+   . Duplex' h
+  -> Accum (h : t) ireq oreq
+  -> Accum t ireq oreq
 hcons (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs') dst'
   where
   prt' ireq = do
     let
-      (h : t) = dst ireq
+      (h : _) = dst ireq
     prt h <> dprt ireq
 
-  tail (h : t) = t
+  tail (_ : t) = t
 
   dst' = tail <<< dst
 
@@ -210,15 +208,15 @@ hcons (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs')
         f (h : t)
 
 tupleCons
-  :: forall a b body ireq oreq
-   . Duplex' body a
-  -> Accum body (a /\ b) ireq oreq
-  -> Accum body b ireq oreq
+  :: forall a b ireq oreq
+   . Duplex' a
+  -> Accum (a /\ b) ireq oreq
+  -> Accum b ireq oreq
 tupleCons (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' prs') dst'
   where
   prt' ireq = do
     let
-      (a /\ b) = dst ireq
+      (a /\ _) = dst ireq
     prt a <> dprt ireq
 
   dst' = snd <<< dst
@@ -230,24 +228,24 @@ tupleCons (Duplex prt prs) (Accum (Duplex dprt dprs) dst) = Accum (Duplex prt' p
       \b ->
         f (a /\ b)
 
-prefix :: forall body route i o. String -> Accum body route i o -> Accum body route i o
+prefix :: forall route i o. String -> Accum route i o -> Accum route i o
 prefix s (Accum (Duplex enc dec) dst) = do
   let
     dpl = Duplex (Printer.prefix s <$> enc) (Parser.prefix s dec)
   Accum dpl dst
 
-path :: forall body route i o. String -> Accum body route i o -> Accum body route i o
+path :: forall route i o. String -> Accum route i o -> Accum route i o
 path = flip (foldr prefix) <<< String.split (String.Pattern "/")
 
-parse :: forall body route i o. Accum body route i o -> ServerRequest body -> route -> Aff (Either ParsingError o)
-parse (Accum (Duplex _ dec) dst) req r = ado
+parse :: forall route i o. Accum route i o -> ServerRequest -> route -> Aff (Either ParsingError o)
+parse (Accum (Duplex _ dec) _) req r = ado
   f <- Parser.run dec req
   in f <@> r
 
-print :: forall body route i o. Accum body route i o -> i -> ClientRequest
+print :: forall route i o. Accum route i o -> i -> ClientRequest
 print (Accum (Duplex enc _) _) = Printer.run <<< enc
 
-method :: forall body route i o. HTTP.Method.Method -> Accum body route i o -> Accum body route i o
+method :: forall route i o. HTTP.Method.Method -> Accum route i o -> Accum route i o
 method m (Accum (Duplex enc dec) dst) = do
   let
     dpl =
@@ -257,21 +255,21 @@ method m (Accum (Duplex enc dec) dst) = do
   Accum dpl dst
 
 imapRoute
-  :: forall body ireq oreq route route'
+  :: forall ireq oreq route route'
    . (route' -> route)
   -> (route -> route')
-  -> Accum body route ireq oreq
-  -> Accum body route' ireq oreq
+  -> Accum route ireq oreq
+  -> Accum route' ireq oreq
 imapRoute f g (Accum dpl dst) = Accum (map (lcmap f) dpl) (map g dst)
 
 unifyRoute
-  :: forall body ireq oreq route route'
+  :: forall ireq oreq route route'
    . TypeEquals route route'
-  => Accum body route ireq oreq
-  -> Accum body route' ireq oreq
+  => Accum route ireq oreq
+  -> Accum route' ireq oreq
 unifyRoute = imapRoute Type.Equality.from Type.Equality.to
 
-rootDuplex :: forall body i o. Accum body {} i o -> Duplex body i o
+rootDuplex :: forall i o. Accum {} i o -> Duplex i o
 rootDuplex accum = do
   let
     (Accum (Duplex prt prs) _) = path "" accum

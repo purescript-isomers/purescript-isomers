@@ -1,17 +1,23 @@
 module Isomers.Contrib.Heterogeneous.Foldings where
 
-import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex)
+import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
 import Prim.Row (class Cons, class Lacks, class Union) as Row
+import Prim.RowList (class RowToList)
+import Prim.RowList as RL
 import Prim.Symbol (class Append) as Symbol
-import Record (insert, union) as Record
+import Record (get, insert, union) as Record
 import Record.Builder (Builder) as Record.Builder
 import Record.Prefix (PrefixProps, add) as Record.Prefix
+import Type.Eval (class Eval, Lift, TypeExpr)
+import Type.Eval.Function (type (<<<))
+import Type.Eval.Functor (Map)
+import Type.Eval.RowList (FromRow)
 import Type.Prelude (class IsSymbol, Proxy(Proxy))
 
 newtype Flatten (sep :: Symbol) = Flatten (Proxy sep)
 
 -- | TODO: Cover `Variant` too.
-instance flattenRecordRec ::
+instance
   ( HFoldlWithIndex (Record.Prefix.PrefixProps sym) (Record.Builder.Builder {} {}) { | res }
       (Record.Builder.Builder {} { | res' })
   , Symbol.Append l sep sym
@@ -23,11 +29,11 @@ instance flattenRecordRec ::
     ({ | acc })
     ({ | res })
     ({ | acc' }) where
-  foldingWithIndex (Flatten sep) l acc v = do
+  foldingWithIndex _ _ acc v = do
     let
       sym = Proxy :: Proxy sym
     Record.union (Record.Prefix.add sym v) acc
-else instance flattenRecord ::
+else instance
   ( IsSymbol l
   , Row.Lacks l acc
   , Row.Cons l a acc acc'
@@ -38,4 +44,11 @@ else instance flattenRecord ::
     { | acc }
     a
     { | acc' } where
-  foldingWithIndex pref l acc v = Record.insert l v acc
+  foldingWithIndex _ l acc v = Record.insert l v acc
+
+foreign import data ToRowListStep :: Type -> TypeExpr Type
+
+instance (RowToList rec rl) => Eval (ToRowListStep { | rec }) (Proxy rl)
+else instance Eval (ToRowListStep a) (Proxy a)
+
+
